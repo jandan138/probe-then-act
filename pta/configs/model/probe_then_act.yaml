@@ -1,0 +1,73 @@
+# Probe-Then-Act full model config (M7)
+method: probe_then_act
+name: pta
+
+encoder:
+  vision:
+    type: cnn
+    channels: [32, 64, 128]
+    kernel_sizes: [5, 3, 3]
+    output_dim: 256
+  tactile:
+    type: mlp
+    hidden_dims: [64, 64]
+    output_dim: 32
+  proprio:
+    type: mlp
+    hidden_dims: [64, 64]
+    output_dim: 32
+  fusion:
+    type: concat_mlp
+    hidden_dims: [256, 128]
+    output_dim: 128
+
+probe:
+  enabled: true
+  max_probe_steps: 3
+  primitives: [tap, press, drag, skim, poke]
+  policy:
+    type: mlp
+    hidden_dims: [128, 128]
+    output_dim: 5  # primitive selection
+  info_gain_reward: true
+
+belief:
+  enabled: true
+  latent_dim: 32  # z dimension
+  encoder:
+    type: mlp
+    hidden_dims: [256, 128]
+  # Outputs z (latent_dim) + sigma (latent_dim)
+  output_dim: 64  # z + sigma
+
+uncertainty:
+  enabled: true
+  head:
+    type: mlp
+    hidden_dims: [64, 32]
+  calibration_loss_weight: 0.1
+
+risk:
+  enabled: true
+  head:
+    type: mlp
+    hidden_dims: [64, 32]
+    output_dim: 3  # spill_risk, jam_risk, instability_risk
+  risk_threshold: 0.7
+  action_filter: true  # filter high-risk actions
+
+policy:
+  type: mlp
+  hidden_dims: [256, 256]
+  activation: elu
+  # Policy receives: obs_features + z + sigma
+  input_includes_belief: true
+  input_includes_uncertainty: true
+
+value:
+  type: mlp
+  hidden_dims: [256, 256]
+
+action:
+  type: cartesian_delta
+  dim: 7

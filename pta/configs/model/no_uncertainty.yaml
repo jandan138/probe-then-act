@@ -1,0 +1,14 @@
+# Ours w/o Uncertainty (M6) — ablation
+method: probe_then_act_no_uncertainty
+name: no_uncertainty
+
+_base_: probe_then_act.yaml
+
+uncertainty:
+  enabled: false
+
+risk:
+  enabled: false
+
+policy:
+  input_includes_uncertainty: false

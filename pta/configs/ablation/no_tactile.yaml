@@ -1,0 +1,7 @@
+# Ablation: No tactile input
+_base_: ../model/probe_then_act.yaml
+
+encoder:
+  tactile: null
+
+# Probe still runs but without tactile feedback

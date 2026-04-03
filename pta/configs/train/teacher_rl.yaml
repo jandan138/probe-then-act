@@ -1,0 +1,38 @@
+# Teacher RL training config
+stage: teacher_rl
+
+env:
+  config: pta/configs/env/scoop_transfer/id.yaml
+  num_envs: 64
+  observation_type: teacher  # privileged observations
+
+algorithm:
+  name: ppo
+  learning_rate: 3.0e-4
+  gamma: 0.99
+  gae_lambda: 0.95
+  clip_range: 0.2
+  entropy_coef: 0.01
+  value_loss_coef: 0.5
+  max_grad_norm: 0.5
+  n_steps: 128  # steps per env before update
+  n_epochs: 10  # PPO epochs per update
+  batch_size: 2048
+  normalize_advantage: true
+
+training:
+  total_timesteps: 10_000_000
+  eval_freq: 50_000
+  save_freq: 100_000
+  log_freq: 5_000
+  seed: 42
+
+checkpoint:
+  dir: checkpoints/teacher
+  name_format: "scoop_transfer_teacher_{step}"
+
+logging:
+  tensorboard: true
+  wandb: false
+  project: probe-then-act
+  run_name: teacher_rl

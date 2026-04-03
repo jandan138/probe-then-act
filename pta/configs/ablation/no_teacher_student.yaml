@@ -1,0 +1,7 @@
+# Ablation: No teacher-student (train from scratch with RL only)
+_base_: ../model/probe_then_act.yaml
+
+training_override:
+  skip_teacher: true
+  skip_distillation: true
+  train_from_scratch: true

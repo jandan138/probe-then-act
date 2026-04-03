@@ -1,0 +1,75 @@
+# Level-and-Fill Environment Config — In-Distribution
+task: level_fill
+split: id
+
+scene:
+  robot: franka_panda
+  control_mode: cartesian_delta
+  control_freq: 20
+  sim_freq: 200
+  max_episode_steps: 300  # longer horizon for spreading
+  show_viewer: false
+
+materials:
+  families: [sand, snow, elastoplastic]
+  sand:
+    E: [1.0e4, 5.0e4]
+    nu: [0.2, 0.4]
+    friction: [0.3, 0.7]
+    density: [1400, 1800]
+  snow:
+    E: [1.0e4, 1.0e5]
+    nu: [0.2, 0.3]
+    hardening: [5.0, 15.0]
+    density: [200, 600]
+  elastoplastic:
+    E: [5.0e4, 5.0e5]
+    nu: [0.3, 0.45]
+    yield_stress: [1.0e3, 1.0e4]
+    density: [1000, 1500]
+
+particles:
+  n_particles: 10000
+  particle_size: 0.005
+
+tool:
+  type: spatula  # flat tool for spreading
+  width: 0.10
+  depth: 0.02
+
+containers:
+  source:
+    type: box
+    size: [0.3, 0.3, 0.15]
+    position: [0.5, 0.0, 0.0]
+  target:
+    type: flat_region
+    size: [0.3, 0.3]
+    position: [0.5, 0.3, 0.0]
+    target_height: 0.03  # desired fill height
+
+sensors:
+  camera:
+    enabled: true
+    width: 128
+    height: 128
+  proprioception:
+    enabled: true
+  tactile:
+    enabled: true
+    type: contact_force
+  depth:
+    enabled: true
+
+rewards:
+  coverage_weight: 1.0
+  levelness_weight: 0.5  # penalize height variance
+  overspill_penalty: -0.3
+  time_penalty: -0.01
+  success_bonus: 10.0
+
+metrics:
+  - coverage_ratio
+  - height_variance
+  - overspill_ratio
+  - episode_length

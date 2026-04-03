@@ -1,0 +1,49 @@
+# Material Classification + Expert Routing (M5)
+method: material_router
+name: material_router
+
+encoder:
+  vision:
+    type: cnn
+    channels: [32, 64, 128]
+    kernel_sizes: [5, 3, 3]
+    output_dim: 256
+  tactile:
+    type: mlp
+    hidden_dims: [64, 64]
+    output_dim: 32
+  proprio:
+    type: mlp
+    hidden_dims: [64, 64]
+    output_dim: 32
+  fusion:
+    type: concat_mlp
+    hidden_dims: [256, 128]
+    output_dim: 128
+
+probe:
+  enabled: true
+  max_probe_steps: 3
+  primitives: [tap, press, drag]
+  policy:
+    type: scripted  # fixed probe for fair comparison
+
+classifier:
+  type: mlp
+  hidden_dims: [128, 64]
+  num_classes: 3  # sand, snow, elastoplastic
+  # Discrete material class → route to expert
+
+experts:
+  num_experts: 3
+  expert_policy:
+    type: mlp
+    hidden_dims: [256, 256]
+
+action:
+  type: cartesian_delta
+  dim: 7
+
+# No continuous belief, no uncertainty
+belief: null
+uncertainty: null

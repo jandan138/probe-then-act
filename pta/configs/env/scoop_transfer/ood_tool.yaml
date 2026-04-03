@@ -1,0 +1,19 @@
+# OOD-Tool Split: train on scoop, test on spatula
+task: scoop_transfer
+split: ood_tool
+
+_base_: id.yaml
+
+tool:
+  train_tools: [scoop]
+  test_tools: [spatula, angled_scoop]
+  spatula:
+    type: spatula
+    width: 0.10
+    depth: 0.02
+    angle: 5
+  angled_scoop:
+    type: angled_scoop
+    width: 0.06
+    depth: 0.05
+    angle: 45

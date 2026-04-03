@@ -1,0 +1,25 @@
+# Default evaluation config
+eval_episodes: 100
+num_envs: 16
+deterministic: true
+record_video: true
+video_freq: 10  # record every 10th episode
+
+seeds: [0, 1, 2, 3, 4]
+
+metrics:
+  primary:
+    - success_rate
+    - transfer_efficiency
+    - spill_ratio
+    - contact_failure_rate
+  secondary:
+    - episode_length
+    - action_smoothness
+    - probe_cost
+
+output:
+  tables_dir: results/tables
+  figures_dir: results/figures
+  videos_dir: results/videos
+  format: csv

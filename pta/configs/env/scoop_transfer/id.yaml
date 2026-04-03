@@ -1,0 +1,96 @@
+# Scoop-and-Transfer Environment Config — In-Distribution
+task: scoop_transfer
+split: id
+
+scene:
+  robot: franka_panda
+  control_mode: cartesian_delta  # delta end-effector pose
+  control_freq: 20  # Hz
+  sim_freq: 200  # Hz (substeps = sim_freq / control_freq = 10)
+  max_episode_steps: 200
+  show_viewer: false
+
+materials:
+  families: [sand, snow, elastoplastic]
+  # Each family has continuous parameter ranges for ID split
+  sand:
+    E: [1.0e4, 5.0e4]         # Young's modulus
+    nu: [0.2, 0.4]             # Poisson's ratio
+    friction: [0.3, 0.7]       # friction angle (tan)
+    density: [1400, 1800]      # kg/m^3
+  snow:
+    E: [1.0e4, 1.0e5]
+    nu: [0.2, 0.3]
+    hardening: [5.0, 15.0]
+    density: [200, 600]
+  elastoplastic:
+    E: [5.0e4, 5.0e5]
+    nu: [0.3, 0.45]
+    yield_stress: [1.0e3, 1.0e4]
+    density: [1000, 1500]
+
+particles:
+  n_particles: 8000
+  particle_size: 0.005  # meters
+
+tool:
+  type: scoop
+  # Scoop geometry parameters
+  width: 0.08
+  depth: 0.04
+  angle: 30  # degrees
+
+containers:
+  source:
+    type: box
+    size: [0.3, 0.3, 0.15]
+    position: [0.5, 0.0, 0.0]
+  target:
+    type: cylinder
+    radius: 0.1
+    height: 0.15
+    position: [0.5, 0.3, 0.0]
+
+sensors:
+  camera:
+    enabled: true
+    width: 128
+    height: 128
+    position: [0.0, 0.5, 0.8]
+    lookat: [0.5, 0.15, 0.1]
+  proprioception:
+    enabled: true
+    include_joint_pos: true
+    include_joint_vel: true
+    include_ee_pose: true
+  tactile:
+    enabled: true
+    type: contact_force  # KinematicContactProbe
+  depth:
+    enabled: true
+
+observation:
+  student:
+    - camera_rgb       # (3, H, W)
+    - camera_depth     # (1, H, W)
+    - proprioception   # (joint_pos + joint_vel + ee_pose)
+    - tactile_trace    # (contact_force_history)
+    - action_history   # (last N actions)
+  teacher:
+    - proprioception
+    - material_params  # PRIVILEGED: hidden material properties
+    - particle_state   # PRIVILEGED: full particle positions/velocities
+
+rewards:
+  transfer_mass_weight: 1.0
+  spill_penalty_weight: -0.5
+  contact_instability_penalty: -0.3
+  time_penalty: -0.01
+  success_bonus: 10.0
+
+metrics:
+  - success_rate
+  - transfer_efficiency
+  - spill_ratio
+  - contact_failure_rate
+  - episode_length

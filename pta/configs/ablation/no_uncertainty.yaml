@@ -1,0 +1,2 @@
+# Ablation: No uncertainty (same as model/no_uncertainty.yaml)
+_base_: ../model/no_uncertainty.yaml

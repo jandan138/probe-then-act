@@ -1,0 +1,19 @@
+# OOD-Material Split: train on sand+elastoplastic, test on snow
+task: scoop_transfer
+split: ood_material
+
+# Inherit from id.yaml, override materials
+_base_: id.yaml
+
+materials:
+  # Training families (for reference — actual training uses id.yaml)
+  train_families: [sand, elastoplastic]
+  # Test families (held out)
+  test_families: [snow]
+  # Additionally test on extreme parameter ranges
+  test_param_ranges:
+    sand:
+      E: [5.0e4, 1.0e5]  # beyond training range
+      friction: [0.7, 0.95]
+    elastoplastic:
+      yield_stress: [1.0e4, 5.0e4]  # beyond training range

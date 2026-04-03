@@ -1,0 +1,26 @@
+# Ablation evaluation config
+_base_: default.yaml
+
+eval_episodes: 200
+seeds: [0, 1, 2]
+
+methods:
+  - name: full_model
+    config: pta/configs/model/probe_then_act.yaml
+  - name: no_probe
+    config: pta/configs/ablation/no_probe.yaml
+  - name: random_probe
+    config: pta/configs/ablation/random_probe.yaml
+  - name: no_tactile
+    config: pta/configs/ablation/no_tactile.yaml
+  - name: no_uncertainty
+    config: pta/configs/ablation/no_uncertainty.yaml
+  - name: no_teacher_student
+    config: pta/configs/ablation/no_teacher_student.yaml
+
+splits:
+  - pta/configs/env/scoop_transfer/ood_material.yaml
+
+output:
+  ablation_table: results/tables/ablation_results.csv
+  figures_prefix: results/figures/fig_ablation

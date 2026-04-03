@@ -1,0 +1,36 @@
+# Reactive PPO model config (M1)
+method: reactive_ppo
+name: reactive
+
+encoder:
+  vision:
+    type: cnn
+    channels: [32, 64, 128]
+    kernel_sizes: [5, 3, 3]
+    output_dim: 256
+  proprio:
+    type: mlp
+    hidden_dims: [64, 64]
+    output_dim: 32
+  fusion:
+    type: concat_mlp
+    hidden_dims: [256, 128]
+    output_dim: 128
+
+policy:
+  type: mlp
+  hidden_dims: [256, 256]
+  activation: elu
+
+value:
+  type: mlp
+  hidden_dims: [256, 256]
+
+action:
+  type: cartesian_delta
+  dim: 7  # dx, dy, dz, droll, dpitch, dyaw, gripper
+
+# No probing, no belief, no uncertainty
+probe: null
+belief: null
+uncertainty: null

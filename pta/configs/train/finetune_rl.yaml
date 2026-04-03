@@ -1,0 +1,29 @@
+# Fine-tune RL config (for student after BC)
+stage: finetune_rl
+
+env:
+  config: pta/configs/env/scoop_transfer/id.yaml
+  num_envs: 64
+  observation_type: student
+
+algorithm:
+  name: ppo
+  learning_rate: 1.0e-4  # lower LR for fine-tuning
+  gamma: 0.99
+  gae_lambda: 0.95
+  clip_range: 0.1  # tighter clip for stability
+  entropy_coef: 0.005
+  n_steps: 128
+  n_epochs: 5
+  batch_size: 2048
+
+training:
+  total_timesteps: 5_000_000
+  eval_freq: 50_000
+  save_freq: 100_000
+  seed: 42
+  resume_from: checkpoints/student/best_bc.pt
+
+checkpoint:
+  dir: checkpoints/student
+  name_format: "scoop_transfer_student_ft_{step}"

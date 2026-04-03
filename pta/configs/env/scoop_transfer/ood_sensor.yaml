@@ -1,0 +1,21 @@
+# OOD-Sensor Perturbation Split
+task: scoop_transfer
+split: ood_sensor
+
+_base_: id.yaml
+
+sensor_perturbations:
+  camera:
+    noise_std: 0.05
+    blur_kernel: 3
+    brightness_jitter: 0.2
+  tactile:
+    bias: 0.1
+    noise_std: 0.15
+    dropout_prob: 0.1  # random missing samples
+  proprioception:
+    noise_std: 0.02
+    latency_steps: 2  # 2-step delayed readings
+  force:
+    scale_error: [0.8, 1.2]  # calibration drift
+    noise_std: 0.1

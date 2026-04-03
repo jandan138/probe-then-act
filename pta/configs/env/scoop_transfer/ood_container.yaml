@@ -1,0 +1,19 @@
+# OOD-Container Split
+task: scoop_transfer
+split: ood_container
+
+_base_: id.yaml
+
+containers:
+  train_targets: [cylinder]
+  test_targets: [wide_bowl, narrow_cup]
+  wide_bowl:
+    type: bowl
+    radius: 0.15
+    height: 0.08
+    position: [0.5, 0.3, 0.0]
+  narrow_cup:
+    type: cylinder
+    radius: 0.05
+    height: 0.20
+    position: [0.5, 0.3, 0.0]

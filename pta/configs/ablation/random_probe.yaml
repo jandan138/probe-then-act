@@ -1,0 +1,7 @@
+# Ablation: Random probing (not learned)
+_base_: ../model/probe_then_act.yaml
+
+probe:
+  enabled: true
+  policy:
+    type: random  # uniform random probe actions

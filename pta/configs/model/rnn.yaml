@@ -1,0 +1,41 @@
+# RNN-PPO model config (M2)
+method: rnn_ppo
+name: rnn
+
+encoder:
+  vision:
+    type: cnn
+    channels: [32, 64, 128]
+    kernel_sizes: [5, 3, 3]
+    output_dim: 256
+  proprio:
+    type: mlp
+    hidden_dims: [64, 64]
+    output_dim: 32
+  fusion:
+    type: concat_mlp
+    hidden_dims: [256, 128]
+    output_dim: 128
+
+recurrent:
+  type: gru
+  hidden_dim: 256
+  num_layers: 1
+  sequence_length: 16  # history window
+
+policy:
+  type: mlp
+  hidden_dims: [256, 256]
+  activation: elu
+
+value:
+  type: mlp
+  hidden_dims: [256, 256]
+
+action:
+  type: cartesian_delta
+  dim: 7
+
+probe: null
+belief: null
+uncertainty: null

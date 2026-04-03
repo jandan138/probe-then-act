@@ -1,0 +1,14 @@
+# Ablation: No probing
+_base_: ../model/probe_then_act.yaml
+
+probe:
+  enabled: false
+belief:
+  enabled: false
+uncertainty:
+  enabled: false
+risk:
+  enabled: false
+policy:
+  input_includes_belief: false
+  input_includes_uncertainty: false

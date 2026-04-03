@@ -1,0 +1,41 @@
+# Paper main evaluation — all methods x all splits
+_base_: default.yaml
+
+eval_episodes: 200
+seeds: [0, 1, 2, 3, 4]
+
+methods:
+  - name: reactive_ppo
+    checkpoint: checkpoints/student/scoop_transfer_reactive_best.pt
+    config: pta/configs/model/reactive.yaml
+  - name: rnn_ppo
+    checkpoint: checkpoints/student/scoop_transfer_rnn_best.pt
+    config: pta/configs/model/rnn.yaml
+  - name: domain_rand_ppo
+    checkpoint: checkpoints/student/scoop_transfer_domrand_best.pt
+    config: pta/configs/model/reactive.yaml
+  - name: fixed_probe_ppo
+    checkpoint: checkpoints/student/scoop_transfer_fixprobe_best.pt
+    config: pta/configs/model/reactive.yaml
+  - name: material_router
+    checkpoint: checkpoints/student/scoop_transfer_router_best.pt
+    config: pta/configs/model/material_router.yaml
+  - name: ours_no_uncertainty
+    checkpoint: checkpoints/student/scoop_transfer_nounc_best.pt
+    config: pta/configs/model/no_uncertainty.yaml
+  - name: probe_then_act
+    checkpoint: checkpoints/student/scoop_transfer_pta_best.pt
+    config: pta/configs/model/probe_then_act.yaml
+  - name: privileged_teacher
+    checkpoint: checkpoints/teacher/scoop_transfer_teacher_best.pt
+    config: pta/configs/model/reactive.yaml
+
+splits:
+  - pta/configs/env/scoop_transfer/id.yaml
+  - pta/configs/env/scoop_transfer/ood_material.yaml
+  - pta/configs/env/scoop_transfer/ood_tool.yaml
+  - pta/configs/env/scoop_transfer/ood_sensor.yaml
+
+output:
+  main_table: results/tables/main_results.csv
+  figures_prefix: results/figures/fig_main
