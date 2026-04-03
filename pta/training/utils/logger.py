@@ -170,21 +170,38 @@ class ExperimentLogger:
             self._seen_tags.update(new_tags)
             self._csv_fields = ["step"] + sorted(self._seen_tags)
 
-            # If file is open, close it so we can rewrite the header
+            # If file is open, close it so we can rewrite with new header
             if self._csv_file is not None:
                 self._csv_file.close()
                 self._csv_file = None
                 self._csv_writer = None
 
-        if self._csv_writer is None:
-            mode = "a" if self._csv_path.exists() and not needs_new_header else "w"
-            self._csv_file = open(self._csv_path, mode, newline="")
+            # Re-read existing data, rewrite with expanded header
+            old_rows: list = []
+            if self._csv_path.exists():
+                with open(self._csv_path, "r", newline="") as rf:
+                    reader = csv.DictReader(rf)
+                    old_rows = list(reader)
+
+            self._csv_file = open(self._csv_path, "w", newline="")
             self._csv_writer = csv.DictWriter(
                 self._csv_file,
                 fieldnames=self._csv_fields,
                 extrasaction="ignore",
             )
-            if mode == "w" or not self._csv_path.exists():
+            self._csv_writer.writeheader()
+            for old_row in old_rows:
+                self._csv_writer.writerow(old_row)
+
+        if self._csv_writer is None:
+            # First write -- create file
+            self._csv_file = open(self._csv_path, "a", newline="")
+            self._csv_writer = csv.DictWriter(
+                self._csv_file,
+                fieldnames=self._csv_fields,
+                extrasaction="ignore",
+            )
+            if self._csv_path.stat().st_size == 0:
                 self._csv_writer.writeheader()
 
         row = {"step": step}
