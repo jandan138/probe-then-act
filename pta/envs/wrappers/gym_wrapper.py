@@ -13,6 +13,13 @@ import numpy as np
 import torch
 
 from pta.envs.tasks.base_task import BaseTask
+from pta.envs.tasks.scoop_transfer import ScoopTransferTask
+
+
+_DEFAULT_WRAPPER_CONFIG: Dict[str, Any] = {
+    "obs_dim": 37,    # 9 qpos + 9 qvel + 3 ee_pos + 4 ee_quat + 3 lf + 3 rf + 1 step_frac + ... (padded)
+    "action_dim": 7,  # dx, dy, dz, droll, dpitch, dyaw, gripper
+}
 
 
 class GenesisGymWrapper(gymnasium.Env):
@@ -24,29 +31,53 @@ class GenesisGymWrapper(gymnasium.Env):
 
     metadata: Dict[str, Any] = {"render_modes": ["rgb_array"]}
 
-    def __init__(self, task: BaseTask, config: Dict[str, Any]) -> None:
+    def __init__(
+        self,
+        task: BaseTask | None = None,
+        config: Dict[str, Any] | None = None,
+        task_config: Dict[str, Any] | None = None,
+        scene_config: Dict[str, Any] | None = None,
+    ) -> None:
         """Wrap *task* as a Gymnasium environment.
 
         Parameters
         ----------
         task:
-            An instantiated :class:`BaseTask` subclass.
+            An instantiated :class:`BaseTask` subclass.  If ``None``,
+            a :class:`ScoopTransferTask` is created automatically.
         config:
-            Wrapper config with ``observation_space`` and
-            ``action_space`` definitions.
+            Wrapper config with ``obs_dim`` and ``action_dim``.
+        task_config:
+            Passed to :class:`ScoopTransferTask` if *task* is None.
+        scene_config:
+            Passed to :class:`SceneBuilder` if *task* is None.
         """
         super().__init__()
+
+        cfg = {**_DEFAULT_WRAPPER_CONFIG, **(config or {})}
+
+        if task is None:
+            task = ScoopTransferTask(
+                config=task_config,
+                scene_config=scene_config,
+            )
+
         self.task = task
-        self.config = config
-        self.observation_space: gymnasium.spaces.Space = self._build_obs_space(config)
-        self.action_space: gymnasium.spaces.Space = self._build_action_space(config)
+        self.config = cfg
+
+        # Build spaces
+        self.observation_space = self._build_obs_space(cfg)
+        self.action_space = self._build_action_space(cfg)
+
+        # Internal state
+        self._obs_dim = cfg["obs_dim"]
 
     def reset(
         self,
         *,
         seed: Optional[int] = None,
         options: Optional[Dict[str, Any]] = None,
-    ) -> Tuple[Dict[str, np.ndarray], Dict[str, Any]]:
+    ) -> Tuple[np.ndarray, Dict[str, Any]]:
         """Reset the environment and return (obs, info).
 
         Parameters
@@ -58,15 +89,21 @@ class GenesisGymWrapper(gymnasium.Env):
 
         Returns
         -------
-        tuple[dict, dict]
+        tuple[ndarray, dict]
             Gymnasium-style ``(observation, info)`` pair.
         """
-        raise NotImplementedError
+        super().reset(seed=seed)
+
+        obs_dict = self.task.reset()
+        obs_np = self._obs_dict_to_numpy(obs_dict)
+        info = {"raw_obs": {k: v.cpu().numpy() if isinstance(v, torch.Tensor) else v
+                            for k, v in obs_dict.items()}}
+        return obs_np, info
 
     def step(
         self,
         action: np.ndarray,
-    ) -> Tuple[Dict[str, np.ndarray], float, bool, bool, Dict[str, Any]]:
+    ) -> Tuple[np.ndarray, float, bool, bool, Dict[str, Any]]:
         """Execute one step and return (obs, reward, terminated, truncated, info).
 
         Parameters
@@ -74,20 +111,88 @@ class GenesisGymWrapper(gymnasium.Env):
         action:
             Numpy action array matching ``self.action_space``.
         """
-        raise NotImplementedError
+        action_t = torch.tensor(action, dtype=torch.float32, device="cuda")
+        obs_dict, reward, done, info = self.task.step(action_t)
+        obs_np = self._obs_dict_to_numpy(obs_dict)
+
+        # In Gymnasium API, distinguish terminated vs truncated
+        terminated = done and info.get("success_rate", 0.0) >= 0.5
+        truncated = done and not terminated
+
+        return obs_np, float(reward), terminated, truncated, info
 
     def render(self) -> Optional[np.ndarray]:
         """Render current frame as an RGB array (if supported)."""
-        raise NotImplementedError
+        try:
+            rgb, _, _, _ = self.task.camera.render(
+                rgb=True, depth=False, segmentation=False, normal=False,
+            )
+            if isinstance(rgb, torch.Tensor):
+                img = rgb.cpu().numpy()
+            else:
+                img = np.asarray(rgb)
+            # Handle batched output (n_envs=0 still returns 4D)
+            if img.ndim == 4:
+                img = img[0]
+            # Ensure uint8
+            if img.dtype != np.uint8:
+                img = np.clip(img, 0, 255).astype(np.uint8)
+            return img
+        except Exception:
+            return None
 
     def close(self) -> None:
         """Clean up Genesis resources."""
-        raise NotImplementedError
+        pass  # Genesis manages its own cleanup via gs.destroy()
+
+    # ------------------------------------------------------------------
+    # Space construction
+    # ------------------------------------------------------------------
 
     def _build_obs_space(self, config: Dict[str, Any]) -> gymnasium.spaces.Space:
         """Construct the Gymnasium observation space from config."""
-        raise NotImplementedError
+        obs_dim = config.get("obs_dim", 37)
+        return gymnasium.spaces.Box(
+            low=-np.inf,
+            high=np.inf,
+            shape=(obs_dim,),
+            dtype=np.float32,
+        )
 
     def _build_action_space(self, config: Dict[str, Any]) -> gymnasium.spaces.Space:
         """Construct the Gymnasium action space from config."""
-        raise NotImplementedError
+        act_dim = config.get("action_dim", 7)
+        return gymnasium.spaces.Box(
+            low=-1.0,
+            high=1.0,
+            shape=(act_dim,),
+            dtype=np.float32,
+        )
+
+    # ------------------------------------------------------------------
+    # Conversion helpers
+    # ------------------------------------------------------------------
+
+    def _obs_dict_to_numpy(self, obs_dict: Dict[str, torch.Tensor]) -> np.ndarray:
+        """Flatten the observation dict into a fixed-size numpy array."""
+        parts = []
+        for key in sorted(obs_dict.keys()):
+            val = obs_dict[key]
+            if isinstance(val, torch.Tensor):
+                val = val.detach().cpu().float()
+                if val.dim() == 0:
+                    val = val.unsqueeze(0)
+                parts.append(val.numpy().flatten())
+            elif isinstance(val, (int, float)):
+                parts.append(np.array([val], dtype=np.float32))
+
+        flat = np.concatenate(parts).astype(np.float32)
+
+        # Pad or truncate to match obs_dim
+        target_dim = self._obs_dim
+        if len(flat) < target_dim:
+            flat = np.pad(flat, (0, target_dim - len(flat)))
+        elif len(flat) > target_dim:
+            flat = flat[:target_dim]
+
+        return flat
