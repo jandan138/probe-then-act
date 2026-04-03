@@ -1,0 +1,16 @@
+sequence,episode,success_rate,transfer_efficiency,spill_ratio
+A_scoop_deposit,1,0.0,0.0,1.0
+A_scoop_deposit,2,0.0,0.0,1.0
+A_scoop_deposit,3,0.0,0.0,1.0
+A_scoop_deposit,4,0.0,0.0,1.0
+A_scoop_deposit,5,0.0,0.0,1.0
+B_probe_scoop,1,0.0,0.0,1.0
+B_probe_scoop,2,0.0,0.0,1.0
+B_probe_scoop,3,0.0,0.0,1.0
+B_probe_scoop,4,0.0,0.0,1.0
+B_probe_scoop,5,0.0,0.0,1.0
+C_random,1,0.0,0.0,1.0
+C_random,2,0.0,0.0,1.0
+C_random,3,0.0,0.0,1.0
+C_random,4,0.0,0.0,1.0
+C_random,5,0.0,0.0,1.0
