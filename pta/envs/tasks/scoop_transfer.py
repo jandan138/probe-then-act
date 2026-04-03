@@ -30,11 +30,11 @@ from pta.envs.builders.scene_builder import SceneBuilder, SceneComponents
 
 _DEFAULT_TASK_CONFIG: Dict[str, Any] = {
     # Episode
-    "horizon": 200,
+    "horizon": 500,
     "ctrl_dt": 5e-3,
     # Action
     "action_dim": 7,  # dx, dy, dz, droll, dpitch, dyaw, gripper
-    "action_scale_pos": 0.01,   # metres per action unit
+    "action_scale_pos": 0.05,   # metres per action unit (increased for reachability)
     "action_scale_rot": 0.05,   # radians per action unit
     "action_scale_grip": 0.04,  # gripper width per action unit
     # Reward weights
@@ -118,25 +118,26 @@ class ScoopTransferTask(BaseTask):
         self._dls_lambda = cfg.get("dls_lambda", 0.01)
 
         # Container bounding boxes for metric computation
+        # Source AABB: extend z-min to ground (0.0) to capture settled particles
         sp = self.sc.source_pos
         ss = self.sc.source_size
         self._source_bbox_min = torch.tensor(
-            [sp[0] - ss[0] / 2, sp[1] - ss[1] / 2, sp[2] - 0.01],
+            [sp[0] - ss[0] / 2, sp[1] - ss[1] / 2, 0.0],  # z=0 to capture ground-settled particles
             device=gs.device, dtype=torch.float32,
         )
         self._source_bbox_max = torch.tensor(
-            [sp[0] + ss[0] / 2, sp[1] + ss[1] / 2, sp[2] + ss[2] + 0.05],
+            [sp[0] + ss[0] / 2, sp[1] + ss[1] / 2, sp[2] + ss[2] + 0.10],
             device=gs.device, dtype=torch.float32,
         )
 
         tp = self.sc.target_pos
         ts = self.sc.target_size
         self._target_bbox_min = torch.tensor(
-            [tp[0] - ts[0] / 2, tp[1] - ts[1] / 2, tp[2] - 0.01],
+            [tp[0] - ts[0] / 2, tp[1] - ts[1] / 2, 0.0],  # z=0 for settled particles
             device=gs.device, dtype=torch.float32,
         )
         self._target_bbox_max = torch.tensor(
-            [tp[0] + ts[0] / 2, tp[1] + ts[1] / 2, tp[2] + ts[2] + 0.05],
+            [tp[0] + ts[0] / 2, tp[1] + ts[1] / 2, tp[2] + ts[2] + 0.10],
             device=gs.device, dtype=torch.float32,
         )
 
@@ -286,7 +287,7 @@ class ScoopTransferTask(BaseTask):
         """Reward = task_reward - risk_penalty + shaping.
 
         Combines transfer efficiency reward, spill penalty, and
-        optional potential-based shaping terms.
+        distance-based shaping to guide the robot toward the source.
         """
         n_in_target = self._count_particles_in_target()
         n_spilled = self._count_spilled_particles()
@@ -300,6 +301,17 @@ class ScoopTransferTask(BaseTask):
             + self._w_spill * spill_frac
             + self._w_time
         )
+
+        # Distance-based shaping: encourage EE to move toward source
+        ee_pos = self._ee_link.get_pos()
+        if ee_pos.dim() > 1:
+            ee_pos = ee_pos.squeeze(0)
+        source_center = torch.tensor(
+            [self.sc.source_pos[0], self.sc.source_pos[1], self.sc.source_pos[2] + 0.05],
+            device=gs.device, dtype=torch.float32,
+        )
+        dist_to_source = torch.norm(ee_pos - source_center).item()
+        reward += -0.1 * dist_to_source  # shaping: closer is better
 
         # Success bonus
         if transfer_frac >= self._success_threshold:

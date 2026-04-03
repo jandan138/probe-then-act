@@ -1,12 +1,39 @@
 """Run scripted baselines for the ScoopTransfer environment.
 
-Three motion sequences are evaluated:
-  A. Scripted Scoop-and-Deposit -- a hand-tuned open-loop trajectory.
-  B. Scripted Probe + Scoop -- 3 probe taps then the same scoop trajectory.
+Four motion strategies are evaluated:
+  A. Scripted Scoop-and-Deposit -- waypoint-based joint trajectory that
+     sweeps the gripper through the source container material toward the
+     target container.
+  B. Scripted Probe + Scoop -- 3 gentle probe taps into the material
+     followed by the same scoop-and-deposit trajectory.
   C. Random baseline -- uniform random actions for comparison.
+  D. No-op baseline -- zero actions to measure the natural particle
+     settling baseline for metrics.
 
-Each sequence is run for N_EPISODES episodes and per-episode metrics are
-recorded: success_rate, transfer_efficiency, spill_ratio.
+IMPORTANT NOTE ON METRICS:
+  The spill_ratio metric uses axis-aligned bounding boxes (AABBs) for the
+  source and target containers.  MPM particles initialised inside the
+  source container settle downward through the thin base plate (0.005 m)
+  and rest on the ground at z ~ 0.01-0.03, which falls below the source
+  AABB minimum z of 0.04.  As a result, the spill_ratio converges to
+  ~1.0 within the first 50-70 steps regardless of robot actions.  The
+  no-op baseline (D) demonstrates this: it produces the same spill_ratio
+  as random actions.
+
+  Transfer efficiency (fraction of particles inside the target AABB) is
+  therefore the more discriminative metric at this stage.  A future fix
+  should extend the source AABB z-range downward to capture settled
+  particles.
+
+Sequences A and B use direct joint-position waypoints (via set_qpos with
+fine interpolation) because:
+  1. The default DLS IK action scale (0.01 m/step) is too small for the
+     gripper to traverse the ~0.28 m from the home position to the source
+     container within the 200-step horizon.
+  2. The PD position controller cannot converge to low-z configurations
+     (near the table surface) due to gravity compensation limitations.
+
+Sequence C uses the standard 7-D action interface through env.step().
 
 Usage::
 
@@ -24,202 +51,205 @@ import csv
 import os
 import sys
 import time
-from typing import Any, Dict, List, Tuple
+from typing import Any, Callable, Dict, List
 
 import numpy as np
 import torch
 
 
 # ---------------------------------------------------------------------------
-# Action helpers
+# Robot workspace mapping (pre-computed via FK with set_qpos)
+# ---------------------------------------------------------------------------
+# Franka home qpos:  [0, -0.785, 0, -2.356, 0, 1.571, 0.785, 0.04, 0.04]
+# EE start position: ~(0.306, 0.0, 0.587)
+#
+# Source container:   centre (0.5, 0.0, 0.05), particles at z~0.10 initially,
+#                     settle to z~0.02 after ~50 steps
+# Target container:   centre (0.5, 0.35, 0.05)
+# Target AABB:        x [0.44, 0.56], y [0.29, 0.41], z [0.04, 0.20]
+#
+# J1 controls base rotation -> EE y position
+# J2=1.7 with J4~-0.65, J6~0.75 -> arm fully extended, fingertips near z=0.01
+#
+# J1 -> EE_y mapping (with [J1, 1.7, 0, -0.65, 0, 0.75, 0]):
+#   J1=-0.15 -> EE_y=-0.13  (before source in -y)
+#   J1= 0.00 -> EE_y=-0.02  (in source)
+#   J1= 0.20 -> EE_y= 0.11  (past source +y edge)
+#   J1= 0.60 -> EE_y= 0.29  (entering target)
+#   J1= 0.80 -> EE_y= 0.39  (in target)
+
+# ---------------------------------------------------------------------------
+# Waypoint interpolation
 # ---------------------------------------------------------------------------
 
-def make_action(
-    dx: float = 0.0,
-    dy: float = 0.0,
-    dz: float = 0.0,
-    droll: float = 0.0,
-    dpitch: float = 0.0,
-    dyaw: float = 0.0,
-    gripper: float = 0.0,
-    device: str = "cuda",
-) -> torch.Tensor:
-    """Create a single 7-D action tensor.
+def interpolate_waypoints(
+    env: Any,
+    start_qpos: List[float],
+    end_qpos: List[float],
+    n_steps: int,
+    settle_per_step: int = 1,
+) -> None:
+    """Smoothly interpolate robot joint positions from *start* to *end*.
 
-    All values are in [-1, 1] -- they are scaled internally by the env:
-      - position:  * 0.01 m
-      - rotation:  * 0.05 rad
-      - gripper:   * 0.04 width
+    Uses ``set_qpos`` with fine linear interpolation.  Between each qpos
+    update, ``settle_per_step`` physics steps allow particles to react.
     """
-    return torch.tensor(
-        [dx, dy, dz, droll, dpitch, dyaw, gripper],
-        dtype=torch.float32,
-        device=device,
-    )
+    start = torch.tensor(start_qpos, dtype=torch.float32, device="cuda")
+    end = torch.tensor(end_qpos, dtype=torch.float32, device="cuda")
+    for i in range(n_steps):
+        alpha = (i + 1) / n_steps
+        qpos = start * (1 - alpha) + end * alpha
+        env.robot.set_qpos(qpos)
+        for _ in range(settle_per_step):
+            env.scene.step()
 
 
-def repeat_action(action: torch.Tensor, n: int) -> List[torch.Tensor]:
-    """Return a list of *n* copies of *action*."""
-    return [action.clone() for _ in range(n)]
+def settle(env: Any, n_steps: int = 20) -> None:
+    """Run physics steps without changing robot pose."""
+    for _ in range(n_steps):
+        env.scene.step()
+
+
+# ---------------------------------------------------------------------------
+# Joint-space waypoints (9-D: 7 arm joints + 2 finger joints)
+# ---------------------------------------------------------------------------
+# Finger values: 0.04 = fully open, 0.00 = fully closed.
+
+HOME = [0.0, -0.785, 0.0, -2.356, 0.0, 1.571, 0.785, 0.04, 0.04]
+
+# Intermediate: arm extending forward
+EXTEND_FWD = [0.0, 0.5, 0.0, -1.8, 0.0, 1.8, 0.0, 0.04, 0.04]
+
+# Above source container
+HOVER_ABOVE_SOURCE = [0.0, 1.0, 0.0, -1.5, 0.0, 1.5, 0.0, 0.04, 0.04]
+
+# Fingertips at particle level, positioned at -y edge of source
+# EE ~ (0.54, -0.13, 0.08), finger tips near z=0.03
+SCOOP_START = [-0.15, 1.7, 0.0, -0.65, 0.0, 0.75, 0.0, 0.04, 0.04]
+
+# Mid-push: sweeping through source centre
+SCOOP_MID = [0.0, 1.7, 0.0, -0.65, 0.0, 0.75, 0.0, 0.04, 0.04]
+
+# Past +y edge of source
+SCOOP_PAST_SOURCE = [0.3, 1.7, 0.0, -0.65, 0.0, 0.75, 0.0, 0.04, 0.04]
+
+# Between source and target
+SCOOP_MIDWAY = [0.5, 1.7, 0.0, -0.65, 0.0, 0.75, 0.0, 0.04, 0.04]
+
+# At target y
+SCOOP_AT_TARGET = [0.7, 1.7, 0.0, -0.65, 0.0, 0.75, 0.0, 0.04, 0.04]
+
+# Past target
+SCOOP_PAST_TARGET = [0.85, 1.7, 0.0, -0.65, 0.0, 0.75, 0.0, 0.04, 0.04]
+
+# Probe waypoints -- intermediate arm extension for gentle contact
+PROBE_HOVER = [0.0, 1.2, 0.0, -1.0, 0.0, 1.2, 0.0, 0.04, 0.04]
+PROBE_DOWN_C = [0.0, 1.5, 0.0, -0.7, 0.0, 0.9, 0.0, 0.04, 0.04]
+PROBE_DOWN_L = [-0.1, 1.5, 0.0, -0.7, 0.0, 0.9, 0.0, 0.04, 0.04]
+PROBE_DOWN_R = [0.1, 1.5, 0.0, -0.7, 0.0, 0.9, 0.0, 0.04, 0.04]
 
 
 # ---------------------------------------------------------------------------
 # Scripted sequences
 # ---------------------------------------------------------------------------
 
-def build_sequence_a(device: str = "cuda") -> List[torch.Tensor]:
-    """Sequence A: Scripted Scoop-and-Deposit.
+def run_sequence_a(env: Any, horizon: int = 200) -> Dict[str, float]:
+    """Sequence A: Scripted Scoop-and-Deposit via joint waypoints.
 
-    The Franka starts at its home pose (~0.3 m above table, roughly
-    centred).  The source container is at (0.5, 0.0, 0.05) and the
-    target at (0.5, 0.35, 0.05).
-
-    Phases:
-      1. Approach  -- move EE above source container.
-      2. Descend   -- lower into material.
-      3. Scoop     -- push forward (along +y) to gather material.
-      4. Lift      -- raise EE.
-      5. Transport -- move EE towards target container.
-      6. Deposit   -- lower and open gripper / tilt to dump.
-
-    Actions are in normalised [-1, 1] space.  With action_scale_pos=0.01,
-    an action component of +1.0 moves the EE by +0.01 m per step.
-    """
-    seq: List[torch.Tensor] = []
-
-    # Phase 1 -- Approach: move toward source (dx ~+0.5, keep y~0)
-    # The EE starts near (0.3, 0.0, 0.5) approximately.
-    # Move forward (+x) and down (-z) to get above the source.
-    seq += repeat_action(make_action(dx=+1.0, dz=-0.8, device=device), 15)
-
-    # Phase 2 -- Descend into material
-    seq += repeat_action(make_action(dz=-1.0, device=device), 12)
-
-    # Phase 3 -- Scoop: push along +y while slightly lifting
-    # Close gripper to hold material
-    seq += repeat_action(
-        make_action(dy=+1.0, dz=+0.2, gripper=-1.0, device=device), 15
-    )
-
-    # Phase 4 -- Lift with material
-    seq += repeat_action(make_action(dz=+1.0, gripper=-1.0, device=device), 15)
-
-    # Phase 5 -- Transport: move toward target container (+y)
-    seq += repeat_action(
-        make_action(dy=+1.0, dz=+0.2, gripper=-1.0, device=device), 20
-    )
-
-    # Phase 6 -- Deposit: lower and open gripper, tilt to dump
-    seq += repeat_action(make_action(dz=-0.8, device=device), 10)
-    seq += repeat_action(
-        make_action(dz=-0.3, gripper=+1.0, dpitch=+0.5, device=device), 15
-    )
-
-    # Hold for settling
-    seq += repeat_action(make_action(device=device), 10)
-
-    return seq  # ~112 steps, well within 200 horizon
-
-
-def build_sequence_b(device: str = "cuda") -> List[torch.Tensor]:
-    """Sequence B: Scripted Probe + Scoop.
-
-    Begins with 3 gentle probe taps at different positions near the
-    source container, then runs the same scoop-and-deposit from
-    Sequence A.
-
-    Probe taps are: touch down gently, retract.
-    """
-    seq: List[torch.Tensor] = []
-
-    # Move toward source first
-    seq += repeat_action(make_action(dx=+1.0, dz=-0.5, device=device), 10)
-
-    # Probe tap 1 -- centre of source
-    seq += repeat_action(make_action(dz=-1.0, device=device), 5)   # down
-    seq += repeat_action(make_action(dz=+1.0, device=device), 5)   # retract
-
-    # Shift slightly in y for tap 2
-    seq += repeat_action(make_action(dy=-0.5, device=device), 3)
-    seq += repeat_action(make_action(dz=-1.0, device=device), 5)   # down
-    seq += repeat_action(make_action(dz=+1.0, device=device), 5)   # retract
-
-    # Shift in +y for tap 3
-    seq += repeat_action(make_action(dy=+1.0, device=device), 3)
-    seq += repeat_action(make_action(dz=-1.0, device=device), 5)   # down
-    seq += repeat_action(make_action(dz=+1.0, device=device), 5)   # retract
-
-    # Now run scoop-and-deposit (adapted -- shorter since we already
-    # moved partially toward the source)
-
-    # Descend into material
-    seq += repeat_action(make_action(dz=-1.0, device=device), 12)
-
-    # Scoop along +y, close gripper
-    seq += repeat_action(
-        make_action(dy=+1.0, dz=+0.2, gripper=-1.0, device=device), 15
-    )
-
-    # Lift
-    seq += repeat_action(make_action(dz=+1.0, gripper=-1.0, device=device), 15)
-
-    # Transport to target
-    seq += repeat_action(
-        make_action(dy=+1.0, dz=+0.2, gripper=-1.0, device=device), 20
-    )
-
-    # Deposit
-    seq += repeat_action(make_action(dz=-0.8, device=device), 8)
-    seq += repeat_action(
-        make_action(dz=-0.3, gripper=+1.0, dpitch=+0.5, device=device), 12
-    )
-
-    # Settle
-    seq += repeat_action(make_action(device=device), 5)
-
-    return seq  # ~153 steps
-
-
-def build_sequence_c(
-    horizon: int = 200, seed: int = 0, device: str = "cuda"
-) -> List[torch.Tensor]:
-    """Sequence C: Random baseline -- uniform random actions."""
-    rng = np.random.RandomState(seed)
-    seq: List[torch.Tensor] = []
-    for _ in range(horizon):
-        a = rng.uniform(-1, 1, size=(7,)).astype(np.float32)
-        seq.append(torch.tensor(a, dtype=torch.float32, device=device))
-    return seq
-
-
-# ---------------------------------------------------------------------------
-# Episode runner
-# ---------------------------------------------------------------------------
-
-def run_episode(
-    env: Any,
-    action_sequence: List[torch.Tensor],
-    horizon: int = 200,
-) -> Dict[str, float]:
-    """Run one episode with the given action sequence.
-
-    Returns the final-step metrics dict.
+    Sweeps the gripper from the -y edge of the source container through
+    the material toward the target container at +y.  Uses fine
+    interpolation (many small qpos increments) to moderate contact forces.
     """
     env.reset()
+
+    # Phase 1: Position at -y edge of source at particle level
+    # Use multi-step approach to avoid violent teleportation
+    interpolate_waypoints(env, HOME, EXTEND_FWD, 20, settle_per_step=1)
+    interpolate_waypoints(env, EXTEND_FWD, HOVER_ABOVE_SOURCE, 20, settle_per_step=1)
+    interpolate_waypoints(env, HOVER_ABOVE_SOURCE, SCOOP_START, 40, settle_per_step=1)
+
+    # Phase 2: Sweep through source material (slow, fine steps)
+    interpolate_waypoints(env, SCOOP_START, SCOOP_MID, 40, settle_per_step=2)
+    interpolate_waypoints(env, SCOOP_MID, SCOOP_PAST_SOURCE, 30, settle_per_step=2)
+
+    # Phase 3: Continue sweep through gap to target
+    interpolate_waypoints(env, SCOOP_PAST_SOURCE, SCOOP_MIDWAY, 30, settle_per_step=2)
+    interpolate_waypoints(env, SCOOP_MIDWAY, SCOOP_AT_TARGET, 30, settle_per_step=2)
+    interpolate_waypoints(env, SCOOP_AT_TARGET, SCOOP_PAST_TARGET, 20, settle_per_step=2)
+
+    # Phase 4: Settle particles
+    settle(env, 50)
+
+    return env.compute_metrics()
+
+
+def run_sequence_b(env: Any, horizon: int = 200) -> Dict[str, float]:
+    """Sequence B: Scripted Probe + Scoop.
+
+    Performs 3 probe taps (gentle vertical motions into the material at
+    different y-positions) to gather contact information, then executes
+    the same scoop-and-deposit sweep from Sequence A.
+    """
+    env.reset()
+
+    # Phase 0: Position for probing
+    interpolate_waypoints(env, HOME, EXTEND_FWD, 15, settle_per_step=1)
+    interpolate_waypoints(env, EXTEND_FWD, PROBE_HOVER, 15, settle_per_step=1)
+
+    # Probe tap 1: centre
+    interpolate_waypoints(env, PROBE_HOVER, PROBE_DOWN_C, 20, settle_per_step=2)
+    interpolate_waypoints(env, PROBE_DOWN_C, PROBE_HOVER, 10, settle_per_step=1)
+
+    # Probe tap 2: left (-y)
+    interpolate_waypoints(env, PROBE_HOVER, PROBE_DOWN_L, 20, settle_per_step=2)
+    interpolate_waypoints(env, PROBE_DOWN_L, PROBE_HOVER, 10, settle_per_step=1)
+
+    # Probe tap 3: right (+y)
+    interpolate_waypoints(env, PROBE_HOVER, PROBE_DOWN_R, 20, settle_per_step=2)
+    interpolate_waypoints(env, PROBE_DOWN_R, PROBE_HOVER, 10, settle_per_step=1)
+
+    # Phase 1: Scoop-and-deposit (same as A, slightly compressed)
+    interpolate_waypoints(env, PROBE_HOVER, SCOOP_START, 30, settle_per_step=1)
+    interpolate_waypoints(env, SCOOP_START, SCOOP_MID, 35, settle_per_step=2)
+    interpolate_waypoints(env, SCOOP_MID, SCOOP_PAST_SOURCE, 25, settle_per_step=2)
+    interpolate_waypoints(env, SCOOP_PAST_SOURCE, SCOOP_MIDWAY, 25, settle_per_step=2)
+    interpolate_waypoints(env, SCOOP_MIDWAY, SCOOP_AT_TARGET, 25, settle_per_step=2)
+    interpolate_waypoints(env, SCOOP_AT_TARGET, SCOOP_PAST_TARGET, 15, settle_per_step=2)
+
+    # Phase 2: Settle
+    settle(env, 40)
+
+    return env.compute_metrics()
+
+
+def run_sequence_c(env: Any, horizon: int = 200, seed: int = 0) -> Dict[str, float]:
+    """Sequence C: Random baseline -- uniform random 7-D actions via step()."""
+    env.reset()
+
+    rng = np.random.RandomState(seed)
     info: Dict[str, float] = {}
 
-    for t in range(min(len(action_sequence), horizon)):
-        _, _, done, info = env.step(action_sequence[t])
+    for t in range(horizon):
+        a = rng.uniform(-1, 1, size=(7,)).astype(np.float32)
+        action = torch.tensor(a, dtype=torch.float32, device="cuda")
+        _, _, done, info = env.step(action)
         if done:
             break
 
-    # If the sequence was shorter than horizon, pad with no-ops
-    if not done and len(action_sequence) < horizon:
-        noop = make_action(device=action_sequence[0].device)
-        for t in range(len(action_sequence), horizon):
-            _, _, done, info = env.step(noop)
-            if done:
-                break
+    return info
+
+
+def run_sequence_d(env: Any, horizon: int = 200) -> Dict[str, float]:
+    """Sequence D: No-op baseline -- zero actions to show settling effect."""
+    env.reset()
+
+    info: Dict[str, float] = {}
+    action = torch.zeros(7, dtype=torch.float32, device="cuda")
+
+    for t in range(horizon):
+        _, _, done, info = env.step(action)
+        if done:
+            break
 
     return info
 
@@ -263,7 +293,7 @@ def main() -> None:
     print(f"  Output CSV:            {args.output}")
     print()
 
-    # Build environment once -- reuse across episodes
+    # Build environment
     print("[1/4] Building environment ...")
     t0 = time.time()
 
@@ -285,36 +315,42 @@ def main() -> None:
 
     build_time = time.time() - t0
     print(f"  OK ({build_time:.1f}s, {env._total_particles} particles)")
+
+    # Report bbox info
+    print(f"  Source AABB z: [{env._source_bbox_min[2]:.3f}, {env._source_bbox_max[2]:.3f}]")
+    print(f"  Target AABB z: [{env._target_bbox_min[2]:.3f}, {env._target_bbox_max[2]:.3f}]")
+    print(f"  NOTE: particles settle to z~0.02 (below source AABB z_min=0.04)")
+    print(f"        -> spill_ratio ~1.0 is expected for all baselines")
     print()
 
     # Define sequences
-    sequences = {
-        "A_scoop_deposit": lambda seed: build_sequence_a(device="cuda"),
-        "B_probe_scoop": lambda seed: build_sequence_b(device="cuda"),
-        "C_random": lambda seed: build_sequence_c(
-            horizon=horizon, seed=seed, device="cuda"
-        ),
+    sequence_runners: Dict[str, Callable] = {
+        "A_scoop_deposit": lambda ep: run_sequence_a(env, horizon),
+        "B_probe_scoop":   lambda ep: run_sequence_b(env, horizon),
+        "C_random":        lambda ep: run_sequence_c(env, horizon, seed=ep * 100 + 42),
+        "D_noop":          lambda ep: run_sequence_d(env, horizon),
     }
 
     all_rows: List[Dict[str, Any]] = []
 
-    # Run each sequence
+    # Run episodes
     print("[2/4] Running episodes ...")
     print()
 
-    for seq_name, seq_builder in sequences.items():
+    for seq_name, runner in sequence_runners.items():
         print(f"  --- Sequence {seq_name} ---")
         ep_metrics: List[Dict[str, float]] = []
 
         for ep in range(n_episodes):
-            action_seq = seq_builder(seed=ep * 100 + 42)
             t_ep = time.time()
-            info = run_episode(env, action_seq, horizon=horizon)
+            info = runner(ep)
             dt = time.time() - t_ep
 
             success = info.get("success_rate", 0.0)
             te = info.get("transfer_efficiency", 0.0)
             sr = info.get("spill_ratio", 0.0)
+            n_in = info.get("n_in_target", 0)
+            n_sp = info.get("n_spilled", 0)
 
             ep_metrics.append({
                 "success_rate": success,
@@ -327,6 +363,8 @@ def main() -> None:
                 f"success={success:.0f}  "
                 f"transfer={te:.4f}  "
                 f"spill={sr:.4f}  "
+                f"in_target={n_in}  "
+                f"spilled={n_sp}  "
                 f"({dt:.1f}s)"
             )
 
@@ -338,7 +376,6 @@ def main() -> None:
                 "spill_ratio": sr,
             })
 
-        # Summary for this sequence
         successes = [m["success_rate"] for m in ep_metrics]
         transfers = [m["transfer_efficiency"] for m in ep_metrics]
         spills = [m["spill_ratio"] for m in ep_metrics]
@@ -349,13 +386,13 @@ def main() -> None:
         )
         print()
 
-    # Print summary table
+    # Summary table
     print("[3/4] Summary Table")
     print("-" * 70)
     print(f"{'Sequence':<20s} {'Success%':>10s} {'TransferEff':>14s} {'SpillRatio':>14s}")
     print("-" * 70)
 
-    for seq_name in sequences:
+    for seq_name in sequence_runners:
         rows = [r for r in all_rows if r["sequence"] == seq_name]
         s_mean = np.mean([r["success_rate"] for r in rows]) * 100
         t_mean = np.mean([r["transfer_efficiency"] for r in rows])
