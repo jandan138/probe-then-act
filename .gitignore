@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+*.pyo
+.env
+checkpoints/
+logs/
+results/videos/
+*.pt
+*.pth
+.venv/
