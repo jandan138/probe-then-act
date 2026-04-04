@@ -198,6 +198,8 @@ class SceneBuilder:
 
     def _init_genesis(self, config: Dict[str, Any]) -> None:
         """Call ``gs.init(backend=gs.gpu)`` with settings from *config*."""
+        if gs._initialized:
+            return
         gs.init(
             backend=gs.gpu,
             logging_level="warning",
