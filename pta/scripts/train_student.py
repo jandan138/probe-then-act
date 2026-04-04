@@ -1,9 +1,10 @@
 """CLI entry point for student / baseline RL training.
 
-Supports three baseline methods from the paper:
+Supports four baseline methods from the paper:
   - M1 (reactive_ppo):     Standard PPO, no history -- Reactive baseline
   - M2 (rnn_ppo):          RecurrentPPO from sb3-contrib -- History-based
   - M3 (domain_rand_ppo):  PPO with domain randomisation wrapper
+  - M4 (fixed_probe_ppo):  PPO with fixed scripted probe sequence
 
 Usage::
 
@@ -15,6 +16,9 @@ Usage::
 
     # M3: Domain-randomisation PPO baseline
     python pta/scripts/train_student.py --method domain_rand_ppo --seed 42
+
+    # M4: Fixed-Probe+PPO baseline
+    python pta/scripts/train_student.py --method fixed_probe_ppo --seed 42
 
     # Shorter test run
     python pta/scripts/train_student.py --method reactive_ppo --total-timesteps 100000
@@ -33,20 +37,20 @@ if str(_PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROJECT_ROOT))
 
 
-METHODS = ["reactive_ppo", "rnn_ppo", "domain_rand_ppo"]
+METHODS = ["reactive_ppo", "rnn_ppo", "domain_rand_ppo", "fixed_probe_ppo"]
 
 
 def parse_args() -> argparse.Namespace:
     """Parse command-line arguments for student/baseline training."""
     parser = argparse.ArgumentParser(
-        description="Train baseline RL policies (M1/M2/M3)",
+        description="Train baseline RL policies (M1/M2/M3/M4)",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
 
     # Method
     parser.add_argument(
         "--method", type=str, required=True, choices=METHODS,
-        help="Baseline method: reactive_ppo (M1), rnn_ppo (M2), domain_rand_ppo (M3)",
+        help="Baseline method: reactive_ppo (M1), rnn_ppo (M2), domain_rand_ppo (M3), fixed_probe_ppo (M4)",
     )
 
     # Training
@@ -375,6 +379,92 @@ def train_domain_rand_ppo(config: dict) -> None:
     print(f"M3 (domain_rand_ppo) training complete. Model saved to {ckpt_dir}")
 
 
+def train_fixed_probe_ppo(config: dict) -> None:
+    """M4: PPO with a fixed scripted probe sequence before manipulation."""
+    from stable_baselines3 import PPO
+    from stable_baselines3.common.callbacks import (
+        CallbackList,
+        CheckpointCallback,
+        EvalCallback,
+    )
+    from stable_baselines3.common.vec_env import DummyVecEnv
+
+    from pta.envs.wrappers.fixed_probe_wrapper import FixedProbeWrapper
+    from pta.envs.wrappers.gym_wrapper import GenesisGymWrapper
+    from pta.training.utils.checkpoint_io import save_sb3_checkpoint
+    from pta.training.utils.seed import set_seed
+
+    seed = config["seed"]
+    set_seed(seed)
+
+    log_dir = Path(config["log_dir"])
+    ckpt_dir = Path(config["checkpoint_dir"])
+    log_dir.mkdir(parents=True, exist_ok=True)
+    ckpt_dir.mkdir(parents=True, exist_ok=True)
+
+    def _make_probe_env():
+        base_env = GenesisGymWrapper(
+            task_config=config.get("task_config"),
+            scene_config=config.get("scene_config"),
+        )
+        return FixedProbeWrapper(env=base_env)
+
+    vec_env = DummyVecEnv([_make_probe_env])
+
+    # Eval env also uses the fixed probe wrapper for consistency
+    eval_env = DummyVecEnv([_make_probe_env])
+
+    model = PPO(
+        policy="MlpPolicy",
+        env=vec_env,
+        learning_rate=config["lr"],
+        n_steps=config["n_steps"],
+        batch_size=config["batch_size"],
+        n_epochs=config["n_epochs"],
+        gamma=config["gamma"],
+        gae_lambda=config["gae_lambda"],
+        clip_range=config["clip_range"],
+        ent_coef=config["entropy_coef"],
+        policy_kwargs={"net_arch": [dict(pi=[256, 256], vf=[256, 256])]},
+        tensorboard_log=str(log_dir / "tb"),
+        seed=seed,
+        verbose=config["verbose"],
+        device="auto",
+    )
+
+    callbacks = CallbackList([
+        CheckpointCallback(
+            save_freq=config["save_freq"],
+            save_path=str(ckpt_dir),
+            name_prefix="fixed_probe_ppo",
+        ),
+        EvalCallback(
+            eval_env,
+            best_model_save_path=str(ckpt_dir / "best"),
+            log_path=str(log_dir / "eval"),
+            eval_freq=config["eval_freq"],
+            n_eval_episodes=5,
+            deterministic=True,
+        ),
+    ])
+
+    model.learn(
+        total_timesteps=config["total_timesteps"],
+        callback=callbacks,
+        progress_bar=True,
+    )
+
+    save_sb3_checkpoint(
+        model,
+        ckpt_dir / "fixed_probe_ppo_final",
+        metadata={"method": "fixed_probe_ppo", "seed": seed, "config": config},
+    )
+
+    eval_env.close()
+    vec_env.close()
+    print(f"M4 (fixed_probe_ppo) training complete. Model saved to {ckpt_dir}")
+
+
 def main() -> None:
     """Parse CLI arguments and launch student/baseline training."""
     args = parse_args()
@@ -433,6 +523,7 @@ def main() -> None:
         "reactive_ppo": "M1 -- Reactive PPO (no history)",
         "rnn_ppo": "M2 -- RNN-PPO (LSTM history)",
         "domain_rand_ppo": "M3 -- Domain-Randomisation PPO",
+        "fixed_probe_ppo": "M4 -- Fixed-Probe+PPO (scripted probe)",
     }
     print(f"  Method:     {method_names[method]}")
     print(f"  Timesteps:  {args.total_timesteps:,}")
@@ -451,6 +542,7 @@ def main() -> None:
         "reactive_ppo": train_reactive_ppo,
         "rnn_ppo": train_rnn_ppo,
         "domain_rand_ppo": train_domain_rand_ppo,
+        "fixed_probe_ppo": train_fixed_probe_ppo,
     }
 
     dispatch[method](config)
