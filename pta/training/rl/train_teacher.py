@@ -1,9 +1,10 @@
 """Train a privileged teacher policy using PPO with full-state observations.
 
-Uses Stable-Baselines3 PPO with the GenesisGymWrapper.  For v1 the
-teacher receives the same observations as the student (proprioception
-+ step fraction).  Privileged observations (hidden material params)
-will be added in v2.
+Uses Stable-Baselines3 PPO with the GenesisGymWrapper, wrapped by
+PrivilegedObsWrapper to append ground-truth material parameters
+(family one-hot + normalized E, nu, rho) to the observation.  This
+gives the teacher access to hidden physics that the student never sees,
+establishing a performance upper bound (M8).
 """
 
 from __future__ import annotations
@@ -21,6 +22,7 @@ from stable_baselines3.common.callbacks import (
 from stable_baselines3.common.vec_env import DummyVecEnv
 
 from pta.envs.wrappers.gym_wrapper import GenesisGymWrapper
+from pta.envs.wrappers.privileged_obs_wrapper import PrivilegedObsWrapper
 from pta.training.utils.checkpoint_io import save_sb3_checkpoint
 from pta.training.utils.logger import ExperimentLogger
 from pta.training.utils.seed import set_seed
@@ -70,25 +72,31 @@ def make_env(
     task_config: Optional[Dict[str, Any]] = None,
     scene_config: Optional[Dict[str, Any]] = None,
     seed: int = 0,
-) -> GenesisGymWrapper:
-    """Create a single GenesisGymWrapper instance.
+) -> PrivilegedObsWrapper:
+    """Create a GenesisGymWrapper with privileged observations.
 
     Parameters
     ----------
     task_config:
         Task-level configuration for ScoopTransferTask.
     scene_config:
-        Scene-level configuration for SceneBuilder.
+        Scene-level configuration for SceneBuilder.  Also used to
+        extract material family and params for the privileged wrapper.
     seed:
         Seed for the environment.
 
     Returns
     -------
-    GenesisGymWrapper
-        A ready-to-use Gymnasium environment.
+    PrivilegedObsWrapper
+        A Gymnasium environment whose observations include both the
+        student-visible features and privileged material parameters.
     """
-    env = GenesisGymWrapper(
+    base_env = GenesisGymWrapper(
         task_config=task_config,
+        scene_config=scene_config,
+    )
+    env = PrivilegedObsWrapper(
+        env=base_env,
         scene_config=scene_config,
     )
     env.reset(seed=seed)
@@ -98,13 +106,11 @@ def make_env(
 def train_teacher(config: Dict[str, Any]) -> PPO:
     """Train a privileged teacher using PPO with access to ground-truth state.
 
-    The teacher receives privileged observations (e.g. true material IDs,
-    exact mass, friction coefficients) that are unavailable at deployment
-    time.  Its converged policy later serves as the expert for student
-    distillation.
-
-    For v1, the teacher uses the same observations as the student
-    (proprioception + step fraction).
+    The teacher receives privileged observations (material family one-hot,
+    normalized E, nu, rho) appended to the base student observations via
+    :class:`PrivilegedObsWrapper`.  These hidden-physics features are
+    unavailable at deployment time.  The converged policy later serves as
+    the expert for student distillation.
 
     Parameters
     ----------
