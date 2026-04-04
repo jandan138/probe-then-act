@@ -59,9 +59,9 @@ def parse_args() -> argparse.Namespace:
 
     # PPO hyper-parameters
     parser.add_argument("--lr", type=float, default=3e-4, help="Learning rate")
-    parser.add_argument("--n-steps", type=int, default=128, help="Steps per env before update")
-    parser.add_argument("--batch-size", type=int, default=64, help="Minibatch size")
-    parser.add_argument("--n-epochs", type=int, default=10, help="PPO epochs per update")
+    parser.add_argument("--n-steps", type=int, default=512, help="Steps per env before update")
+    parser.add_argument("--batch-size", type=int, default=256, help="Minibatch size")
+    parser.add_argument("--n-epochs", type=int, default=5, help="PPO epochs per update")
     parser.add_argument("--gamma", type=float, default=0.99, help="Discount factor")
     parser.add_argument("--gae-lambda", type=float, default=0.95, help="GAE lambda")
     parser.add_argument("--clip-range", type=float, default=0.2, help="PPO clip range")
@@ -98,10 +98,38 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--log-dir", type=str, default=None, help="Log directory")
     parser.add_argument("--checkpoint-dir", type=str, default=None, help="Checkpoint directory")
 
+    # Parallelism
+    parser.add_argument(
+        "--n-envs", type=int, default=1,
+        help="Number of parallel Genesis envs (GPU-batched). Use 4-8 for MPM scenes",
+    )
+
     # Misc
     parser.add_argument("--verbose", type=int, default=1, help="Verbosity (0/1/2)")
 
     return parser.parse_args()
+
+
+def _make_vec_env(config: dict, for_eval: bool = False):
+    """Create a VecEnv: GPU-batched if n_envs > 1, else DummyVecEnv."""
+    from stable_baselines3.common.vec_env import DummyVecEnv
+    from pta.envs.wrappers.gym_wrapper import GenesisGymWrapper
+
+    n_envs = config.get("n_envs", 1)
+    if n_envs > 1 and not for_eval:
+        from pta.envs.wrappers.vector_env import GenesisBatchedVecEnv
+        return GenesisBatchedVecEnv(
+            num_envs=n_envs,
+            task_config=config.get("task_config"),
+            scene_config=config.get("scene_config"),
+        )
+
+    def _make_env():
+        return GenesisGymWrapper(
+            task_config=config.get("task_config"),
+            scene_config=config.get("scene_config"),
+        )
+    return DummyVecEnv([_make_env])
 
 
 def train_reactive_ppo(config: dict) -> None:
@@ -112,9 +140,7 @@ def train_reactive_ppo(config: dict) -> None:
         CheckpointCallback,
         EvalCallback,
     )
-    from stable_baselines3.common.vec_env import DummyVecEnv
 
-    from pta.envs.wrappers.gym_wrapper import GenesisGymWrapper
     from pta.training.utils.checkpoint_io import save_sb3_checkpoint
     from pta.training.utils.seed import set_seed
 
@@ -126,14 +152,8 @@ def train_reactive_ppo(config: dict) -> None:
     log_dir.mkdir(parents=True, exist_ok=True)
     ckpt_dir.mkdir(parents=True, exist_ok=True)
 
-    def _make_env():
-        return GenesisGymWrapper(
-            task_config=config.get("task_config"),
-            scene_config=config.get("scene_config"),
-        )
-
-    vec_env = DummyVecEnv([_make_env])
-    eval_env = DummyVecEnv([_make_env])
+    vec_env = _make_vec_env(config)
+    eval_env = _make_vec_env(config, for_eval=True)
 
     model = PPO(
         policy="MlpPolicy",
@@ -200,9 +220,7 @@ def train_rnn_ppo(config: dict) -> None:
         CheckpointCallback,
         EvalCallback,
     )
-    from stable_baselines3.common.vec_env import DummyVecEnv
 
-    from pta.envs.wrappers.gym_wrapper import GenesisGymWrapper
     from pta.training.utils.checkpoint_io import save_sb3_checkpoint
     from pta.training.utils.seed import set_seed
 
@@ -214,14 +232,9 @@ def train_rnn_ppo(config: dict) -> None:
     log_dir.mkdir(parents=True, exist_ok=True)
     ckpt_dir.mkdir(parents=True, exist_ok=True)
 
-    def _make_env():
-        return GenesisGymWrapper(
-            task_config=config.get("task_config"),
-            scene_config=config.get("scene_config"),
-        )
-
-    vec_env = DummyVecEnv([_make_env])
-    eval_env = DummyVecEnv([_make_env])
+    # RNN-PPO requires sequential data, use DummyVecEnv (not GPU-batched)
+    vec_env = _make_vec_env(config, for_eval=True)
+    eval_env = _make_vec_env(config, for_eval=True)
 
     policy_kwargs = {
         "lstm_hidden_size": config.get("lstm_hidden_size", 256),
@@ -303,6 +316,7 @@ def train_domain_rand_ppo(config: dict) -> None:
     log_dir.mkdir(parents=True, exist_ok=True)
     ckpt_dir.mkdir(parents=True, exist_ok=True)
 
+    # Domain rand wraps individual envs; GPU batching not compatible
     def _make_dr_env():
         base_env = GenesisGymWrapper(
             task_config=config.get("task_config"),
@@ -320,13 +334,7 @@ def train_domain_rand_ppo(config: dict) -> None:
     vec_env = DummyVecEnv([_make_dr_env])
 
     # Eval env without domain rand (use fixed material for fair eval)
-    def _make_eval_env():
-        return GenesisGymWrapper(
-            task_config=config.get("task_config"),
-            scene_config=config.get("scene_config"),
-        )
-
-    eval_env = DummyVecEnv([_make_eval_env])
+    eval_env = _make_vec_env(config, for_eval=True)
 
     model = PPO(
         policy="MlpPolicy",
@@ -402,6 +410,7 @@ def train_fixed_probe_ppo(config: dict) -> None:
     log_dir.mkdir(parents=True, exist_ok=True)
     ckpt_dir.mkdir(parents=True, exist_ok=True)
 
+    # Fixed probe wrapper wraps individual envs; not compatible with GPU batching
     def _make_probe_env():
         base_env = GenesisGymWrapper(
             task_config=config.get("task_config"),
@@ -410,8 +419,6 @@ def train_fixed_probe_ppo(config: dict) -> None:
         return FixedProbeWrapper(env=base_env)
 
     vec_env = DummyVecEnv([_make_probe_env])
-
-    # Eval env also uses the fixed probe wrapper for consistency
     eval_env = DummyVecEnv([_make_probe_env])
 
     model = PPO(
@@ -503,11 +510,12 @@ def main() -> None:
         # Env
         "scene_config": {
             "particle_material": args.material,
-            "n_envs": 0,
+            "n_envs": args.n_envs,
         },
         "task_config": {
             "horizon": args.horizon,
         },
+        "n_envs": args.n_envs,
         # M2 options
         "lstm_hidden_size": args.lstm_hidden_size,
         "n_lstm_layers": args.n_lstm_layers,
@@ -530,6 +538,9 @@ def main() -> None:
     print(f"  Seed:       {args.seed}")
     print(f"  Material:   {args.material}")
     print(f"  Horizon:    {args.horizon}")
+    print(f"  n_envs:     {args.n_envs}")
+    print(f"  n_steps:    {args.n_steps}")
+    print(f"  batch_size: {args.batch_size}")
     if method == "rnn_ppo":
         print(f"  LSTM:       hidden={args.lstm_hidden_size}, layers={args.n_lstm_layers}")
     if method == "domain_rand_ppo":

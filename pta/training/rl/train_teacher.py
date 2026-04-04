@@ -36,9 +36,9 @@ from pta.utils.paths import CHECKPOINT_DIR, LOG_DIR
 _DEFAULT_TRAIN_CONFIG: Dict[str, Any] = {
     # PPO hyper-parameters
     "learning_rate": 3e-4,
-    "n_steps": 128,
-    "batch_size": 64,
-    "n_epochs": 10,
+    "n_steps": 512,
+    "batch_size": 256,
+    "n_epochs": 5,
     "gamma": 0.99,
     "gae_lambda": 0.95,
     "clip_range": 0.2,

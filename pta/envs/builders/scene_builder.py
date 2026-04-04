@@ -202,7 +202,9 @@ class SceneBuilder:
             return
         gs.init(
             backend=gs.gpu,
+            precision="32",
             logging_level="warning",
+            performance_mode=True,
         )
 
     def _create_scene(self, config: Dict[str, Any]) -> Any:
