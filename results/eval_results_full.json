@@ -1,0 +1,157 @@
+{
+  "reactive_ppo": {
+    "id": {
+      "success_rate": 0.0,
+      "mean_return": -8.53,
+      "mean_spill_ratio": 0.0,
+      "mean_transfer_efficiency": 0.0
+    },
+    "ood_material": {
+      "snow": {
+        "return": -8.53,
+        "spill": 0.0
+      },
+      "sand_extreme": {
+        "return": -8.53,
+        "spill": 0.0
+      },
+      "elast_extreme": {
+        "return": -8.53,
+        "spill": 0.0
+      },
+      "liquid": {
+        "return": -50.66,
+        "spill": 0.741
+      },
+      "_avg": {
+        "success_rate": 0.0,
+        "mean_return": -19.06,
+        "mean_spill_ratio": 0.185
+      }
+    }
+  },
+  "rnn_ppo": {
+    "id": {
+      "success_rate": 0.0,
+      "mean_return": -8.41,
+      "mean_spill_ratio": 0.0,
+      "mean_transfer_efficiency": 0.0
+    },
+    "ood_material": {
+      "snow": {
+        "return": -8.41,
+        "spill": 0.0
+      },
+      "sand_extreme": {
+        "return": -8.41,
+        "spill": 0.0
+      },
+      "elast_extreme": {
+        "return": -8.41,
+        "spill": 0.0
+      },
+      "liquid": {
+        "return": -50.54,
+        "spill": 0.741
+      },
+      "_avg": {
+        "success_rate": 0.0,
+        "mean_return": -18.94,
+        "mean_spill_ratio": 0.185
+      }
+    }
+  },
+  "domain_rand_ppo": {
+    "id": {
+      "success_rate": 0.0,
+      "mean_return": -7.91,
+      "mean_spill_ratio": 0.0,
+      "mean_transfer_efficiency": 0.0
+    },
+    "ood_material": {
+      "snow": {
+        "return": -7.92,
+        "spill": 0.0
+      },
+      "sand_extreme": {
+        "return": -7.92,
+        "spill": 0.0
+      },
+      "elast_extreme": {
+        "return": -7.91,
+        "spill": 0.0
+      },
+      "liquid": {
+        "return": -50.05,
+        "spill": 0.741
+      },
+      "_avg": {
+        "success_rate": 0.0,
+        "mean_return": -18.7,
+        "mean_spill_ratio": 0.185
+      }
+    }
+  },
+  "fixed_probe_ppo": {
+    "id": {
+      "success_rate": 0.0,
+      "mean_return": -6.54,
+      "mean_spill_ratio": 0.0,
+      "mean_transfer_efficiency": 0.0
+    },
+    "ood_material": {
+      "snow": {
+        "return": -6.54,
+        "spill": 0.0
+      },
+      "sand_extreme": {
+        "return": -6.54,
+        "spill": 0.0
+      },
+      "elast_extreme": {
+        "return": -6.54,
+        "spill": 0.0
+      },
+      "liquid": {
+        "return": -48.68,
+        "spill": 0.741
+      },
+      "_avg": {
+        "success_rate": 0.0,
+        "mean_return": -17.45,
+        "mean_spill_ratio": 0.185
+      }
+    }
+  },
+  "teacher": {
+    "id": {
+      "success_rate": 0.0,
+      "mean_return": -7.81,
+      "mean_spill_ratio": 0.0,
+      "mean_transfer_efficiency": 0.0
+    },
+    "ood_material": {
+      "snow": {
+        "return": -7.81,
+        "spill": 0.0
+      },
+      "sand_extreme": {
+        "return": -7.92,
+        "spill": 0.0
+      },
+      "elast_extreme": {
+        "return": -7.81,
+        "spill": 0.0
+      },
+      "liquid": {
+        "return": -49.98,
+        "spill": 0.741
+      },
+      "_avg": {
+        "success_rate": 0.0,
+        "mean_return": -18.38,
+        "mean_spill_ratio": 0.185
+      }
+    }
+  }
+}

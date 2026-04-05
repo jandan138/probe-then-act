@@ -1,0 +1,3 @@
+method,split,success_rate,mean_return,std_return,mean_episode_length,mean_transfer_efficiency,mean_spill_ratio,nan_crash_count,n_episodes
+teacher,id,0.0,-7.81013913194338,0.0022925402649915,200.0,0.0,0.0,0.0,10.0
+teacher,ood_material,0.0,-18.378873607038923,0.005237988279672493,200.0,0.0,0.18530150753768845,0.0,10.0

@@ -1,0 +1,24 @@
+{
+  "teacher": {
+    "id": {
+      "success_rate": 0.0,
+      "mean_return": -7.81013913194338,
+      "std_return": 0.0022925402649915,
+      "mean_episode_length": 200.0,
+      "mean_transfer_efficiency": 0.0,
+      "mean_spill_ratio": 0.0,
+      "nan_crash_count": 0.0,
+      "n_episodes": 10.0
+    },
+    "ood_material": {
+      "success_rate": 0.0,
+      "mean_return": -18.378873607038923,
+      "std_return": 0.005237988279672493,
+      "mean_episode_length": 200.0,
+      "mean_transfer_efficiency": 0.0,
+      "mean_spill_ratio": 0.18530150753768845,
+      "nan_crash_count": 0.0,
+      "n_episodes": 10.0
+    }
+  }
+}

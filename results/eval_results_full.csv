@@ -1,0 +1,11 @@
+method,split,success_rate,mean_return,mean_spill_ratio
+reactive_ppo,id,0.0,-8.53,0.0
+reactive_ppo,ood_material,0.0,-19.06,0.185
+rnn_ppo,id,0.0,-8.41,0.0
+rnn_ppo,ood_material,0.0,-18.94,0.185
+domain_rand_ppo,id,0.0,-7.91,0.0
+domain_rand_ppo,ood_material,0.0,-18.7,0.185
+fixed_probe_ppo,id,0.0,-6.54,0.0
+fixed_probe_ppo,ood_material,0.0,-17.45,0.185
+teacher,id,0.0,-7.81,0.0
+teacher,ood_material,0.0,-18.38,0.185
