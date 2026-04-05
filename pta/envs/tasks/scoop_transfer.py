@@ -31,7 +31,7 @@ from pta.envs.builders.scene_builder import SceneBuilder, SceneComponents
 _DEFAULT_TASK_CONFIG: Dict[str, Any] = {
     # Episode
     "horizon": 500,
-    "ctrl_dt": 5e-3,
+    "ctrl_dt": 2e-3,
     # Action
     "action_dim": 7,  # dx, dy, dz, droll, dpitch, dyaw, gripper
     "action_scale_pos": 0.05,   # metres per action unit (increased for reachability)
@@ -222,10 +222,23 @@ class ScoopTransferTask(BaseTask):
         self.robot.control_dofs_position(full_qpos)
 
         # Step physics
-        self.scene.step()
+        try:
+            self.scene.step()
+        except Exception:
+            # NaN constraint forces — treat as episode failure, return zeros
+            dummy_obs = {
+                "proprio": torch.zeros(37, device=gs.device),
+                "step_fraction": torch.tensor([1.0], device=gs.device),
+            }
+            return dummy_obs, -10.0, True, {"step": self._step_count, "nan_crash": True}
 
         # Compute outputs
         obs = self.get_observations()
+
+        # NaN guard on observations
+        if torch.isnan(obs["proprio"]).any():
+            obs["proprio"] = torch.zeros_like(obs["proprio"])
+            return obs, -10.0, True, {"step": self._step_count, "nan_crash": True}
         reward = self.compute_reward()
         done = self.is_done()
         info = self.compute_metrics()

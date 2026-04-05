@@ -6,7 +6,7 @@ Gymnasium-compatible entry point.
 
 from pta.envs.builders import SceneBuilder, RobotBuilder, MaterialBuilder, ToolBuilder, SensorBuilder, ContainerBuilder
 from pta.envs.tasks import BaseTask, ScoopTransferTask, LevelFillTask
-from pta.envs.wrappers import GenesisGymWrapper, VectorEnvWrapper
+from pta.envs.wrappers import GenesisGymWrapper, GenesisBatchedVecEnv
 
 __all__ = [
     "SceneBuilder",
@@ -19,5 +19,5 @@ __all__ = [
     "ScoopTransferTask",
     "LevelFillTask",
     "GenesisGymWrapper",
-    "VectorEnvWrapper",
+    "GenesisBatchedVecEnv",
 ]

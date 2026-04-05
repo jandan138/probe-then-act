@@ -254,7 +254,9 @@ class GenesisBatchedVecEnv(VecEnv):
         raise NotImplementedError
 
     def get_attr(self, attr_name, indices=None):
-        raise NotImplementedError
+        if attr_name == "render_mode":
+            return [None] * self.num_envs_actual
+        raise AttributeError(f"GenesisBatchedVecEnv has no attribute {attr_name!r}")
 
     def set_attr(self, attr_name, value, indices=None):
         raise NotImplementedError

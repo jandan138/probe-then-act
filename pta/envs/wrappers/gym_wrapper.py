@@ -112,7 +112,15 @@ class GenesisGymWrapper(gymnasium.Env):
             Numpy action array matching ``self.action_space``.
         """
         action_t = torch.tensor(action, dtype=torch.float32, device="cuda")
-        obs_dict, reward, done, info = self.task.step(action_t)
+        try:
+            obs_dict, reward, done, info = self.task.step(action_t)
+        except Exception as e:
+            if "nan" in str(e).lower():
+                # Rigid/MPM solver NaN -- reset and return truncated episode
+                obs_np, info = self.reset()
+                info["nan_reset"] = True
+                return obs_np, 0.0, False, True, info
+            raise
         obs_np = self._obs_dict_to_numpy(obs_dict)
 
         # In Gymnasium API, distinguish terminated vs truncated

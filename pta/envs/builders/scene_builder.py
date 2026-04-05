@@ -53,8 +53,8 @@ class SceneComponents:
 # ---------------------------------------------------------------------------
 
 _DEFAULT_CONFIG: Dict[str, Any] = {
-    "ctrl_dt": 5e-3,
-    "substeps": 10,
+    "ctrl_dt": 2e-3,
+    "substeps": 25,
     # MPM domain -- must enclose source/target containers + workspace
     "mpm_lower_bound": (-0.1, -0.5, -0.05),
     "mpm_upper_bound": (1.0, 0.8, 0.8),
