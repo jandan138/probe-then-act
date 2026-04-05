@@ -2,24 +2,40 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 
-def get_id_split(config: Dict[str, Any]) -> Dict[str, Any]:
+def get_id_split(config: Dict[str, Any] | None = None) -> Dict[str, Any]:
     """Return the in-distribution evaluation split configuration.
 
-    The ID split uses the same object categories, materials, and
-    containers seen during training, but with held-out random seeds.
+    Uses the same material families seen during training (sand, snow,
+    elastoplastic) with default parameters.
 
     Parameters
     ----------
-    config : dict
-        Base experiment configuration.
+    config : dict, optional
+        Base experiment configuration (unused for now).
 
     Returns
     -------
     dict[str, Any]
-        Split configuration including ``name``, environment parameter
-        overrides, and evaluation seeds.
+        Split configuration with ``name``, ``materials`` list, and
+        scene overrides for each material.
     """
-    raise NotImplementedError
+    return {
+        "name": "id",
+        "materials": [
+            {
+                "family": "sand",
+                "params": {},  # default sand params
+            },
+            {
+                "family": "snow",
+                "params": {},
+            },
+            {
+                "family": "elastoplastic",
+                "params": {},
+            },
+        ],
+    }
