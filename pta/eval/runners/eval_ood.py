@@ -18,6 +18,7 @@ def evaluate_ood(
     splits: List[Dict[str, Any]],
     n_episodes: int = 20,
     deterministic: bool = True,
+    task_config: Dict[str, Any] | None = None,
 ) -> Dict[str, Dict[str, float]]:
     """Run a policy on multiple evaluation splits.
 
@@ -64,7 +65,7 @@ def evaluate_ood(
             print(f"  Material: {label} (family={family}, params={params})")
 
             # Create environment with this material
-            env = _make_eval_env(method, family, params)
+            env = _make_eval_env(method, family, params, task_config=task_config)
             if env is None:
                 print(f"  SKIP: could not create env for {label}")
                 continue
@@ -106,6 +107,7 @@ def _make_eval_env(
     method: str,
     family: str,
     params: Dict[str, Any],
+    task_config: Dict[str, Any] | None = None,
 ) -> Any:
     """Create a Gymnasium environment for evaluation.
 
@@ -118,7 +120,10 @@ def _make_eval_env(
         "particle_material": family,
         "particle_params": params,
     }
-    base_env = GenesisGymWrapper(scene_config=scene_config)
+    base_env = GenesisGymWrapper(
+        task_config=task_config,
+        scene_config=scene_config,
+    )
 
     if method == "fixed_probe_ppo":
         from pta.envs.wrappers.fixed_probe_wrapper import FixedProbeWrapper

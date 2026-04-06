@@ -64,6 +64,10 @@ def parse_args() -> argparse.Namespace:
         help="Use deterministic actions",
     )
     parser.add_argument(
+        "--horizon", type=int, default=200,
+        help="Episode horizon (must match training horizon)",
+    )
+    parser.add_argument(
         "--output-dir", type=str, default="results",
         help="Output directory for results",
     )
@@ -117,11 +121,13 @@ def main() -> None:
         sys.exit(1)
 
     all_results = {}
+    task_config = {"horizon": args.horizon}
     print("=" * 60)
     print(f"Phase 3: OOD Evaluation")
     print(f"  Methods:  {args.methods}")
     print(f"  Splits:   {args.splits}")
     print(f"  Episodes: {args.n_episodes} per material config")
+    print(f"  Horizon:  {args.horizon}")
     print("=" * 60)
 
     for method in args.methods:
@@ -153,6 +159,7 @@ def main() -> None:
             splits=splits,
             n_episodes=args.n_episodes,
             deterministic=args.deterministic,
+            task_config=task_config,
         )
         all_results[method] = method_results
 
