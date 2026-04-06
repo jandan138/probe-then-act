@@ -150,6 +150,48 @@ PROBE_DOWN_R = [0.1, 1.5, 0.0, -0.7, 0.0, 0.9, 0.0, 0.04, 0.04]
 
 
 # ---------------------------------------------------------------------------
+# Scoop-tool waypoints (7-D: 7 arm joints, NO finger joints)
+# ---------------------------------------------------------------------------
+# Used with panda_scoop.xml where the gripper is replaced by a rigid scoop.
+
+HOME_S = [0.0, -0.785, 0.0, -2.356, 0.0, 1.571, 0.785]
+EXTEND_FWD_S = [0.0, 0.5, 0.0, -1.8, 0.0, 1.8, 0.0]
+HOVER_SOURCE_S = [0.0, 1.0, 0.0, -1.5, 0.0, 1.5, 0.0]
+
+# Scoop at particle level (-y edge of source)
+# J2=1.3, J4=-1.0 -> z=0.052, safely above ground
+# FK: (0.596, -0.087, 0.052)
+SCOOP_START_S = [-0.15, 1.3, 0.0, -1.0, 0.0, 1.1, 0.0]
+
+# Mid-sweep through source center
+# FK: (0.603, 0.003, 0.052)
+SCOOP_MID_S = [0.0, 1.3, 0.0, -1.0, 0.0, 1.1, 0.0]
+
+# Past +y edge of source — stop before going too far
+SCOOP_PAST_S = [0.15, 1.3, 0.0, -1.0, 0.0, 1.1, 0.0]
+
+# Slight lift to secure particles in scoop cup
+# J2=1.1 -> z=0.080
+LIFT_LOW_S = [0.0, 1.1, 0.0, -1.2, 0.0, 1.2, 0.0]
+
+# Full lift above source rim
+# J2=0.8 -> z=0.160 (source rim at z~0.13)
+LIFT_S = [0.0, 0.8, 0.0, -1.5, 0.0, 1.5, 0.0]
+
+# Traverse to over target while lifted
+# FK: (0.466, 0.393, 0.160)
+TRAVERSE_S = [0.7, 0.8, 0.0, -1.5, 0.0, 1.5, 0.0]
+
+# Lower over target
+# FK: (0.463, 0.390, 0.080)
+DEPOSIT_S = [0.7, 1.1, 0.0, -1.2, 0.0, 1.2, 0.0]
+
+# Tilt scoop to dump (rotate J7)
+# FK: (0.466, 0.390, 0.100)
+DUMP_S = [0.7, 1.1, 0.0, -1.2, 0.0, 1.2, 1.5]
+
+
+# ---------------------------------------------------------------------------
 # Scripted sequences
 # ---------------------------------------------------------------------------
 
@@ -254,6 +296,47 @@ def run_sequence_d(env: Any, horizon: int = 200) -> Dict[str, float]:
     return info
 
 
+def run_sequence_e_scoop(env: Any, horizon: int = 200) -> Dict[str, float]:
+    """Sequence E: Edge-push with panda_scoop.xml (7-DOF, no fingers).
+
+    Strategy: Source particles sit on an elevated platform. The scoop pushes
+    particles off the +y edge of the platform into a target container below.
+    Multiple passes to maximize transfer.
+
+    Requires: env built with tool_type="scoop" and task_layout="edge_push".
+    """
+    env.reset()
+
+    phase_reached = "approach"
+
+    # Waypoints for edge-push (7-DOF, platform at z=0.15)
+    # Scoop at J2=0.8 gives z~0.16, right at platform surface
+    BEHIND_EP = [-0.10, 0.8, 0.0, -1.5, 0.0, 1.5, 0.0]
+    PUSH_END_EP = [0.40, 0.8, 0.0, -1.5, 0.0, 1.5, 0.0]
+
+    # Phase 1: Approach — position behind particles on platform
+    interpolate_waypoints(env, HOME_S, EXTEND_FWD_S, 20, settle_per_step=1)
+    interpolate_waypoints(env, EXTEND_FWD_S, BEHIND_EP, 30, settle_per_step=2)
+
+    phase_reached = "push"
+
+    # Phase 2: Multi-pass push — push particles off the platform edge
+    for pass_idx in range(3):
+        interpolate_waypoints(env, BEHIND_EP, PUSH_END_EP, 100, settle_per_step=3)
+        if pass_idx < 2:
+            # Retract for another pass
+            interpolate_waypoints(env, PUSH_END_EP, BEHIND_EP, 30, settle_per_step=1)
+
+    phase_reached = "dump"
+
+    # Phase 3: Settle — let particles fall into target
+    settle(env, 80)
+
+    metrics = env.compute_metrics()
+    metrics["phase_reached"] = phase_reached
+    return metrics
+
+
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
@@ -279,6 +362,23 @@ def main() -> None:
         default="results/tables/scripted_baselines.csv",
         help="CSV output path (default: results/tables/scripted_baselines.csv)",
     )
+    parser.add_argument(
+        "--tool-type", type=str, default="gripper",
+        choices=["gripper", "scoop"],
+        help="Tool type: gripper (9-DOF) or scoop (7-DOF, panda_scoop.xml)",
+    )
+    parser.add_argument(
+        "--sequence", type=str, default=None,
+        help="Run only a specific sequence (A, B, C, D, E). Default: all applicable.",
+    )
+    parser.add_argument(
+        "--source-wall-height", type=float, default=None,
+        help="Override source container wall height (0 for no walls).",
+    )
+    parser.add_argument(
+        "--target-wall-height", type=float, default=None,
+        help="Override target container wall height (0 for no walls).",
+    )
     args = parser.parse_args()
 
     n_episodes = args.n_episodes
@@ -290,6 +390,7 @@ def main() -> None:
     print(f"  Episodes per sequence: {n_episodes}")
     print(f"  Horizon:               {horizon}")
     print(f"  Material:              {args.material}")
+    print(f"  Tool type:             {args.tool_type}")
     print(f"  Output CSV:            {args.output}")
     print()
 
@@ -302,7 +403,12 @@ def main() -> None:
     scene_cfg = {
         "particle_material": args.material,
         "n_envs": 0,
+        "tool_type": args.tool_type,
     }
+    if args.source_wall_height is not None:
+        scene_cfg["source_wall_height"] = args.source_wall_height
+    if args.target_wall_height is not None:
+        scene_cfg["target_wall_height"] = args.target_wall_height
     task_cfg = {
         "horizon": horizon,
     }
@@ -324,12 +430,28 @@ def main() -> None:
     print()
 
     # Define sequences
-    sequence_runners: Dict[str, Callable] = {
+    all_sequence_runners: Dict[str, Callable] = {
         "A_scoop_deposit": lambda ep: run_sequence_a(env, horizon),
         "B_probe_scoop":   lambda ep: run_sequence_b(env, horizon),
         "C_random":        lambda ep: run_sequence_c(env, horizon, seed=ep * 100 + 42),
         "D_noop":          lambda ep: run_sequence_d(env, horizon),
+        "E_scoop_tool":    lambda ep: run_sequence_e_scoop(env, horizon),
     }
+
+    # Filter sequences based on args
+    if args.sequence:
+        seq_key = args.sequence.upper()
+        matched = {k: v for k, v in all_sequence_runners.items() if k.startswith(seq_key)}
+        if not matched:
+            print(f"ERROR: Unknown sequence '{args.sequence}'. Available: A, B, C, D, E")
+            sys.exit(1)
+        sequence_runners = matched
+    elif args.tool_type == "scoop":
+        # For scoop tool, only run E by default (A/B use 9-DOF waypoints)
+        sequence_runners = {"E_scoop_tool": all_sequence_runners["E_scoop_tool"]}
+    else:
+        # Gripper: run A-D (E requires scoop)
+        sequence_runners = {k: v for k, v in all_sequence_runners.items() if k != "E_scoop_tool"}
 
     all_rows: List[Dict[str, Any]] = []
 

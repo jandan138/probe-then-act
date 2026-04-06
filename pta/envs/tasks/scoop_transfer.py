@@ -95,6 +95,7 @@ class ScoopTransferTask(BaseTask):
         self._finger_dof_idx = self.sc.finger_dof_idx
 
         self._n_arm_dof = len(self._arm_dof_idx)
+        self._has_fingers = len(self._finger_dof_idx) > 0
 
         # Task params
         self._horizon = cfg["horizon"]
@@ -103,8 +104,14 @@ class ScoopTransferTask(BaseTask):
         self._act_scale_rot = cfg["action_scale_rot"]
         self._act_scale_grip = cfg["action_scale_grip"]
         self._success_threshold = cfg["success_threshold"]
+
+        # Default qpos depends on whether fingers exist
+        raw_qpos = cfg["default_qpos"]
+        if not self._has_fingers and len(raw_qpos) > self._n_arm_dof:
+            # Strip finger entries for scoop mode
+            raw_qpos = raw_qpos[:self._n_arm_dof]
         self._default_qpos = torch.tensor(
-            cfg["default_qpos"], dtype=torch.float32, device=gs.device,
+            raw_qpos, dtype=torch.float32, device=gs.device,
         )
 
         # Reward weights
@@ -205,21 +212,24 @@ class ScoopTransferTask(BaseTask):
         # Scale action
         delta_pos = action[:3] * self._act_scale_pos
         delta_rot = action[3:6] * self._act_scale_rot
-        grip_cmd = action[6] * self._act_scale_grip
 
         # Compute target joint positions via IK
         qpos = self._compute_ik(delta_pos, delta_rot)
 
-        # Update gripper
-        self._gripper_width = float(
-            max(0.0, min(0.04, self._gripper_width + grip_cmd.item()))
-        )
-        grip_val = self._gripper_width
-
-        # Set full qpos (arm + gripper)
-        full_qpos = qpos.clone()
-        full_qpos[self._finger_dof_idx] = grip_val
-        self.robot.control_dofs_position(full_qpos)
+        if self._has_fingers:
+            grip_cmd = action[6] * self._act_scale_grip
+            # Update gripper
+            self._gripper_width = float(
+                max(0.0, min(0.04, self._gripper_width + grip_cmd.item()))
+            )
+            grip_val = self._gripper_width
+            # Set full qpos (arm + gripper)
+            full_qpos = qpos.clone()
+            full_qpos[self._finger_dof_idx] = grip_val
+            self.robot.control_dofs_position(full_qpos)
+        else:
+            # Scoop mode: arm-only, no gripper
+            self.robot.control_dofs_position(qpos[:self._n_arm_dof])
 
         # Step physics
         try:
@@ -264,19 +274,27 @@ class ScoopTransferTask(BaseTask):
         ee_pos = self._ee_link.get_pos()
         ee_quat = self._ee_link.get_quat()
 
-        # Gripper finger positions
-        lf_pos = self._left_finger_link.get_pos()
-        rf_pos = self._right_finger_link.get_pos()
-
         # Flatten all into a single tensor for the student
         obs_components = []
-        for t in [qpos, qvel, ee_pos, ee_quat, lf_pos, rf_pos]:
+        for t in [qpos, qvel, ee_pos, ee_quat]:
             if t.dim() == 0:
                 obs_components.append(t.unsqueeze(0))
             elif t.dim() > 1:
                 obs_components.append(t.squeeze(0))
             else:
                 obs_components.append(t)
+
+        # Add finger positions only if gripper mode
+        if self._has_fingers:
+            lf_pos = self._left_finger_link.get_pos()
+            rf_pos = self._right_finger_link.get_pos()
+            for t in [lf_pos, rf_pos]:
+                if t.dim() == 0:
+                    obs_components.append(t.unsqueeze(0))
+                elif t.dim() > 1:
+                    obs_components.append(t.squeeze(0))
+                else:
+                    obs_components.append(t)
 
         proprio = torch.cat(obs_components, dim=-1)
 

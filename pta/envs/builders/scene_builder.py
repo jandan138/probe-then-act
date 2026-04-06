@@ -58,8 +58,10 @@ _DEFAULT_CONFIG: Dict[str, Any] = {
     # MPM domain -- must enclose source/target containers + workspace
     "mpm_lower_bound": (-0.1, -0.5, -0.05),
     "mpm_upper_bound": (1.0, 0.8, 0.8),
-    "mpm_grid_density": 64,
-    # Containers
+    "mpm_grid_density": 128,  # 128 needed for scoop-particle coupling
+    # Task layout: "flat" (original) or "edge_push" (elevated platform)
+    "task_layout": "edge_push",
+    # Containers (flat layout)
     "source_pos": (0.5, 0.0, 0.05),
     "source_size": (0.15, 0.15, 0.005),  # thin base plate
     "source_wall_thickness": 0.005,
@@ -68,11 +70,11 @@ _DEFAULT_CONFIG: Dict[str, Any] = {
     "target_size": (0.12, 0.12, 0.005),  # thin base plate
     "target_wall_thickness": 0.005,
     "target_wall_height": 0.10,
-    # Particles (block inside source container)
+    # Particles
     "particle_material": "sand",
     "particle_params": {},
-    "particle_pos": (0.5, 0.0, 0.10),
-    "particle_size": (0.10, 0.10, 0.04),
+    "particle_pos": (0.55, 0.03, 0.20),   # near platform edge for edge_push
+    "particle_size": (0.12, 0.06, 0.03),
     # Camera
     "camera_res": (128, 128),
     "camera_pos": (1.2, -0.3, 0.8),
@@ -80,6 +82,8 @@ _DEFAULT_CONFIG: Dict[str, Any] = {
     "camera_fov": 60,
     # Robot
     "robot_pos": (0.0, 0.0, 0.0),
+    # Tool
+    "tool_type": "gripper",  # "gripper" or "scoop"
     # Build
     "n_envs": 0,  # 0 = single env
 }
@@ -124,25 +128,30 @@ class SceneBuilder:
         # 3. Add ground plane (coupled with MPM)
         self._add_ground(scene)
 
-        # 4. Add source container
-        source_container = self._add_box_container(
-            scene,
-            name="source",
-            base_pos=cfg["source_pos"],
-            base_size=cfg["source_size"],
-            wall_thickness=cfg["source_wall_thickness"],
-            wall_height=cfg["source_wall_height"],
-        )
+        # 4-5. Add containers (depends on layout)
+        task_layout = cfg.get("task_layout", "flat")
+        if task_layout == "edge_push":
+            source_container, target_container = self._add_edge_push_layout(scene, cfg)
+        else:
+            # 4. Add source container
+            source_container = self._add_box_container(
+                scene,
+                name="source",
+                base_pos=cfg["source_pos"],
+                base_size=cfg["source_size"],
+                wall_thickness=cfg["source_wall_thickness"],
+                wall_height=cfg["source_wall_height"],
+            )
 
-        # 5. Add target container
-        target_container = self._add_box_container(
-            scene,
-            name="target",
-            base_pos=cfg["target_pos"],
-            base_size=cfg["target_size"],
-            wall_thickness=cfg["target_wall_thickness"],
-            wall_height=cfg["target_wall_height"],
-        )
+            # 5. Add target container
+            target_container = self._add_box_container(
+                scene,
+                name="target",
+                base_pos=cfg["target_pos"],
+                base_size=cfg["target_size"],
+                wall_thickness=cfg["target_wall_thickness"],
+                wall_height=cfg["target_wall_height"],
+            )
 
         # 6. Add MPM particles in the source container
         particles = self._add_particles(scene, cfg)
@@ -161,18 +170,26 @@ class SceneBuilder:
             scene.build(n_envs=n_envs)
 
         # 10. Configure robot PD gains (must be after build)
-        self._configure_robot_gains(robot)
+        tool_type = cfg.get("tool_type", "gripper")
+        self._configure_robot_gains(robot, tool_type)
 
-        # 11. Get link references
-        ee_link = robot.get_link("hand")
-        left_finger_link = robot.get_link("left_finger")
-        right_finger_link = robot.get_link("right_finger")
+        # 11. Get link references (depends on tool type)
+        if tool_type == "scoop":
+            ee_link = robot.get_link("scoop")
+            left_finger_link = None
+            right_finger_link = None
+            # Scoop: 7 arm DOFs, no finger DOFs
+            arm_dof_idx = torch.arange(robot.n_dofs, device=gs.device)
+            finger_dof_idx = torch.tensor([], dtype=torch.long, device=gs.device)
+        else:
+            ee_link = robot.get_link("hand")
+            left_finger_link = robot.get_link("left_finger")
+            right_finger_link = robot.get_link("right_finger")
+            n_arm_dof = robot.n_dofs - 2
+            arm_dof_idx = torch.arange(n_arm_dof, device=gs.device)
+            finger_dof_idx = torch.arange(n_arm_dof, n_arm_dof + 2, device=gs.device)
 
-        n_arm_dof = robot.n_dofs - 2
-        arm_dof_idx = torch.arange(n_arm_dof, device=gs.device)
-        finger_dof_idx = torch.arange(n_arm_dof, n_arm_dof + 2, device=gs.device)
-
-        return SceneComponents(
+        components = SceneComponents(
             scene=scene,
             robot=robot,
             tool=robot,  # v1: gripper IS the tool
@@ -186,11 +203,27 @@ class SceneBuilder:
             right_finger_link=right_finger_link,
             arm_dof_idx=arm_dof_idx,
             finger_dof_idx=finger_dof_idx,
-            source_pos=cfg["source_pos"],
-            source_size=(cfg["source_size"][0], cfg["source_size"][1], cfg["source_wall_height"]),
-            target_pos=cfg["target_pos"],
-            target_size=(cfg["target_size"][0], cfg["target_size"][1], cfg["target_wall_height"]),
         )
+
+        # Set source/target positions based on layout
+        if task_layout == "edge_push":
+            pp = cfg.get("platform_pos", (0.55, 0.0, 0.15))
+            ps = cfg.get("platform_size", (0.20, 0.15, 0.01))
+            pwh = cfg.get("platform_wall_height", 0.04)
+            etp = cfg.get("edge_target_pos", (0.55, 0.15, 0.01))
+            ets = cfg.get("edge_target_size", (0.30, 0.20, 0.005))
+            etwh = cfg.get("edge_target_wall_height", 0.04)
+            components.source_pos = pp
+            components.source_size = (ps[0], ps[1], pwh)
+            components.target_pos = etp
+            components.target_size = (ets[0], ets[1], etwh)
+        else:
+            components.source_pos = cfg["source_pos"]
+            components.source_size = (cfg["source_size"][0], cfg["source_size"][1], cfg["source_wall_height"])
+            components.target_pos = cfg["target_pos"]
+            components.target_size = (cfg["target_size"][0], cfg["target_size"][1], cfg["target_wall_height"])
+
+        return components
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -239,6 +272,62 @@ class SceneBuilder:
             ),
             morph=gs.morphs.URDF(file="urdf/plane/plane.urdf", fixed=True),
         )
+
+    def _add_edge_push_layout(
+        self, scene: Any, config: Dict[str, Any]
+    ) -> tuple:
+        """Add edge-push layout: elevated platform + target below edge.
+
+        The source is an elevated platform with walls on 3 sides (not +y).
+        Particles are pushed off the +y edge and fall into a target
+        container at ground level.
+        """
+        mat = gs.materials.Rigid(needs_coup=True, coup_friction=0.5)
+
+        pp = config.get("platform_pos", (0.55, 0.0, 0.15))
+        ps = config.get("platform_size", (0.20, 0.15, 0.01))
+        pwh = config.get("platform_wall_height", 0.04)
+        px, py, pz = pp
+        psx, psy, psz = ps
+        half_x, half_y = psx / 2, psy / 2
+
+        # Platform base
+        platform = scene.add_entity(
+            material=mat, morph=gs.morphs.Box(pos=pp, size=ps, fixed=True),
+            surface=gs.surfaces.Rough(diffuse_texture=gs.textures.ColorTexture(color=(0.6, 0.6, 0.6))),
+        )
+
+        # Walls on 3 sides (back -y, left -x, right +x). NO wall on +y (the edge)
+        scene.add_entity(material=mat, morph=gs.morphs.Box(
+            pos=(px, py - half_y, pz + pwh / 2), size=(psx, 0.005, pwh), fixed=True))
+        scene.add_entity(material=mat, morph=gs.morphs.Box(
+            pos=(px - half_x, py, pz + pwh / 2), size=(0.005, psy, pwh), fixed=True))
+        scene.add_entity(material=mat, morph=gs.morphs.Box(
+            pos=(px + half_x, py, pz + pwh / 2), size=(0.005, psy, pwh), fixed=True))
+
+        # Target container below the platform edge
+        etp = config.get("edge_target_pos", (0.55, 0.15, 0.01))
+        ets = config.get("edge_target_size", (0.30, 0.20, 0.005))
+        etwh = config.get("edge_target_wall_height", 0.04)
+        etx, ety, etz = etp
+        etsx, etsy, etsz = ets
+        et_hx, et_hy = etsx / 2, etsy / 2
+
+        # Target base
+        target = scene.add_entity(
+            material=mat, morph=gs.morphs.Box(pos=etp, size=ets, fixed=True),
+            surface=gs.surfaces.Rough(diffuse_texture=gs.textures.ColorTexture(color=(0.5, 0.5, 0.5))),
+        )
+
+        # Target walls (3 sides, open on the side facing platform)
+        scene.add_entity(material=mat, morph=gs.morphs.Box(
+            pos=(etx, ety + et_hy, etz + etwh / 2), size=(etsx, 0.005, etwh), fixed=True))
+        scene.add_entity(material=mat, morph=gs.morphs.Box(
+            pos=(etx - et_hx, ety, etz + etwh / 2), size=(0.005, etsy, etwh), fixed=True))
+        scene.add_entity(material=mat, morph=gs.morphs.Box(
+            pos=(etx + et_hx, ety, etz + etwh / 2), size=(0.005, etsy, etwh), fixed=True))
+
+        return platform, target
 
     def _add_box_container(
         self,
@@ -322,13 +411,20 @@ class SceneBuilder:
     def _add_robot(self, scene: Any, config: Dict[str, Any]) -> Any:
         """Add a Franka Panda robot with MPM coupling."""
         robot_pos = config.get("robot_pos", (0.0, 0.0, 0.0))
+        tool_type = config.get("tool_type", "gripper")
+
+        if tool_type == "scoop":
+            mjcf_file = "xml/franka_emika_panda/panda_scoop.xml"
+        else:
+            mjcf_file = "xml/franka_emika_panda/panda.xml"
+
         robot = scene.add_entity(
             material=gs.materials.Rigid(
                 needs_coup=True,
-                coup_friction=1.0,
+                coup_friction=3.0,  # high friction for MPM particle interaction
             ),
             morph=gs.morphs.MJCF(
-                file="xml/franka_emika_panda/panda.xml",
+                file=mjcf_file,
                 pos=robot_pos,
             ),
         )
@@ -345,16 +441,29 @@ class SceneBuilder:
         )
         return cam
 
-    def _configure_robot_gains(self, robot: Any) -> None:
+    def _configure_robot_gains(self, robot: Any, tool_type: str = "gripper") -> None:
         """Set PD gains and force ranges for the Franka. Must be called
         after scene.build()."""
-        robot.set_dofs_kp(
-            np.array([4500, 4500, 3500, 3500, 2000, 2000, 2000, 100, 100]),
-        )
-        robot.set_dofs_kv(
-            np.array([450, 450, 350, 350, 200, 200, 200, 10, 10]),
-        )
-        robot.set_dofs_force_range(
-            np.array([-87, -87, -87, -87, -12, -12, -12, -100, -100]),
-            np.array([87, 87, 87, 87, 12, 12, 12, 100, 100]),
-        )
+        if tool_type == "scoop":
+            # 7 arm DOFs only (no finger DOFs)
+            robot.set_dofs_kp(
+                np.array([4500, 4500, 3500, 3500, 2000, 2000, 2000]),
+            )
+            robot.set_dofs_kv(
+                np.array([450, 450, 350, 350, 200, 200, 200]),
+            )
+            robot.set_dofs_force_range(
+                np.array([-87, -87, -87, -87, -12, -12, -12]),
+                np.array([87, 87, 87, 87, 12, 12, 12]),
+            )
+        else:
+            robot.set_dofs_kp(
+                np.array([4500, 4500, 3500, 3500, 2000, 2000, 2000, 100, 100]),
+            )
+            robot.set_dofs_kv(
+                np.array([450, 450, 350, 350, 200, 200, 200, 10, 10]),
+            )
+            robot.set_dofs_force_range(
+                np.array([-87, -87, -87, -87, -12, -12, -12, -100, -100]),
+                np.array([87, 87, 87, 87, 12, 12, 12, 100, 100]),
+            )

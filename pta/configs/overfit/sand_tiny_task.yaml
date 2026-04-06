@@ -1,0 +1,106 @@
+# Tiny-Task Overfit Config — Sand-Only, Fixed Parameters
+# Per docs/05_TINY_TASK_OVERFIT_PROTOCOL.md: freeze everything for overfit test.
+
+task: scoop_transfer
+split: overfit_sand
+
+scene:
+  robot: franka_panda
+  tool_type: scoop                # Use panda_scoop.xml (7-DOF, no fingers)
+  control_mode: cartesian_delta_3d  # 3D position only (dx, dy, dz)
+  physics_rate: 500               # Hz (ctrl_dt = 2e-3)
+  policy_rate: 20                 # Hz (action_repeat = 25)
+  action_repeat: 25
+  max_episode_steps: 2000         # 2000 physics steps = 4.0 seconds
+  effective_episode_seconds: 4.0
+  show_viewer: false
+
+# FIXED material — no randomization
+materials:
+  families: [sand]
+  sand:
+    E: 3.0e4            # fixed Young's modulus
+    nu: 0.3             # fixed Poisson's ratio
+    friction: 0.5       # fixed friction
+    density: 1600       # fixed density (kg/m^3)
+
+particles:
+  n_particles: 400      # small count for fast iteration
+  particle_size: 0.005
+
+tool:
+  type: scoop
+  mjcf_file: xml/franka_emika_panda/panda_scoop.xml
+
+containers:
+  source:
+    type: box
+    position: [0.5, 0.0, 0.05]
+    base_size: [0.15, 0.15, 0.005]
+    wall_thickness: 0.005
+    wall_height: 0.08
+  target:
+    type: box
+    position: [0.5, 0.35, 0.05]
+    base_size: [0.12, 0.12, 0.005]
+    wall_thickness: 0.005
+    wall_height: 0.10
+
+# FIXED robot start pose
+robot:
+  start_qpos: [0.0, -0.785, 0.0, -2.356, 0.0, 1.571, 0.785]
+  position: [0.0, 0.0, 0.0]
+
+# Simplified action space
+action:
+  dim: 3                         # dx, dy, dz only
+  scale_pos: 0.05                # metres per action unit
+  # Orientation fixed per phase (handled by ReducedActionWrapper)
+
+# Rebalanced reward (approach ≪ scoop ≪ lift ≪ transfer ≪ success)
+rewards:
+  w_approach: -0.01
+  w_scoop: 2.0
+  w_lift: 3.0
+  w_transfer: 10.0
+  w_success_bonus: 50.0
+  w_spill: -1.0
+  w_time: -0.0001
+  success_threshold: 0.3         # 30% transferred = success for tiny task
+
+# Observation noise OFF
+observation_noise: false
+domain_randomization: false
+
+# Metrics to log (beyond mean return)
+metrics:
+  - success_rate
+  - phase_reached
+  - lifted_mass_frac
+  - transferred_mass_frac
+  - spill_frac
+  - max_penetration_depth
+  - contact_duration
+  - distance_to_source
+  - distance_to_target
+
+# PPO hyperparameters for tiny-task overfit
+training:
+  algorithm: ppo
+  entropy_coef: 0.0
+  use_sde: true
+  sde_sample_freq: 4
+  learning_rate: 3.0e-4
+  gamma: 0.99
+  gae_lambda: 0.95
+  clip_range: 0.2
+  n_steps: 512
+  n_epochs: 5
+  batch_size: 256
+  policy_kwargs:
+    net_arch: [{pi: [256, 256], vf: [256, 256]}]
+    log_std_init: -1.0
+  total_timesteps: 2_000_000
+  eval_freq: 10_000
+  save_freq: 50_000
+  seed: 42
