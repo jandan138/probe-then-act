@@ -59,3 +59,13 @@ python pta/scripts/run_eval_main.py --config pta/configs/eval/paper_main.yaml
 2. `docs/01_REPO_BLUEPRINT.md` — Repo architecture
 3. `docs/02_EXECUTION_PLAYBOOK.md` — Week-by-week execution
 4. `docs/03_EXPERIMENT_PROTOCOL.md` — Hypotheses, experiment matrix, metrics
+5. `docs/04_VALIDATION_GATES.md` — Gate 0–5 workflow (Gate 0 **PASSED**)
+6. `docs/05_TINY_TASK_OVERFIT_PROTOCOL.md` — Tiny-task overfit before scale-up
+
+## Current Status (2026-04-06)
+- **Phase 4 (M1 Pivot)** in progress
+- **Gate 0 PASSED**: Edge-push task, 42.2% transfer, 9.0% spill
+- **Task redesign**: Scoop-lift-dump → Edge-push (MPM particles have no adhesion to rigid bodies)
+- **Key config**: `mpm_grid_density=128`, `coup_friction=3.0`, `task_layout="edge_push"`
+- **Scoop MJCF**: `panda_scoop.xml` (7-DOF, no fingers, U-shaped rigid scoop)
+- **Next**: Gate 4 — E1 Teacher overfit on tiny task

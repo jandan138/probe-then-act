@@ -69,7 +69,7 @@ Gate 0 is considered passed only if all are true:
 - frequent NaNs / explosions → simulator settings or contacts are unstable.
 
 ### Current status
-**NOT PASSED**.
+**PASSED** (2026-04-06). Edge-push task: 42.2% transfer, 9.0% spill, 5/5 repeatable. Task redesigned from scoop-lift-dump to edge-push (elevated platform, scoop pushes particles off +y edge).
 
 ---
 
@@ -246,11 +246,11 @@ Do **not** spend substantial GPU budget on:
 
 | Gate | Name | Status | Interpretation |
 |---|---|---|---|
-| 0 | Physical Feasibility | NOT PASSED | Current gripper-only setup has not been validated by scripted success. |
-| 1 | Task / Theory Specification | PARTIAL | Reward/phase logic exists, but the task contract is not yet rigid enough. |
-| 2 | Implementation Correctness | PARTIAL | Infra is good, but metric and wrapper correctness still need tighter verification. |
+| 0 | Physical Feasibility | **PASSED** | Edge-push: 42.2% transfer, 9.0% spill. Scoop-lift-dump infeasible (MPM no adhesion). |
+| 1 | Task / Theory Specification | PARTIAL | Reward/phase logic updated for edge-push. Task contract not yet formal. |
+| 2 | Implementation Correctness | PARTIAL | Edge-push infra good, metric and wrapper correctness need tighter verification. |
 | 3 | System Smoke Test | PASSED | Environment, training infra, eval infra, and checkpoints are operational. |
-| 4 | Tiny-Task Overfit | NOT PASSED | No method has demonstrated true scoop-transfer learning yet. |
+| 4 | Tiny-Task Overfit | NOT PASSED | No method has demonstrated learned edge-push success yet. |
 | 5 | Full-Scale Experiment | BLOCKED | Not allowed until the lower gates pass. |
 
 ---
