@@ -43,7 +43,7 @@ _DEFAULT_TASK_CONFIG: Dict[str, Any] = {
     "w_time": -0.001,
     "w_success_bonus": 5.0,
     # Success
-    "success_threshold": 0.5,  # fraction of particles in target
+    "success_threshold": 0.3,  # 30% for edge-push tiny task
     # Robot defaults
     "default_qpos": [0.0, -0.785, 0.0, -2.356, 0.0, 1.571, 0.785, 0.04, 0.04],
     # IK
@@ -315,16 +315,14 @@ class ScoopTransferTask(BaseTask):
     # ------------------------------------------------------------------
 
     def compute_reward(self) -> float:
-        """Staged reward shaping for scoop-and-transfer.
+        """Reward shaping for edge-push scoop-and-transfer.
 
-        Four phases guide the policy through the manipulation sequence:
-          1. Approach: EE moves toward the source container
-          2. Scoop:    EE dips into particles (below particle surface)
-          3. Lift:     particles near the EE are raised above source rim
-          4. Transfer: particles reach the target container
-
-        Each phase provides dense shaping so PPO gets gradient signal
-        even before achieving actual transfer.
+        For the edge-push layout, the scoop pushes particles off a platform
+        edge into a target container below. Reward phases:
+          1. Approach: EE moves toward particle region on platform
+          2. Push progress: EE y-position advances toward the platform edge
+          3. Transfer: particles reach the target container (dominant)
+          4. Spill penalty: particles outside both source and target
         """
         ee_pos = self._ee_link.get_pos()
         if ee_pos.dim() > 1:
@@ -341,69 +339,34 @@ class ScoopTransferTask(BaseTask):
         transfer_frac = n_in_target / total
         spill_frac = n_spilled / total
 
-        # --- Phase 1: Approach source container ---
+        # --- Phase 1: Approach particle region (small guidance) ---
         source_center = torch.tensor(
             [self.sc.source_pos[0], self.sc.source_pos[1],
-             self.sc.source_pos[2] + 0.10],  # slightly above particle surface
+             self.sc.source_pos[2] + 0.05],
             device=gs.device, dtype=torch.float32,
         )
         dist_to_source = torch.norm(ee_pos - source_center).item()
-        r_approach = -0.1 * dist_to_source
+        r_approach = -0.01 * dist_to_source  # small, guidance only
 
-        # --- Phase 2: Scoop — reward for EE being low (inside material) ---
-        # Particle surface is ~0.14m. Reward EE for going below that.
-        particle_surface_z = self.sc.source_pos[2] + 0.10  # ~0.15
-        ee_z = ee_pos[2].item()
-        # Only reward scooping when EE is near the source (x,y)
-        ee_xy = ee_pos[:2]
-        source_xy = torch.tensor(
-            [self.sc.source_pos[0], self.sc.source_pos[1]],
-            device=gs.device, dtype=torch.float32,
-        )
-        dist_xy = torch.norm(ee_xy - source_xy).item()
-        if dist_xy < 0.15:  # within source container radius
-            depth_below_surface = max(0.0, particle_surface_z - ee_z)
-            r_scoop = 0.3 * min(depth_below_surface, 0.08)  # cap at 0.024
-        else:
-            r_scoop = 0.0
+        # --- Phase 2: Push progress — reward EE moving in +y direction ---
+        # Platform edge is at source_pos[1] + half_y_size
+        # Reward for EE y being past the particle center (pushing forward)
+        ee_y = ee_pos[1].item()
+        # Mean particle y gives a sense of how much has been pushed
+        mean_particle_y = particle_pos[:, 1].mean().item()
+        r_push = 2.0 * max(0.0, mean_particle_y - self.sc.source_pos[1])
 
-        # --- Phase 3: Lift — reward particles near EE being raised ---
-        # Count particles within 0.06m of EE (on the tool)
-        dist_to_ee = torch.norm(particle_pos - ee_pos.unsqueeze(0), dim=-1)
-        near_ee_mask = dist_to_ee < 0.06
-        n_near_ee = near_ee_mask.sum().item()
-        if n_near_ee > 0:
-            # Reward for particles near EE being above the source rim
-            source_rim_z = self.sc.source_pos[2] + 0.08 + 0.02  # wall_height + margin
-            particles_near_ee_z = particle_pos[near_ee_mask, 2]
-            n_lifted = (particles_near_ee_z > source_rim_z).sum().item()
-            r_lift = 0.5 * (n_lifted / total)
-        else:
-            r_lift = 0.0
-
-        # --- Phase 4: Transfer — reward for particles in target ---
-        r_transfer = self._w_transfer * transfer_frac
-
-        # --- Phase 4b: Distance to target (when carrying particles) ---
-        if n_near_ee > 2:
-            target_center = torch.tensor(
-                [self.sc.target_pos[0], self.sc.target_pos[1],
-                 self.sc.target_pos[2] + 0.15],
-                device=gs.device, dtype=torch.float32,
-            )
-            dist_to_target = torch.norm(ee_pos - target_center).item()
-            r_carry = -0.05 * dist_to_target  # encourage moving to target
-        else:
-            r_carry = 0.0
+        # --- Phase 3: Transfer — dominant reward ---
+        r_transfer = 10.0 * transfer_frac
 
         # --- Penalties ---
-        r_spill = self._w_spill * spill_frac
-        r_time = self._w_time
+        r_spill = -1.0 * spill_frac
+        r_time = -0.0001
 
         # --- Success bonus ---
-        r_success = self._w_success_bonus if transfer_frac >= self._success_threshold else 0.0
+        r_success = 50.0 if transfer_frac >= self._success_threshold else 0.0
 
-        reward = r_approach + r_scoop + r_lift + r_transfer + r_carry + r_spill + r_time + r_success
+        reward = r_approach + r_push + r_transfer + r_spill + r_time + r_success
         return float(reward)
 
     # ------------------------------------------------------------------

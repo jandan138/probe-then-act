@@ -65,12 +65,17 @@ class GenesisGymWrapper(gymnasium.Env):
         self.task = task
         self.config = cfg
 
-        # Build spaces
-        self.observation_space = self._build_obs_space(cfg)
-        self.action_space = self._build_action_space(cfg)
+        # Probe actual obs dimension from a reset
+        probe_obs = task.get_observations()
+        actual_dim = sum(
+            v.numel() if isinstance(v, torch.Tensor) else 1
+            for v in probe_obs.values()
+        )
+        self._obs_dim = actual_dim
 
-        # Internal state
-        self._obs_dim = cfg["obs_dim"]
+        # Build spaces
+        self.observation_space = self._build_obs_space({"obs_dim": actual_dim})
+        self.action_space = self._build_action_space(cfg)
 
     def reset(
         self,

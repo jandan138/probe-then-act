@@ -23,6 +23,8 @@ from stable_baselines3.common.vec_env import DummyVecEnv
 
 from pta.envs.wrappers.gym_wrapper import GenesisGymWrapper
 from pta.envs.wrappers.privileged_obs_wrapper import PrivilegedObsWrapper
+from pta.envs.wrappers.reduced_action_wrapper import ReducedActionWrapper
+from pta.envs.wrappers.action_repeat_wrapper import ActionRepeatWrapper
 from pta.training.utils.checkpoint_io import save_sb3_checkpoint
 from pta.training.utils.logger import ExperimentLogger
 from pta.training.utils.seed import set_seed
@@ -42,14 +44,17 @@ _DEFAULT_TRAIN_CONFIG: Dict[str, Any] = {
     "gamma": 0.99,
     "gae_lambda": 0.95,
     "clip_range": 0.2,
-    "entropy_coef": 0.01,
+    "entropy_coef": 0.0,       # was 0.01 — disabled to prevent entropy divergence
     "value_loss_coef": 0.5,
     "max_grad_norm": 0.5,
     "normalize_advantage": True,
+    "use_sde": True,            # State-Dependent Exploration
+    "sde_sample_freq": 4,
     # Policy
     "policy": "MlpPolicy",
     "policy_kwargs": {
         "net_arch": [dict(pi=[256, 256], vf=[256, 256])],
+        "log_std_init": -1.0,  # initial std ~ 0.37
     },
     # Training
     "total_timesteps": 500_000,
@@ -72,31 +77,30 @@ def make_env(
     task_config: Optional[Dict[str, Any]] = None,
     scene_config: Optional[Dict[str, Any]] = None,
     seed: int = 0,
-) -> PrivilegedObsWrapper:
-    """Create a GenesisGymWrapper with privileged observations.
+    use_reduced_action: bool = False,
+    action_repeat: int = 1,
+) -> gymnasium.Env:
+    """Create a GenesisGymWrapper with optional wrappers.
 
-    Parameters
-    ----------
-    task_config:
-        Task-level configuration for ScoopTransferTask.
-    scene_config:
-        Scene-level configuration for SceneBuilder.  Also used to
-        extract material family and params for the privileged wrapper.
-    seed:
-        Seed for the environment.
-
-    Returns
-    -------
-    PrivilegedObsWrapper
-        A Gymnasium environment whose observations include both the
-        student-visible features and privileged material parameters.
+    Wrapper stack (inside-out):
+      GenesisGymWrapper → ReducedActionWrapper → ActionRepeatWrapper → PrivilegedObsWrapper
     """
+    import gymnasium
+
     base_env = GenesisGymWrapper(
         task_config=task_config,
         scene_config=scene_config,
     )
+    env = base_env
+
+    if use_reduced_action:
+        env = ReducedActionWrapper(env)
+
+    if action_repeat > 1:
+        env = ActionRepeatWrapper(env, repeat=action_repeat)
+
     env = PrivilegedObsWrapper(
-        env=base_env,
+        env=env,
         scene_config=scene_config,
     )
     env.reset(seed=seed)
@@ -136,12 +140,16 @@ def train_teacher(config: Dict[str, Any]) -> PPO:
     # -- Environment -------------------------------------------------------
     task_config = cfg.get("task_config")
     scene_config = cfg.get("scene_config")
+    use_reduced_action = cfg.get("use_reduced_action", False)
+    action_repeat = cfg.get("action_repeat", 1)
 
     def _make_env():
         return make_env(
             task_config=task_config,
             scene_config=scene_config,
             seed=seed,
+            use_reduced_action=use_reduced_action,
+            action_repeat=action_repeat,
         )
 
     vec_env = DummyVecEnv([_make_env])
@@ -152,6 +160,8 @@ def train_teacher(config: Dict[str, Any]) -> PPO:
             task_config=task_config,
             scene_config=scene_config,
             seed=seed + 1000,
+            use_reduced_action=use_reduced_action,
+            action_repeat=action_repeat,
         )
 
     eval_env = DummyVecEnv([_make_eval_env])
@@ -173,6 +183,8 @@ def train_teacher(config: Dict[str, Any]) -> PPO:
         vf_coef=cfg["value_loss_coef"],
         max_grad_norm=cfg["max_grad_norm"],
         normalize_advantage=cfg["normalize_advantage"],
+        use_sde=cfg.get("use_sde", False),
+        sde_sample_freq=cfg.get("sde_sample_freq", -1),
         policy_kwargs=policy_kwargs,
         tensorboard_log=cfg["tensorboard_log"],
         seed=seed,
