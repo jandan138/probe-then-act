@@ -212,7 +212,18 @@ Gate 4 is passed only if, on a fixed tiny-task evaluation set:
 - Teacher cannot overfit → task is still too hard or implementation still wrong.
 
 ### Current status
-**NOT PASSED**.
+**NOT PASSED** (2026-04-07).
+
+E1 Teacher PPO (4 attempts):
+- v1-v3: configuration bugs (budget, horizon). Fixed.
+- **v4 (delta reward)**: 10K/20K policy steps. Reward oscillated -38 ± 3 around random baseline (-39.6). 0% transfer, 0% success. Policy learned weak approach improvement only.
+
+E2 Cartesian-delta residual RL:
+- **FAILED**: Genesis IK inverts y-axis for Franka at home config. EE cannot reach particles at y=-0.03 via Cartesian delta actions.
+
+**Root cause**: ReducedActionWrapper (3D Cartesian delta → IK) is fundamentally broken for y-axis. Need joint-space action or BC warmstart.
+
+**Failure pattern B applies**: Scripted succeeds (42.2% transfer via joint-space), but learner fails → action space is wrong.
 
 ---
 
@@ -247,10 +258,10 @@ Do **not** spend substantial GPU budget on:
 | Gate | Name | Status | Interpretation |
 |---|---|---|---|
 | 0 | Physical Feasibility | **PASSED** | Edge-push: 42.2% transfer, 9.0% spill. Scoop-lift-dump infeasible (MPM no adhesion). |
-| 1 | Task / Theory Specification | PARTIAL | Reward/phase logic updated for edge-push. Task contract not yet formal. |
-| 2 | Implementation Correctness | PARTIAL | Edge-push infra good, metric and wrapper correctness need tighter verification. |
+| 1 | Task / Theory Specification | PARTIAL | Reward/phase logic updated for edge-push (delta-based v2). Task contract not yet formal. |
+| 2 | Implementation Correctness | **BLOCKED** | IK y-axis inversion invalidates Cartesian delta action space. Need joint-space action. |
 | 3 | System Smoke Test | PASSED | Environment, training infra, eval infra, and checkpoints are operational. |
-| 4 | Tiny-Task Overfit | NOT PASSED | No method has demonstrated learned edge-push success yet. |
+| 4 | Tiny-Task Overfit | **NOT PASSED** | E1 PPO failed (0% transfer). E2 residual failed (IK bug). Action space redesign needed. |
 | 5 | Full-Scale Experiment | BLOCKED | Not allowed until the lower gates pass. |
 
 ---
@@ -298,17 +309,16 @@ Save all of the following:
 ## 6. Immediate next actions
 
 ### Priority 1
-Pass **Gate 0**.
-- Add scoop attachment.
-- Run scripted feasibility.
-- Measure lifted/transferred mass.
+Pass **Gate 2** (Implementation Correctness) — fix action space.
+- Switch from Cartesian delta + IK to **joint-space delta** action space (bypass IK entirely).
+- Or: implement BC warmstart from scripted joint-space demos.
+- Verify: random joint-delta actions can move EE to particles.
 
 ### Priority 2
 Pass **Gate 4**.
-- Freeze a tiny task.
-- Reduce action space.
-- Use longer effective episode duration.
-- Train Teacher or residual learner until it clearly overfits.
+- Re-run E1 Teacher PPO with joint-space action.
+- Or: collect scripted demos → BC pretrain → PPO fine-tune.
+- Target: success_rate ≥ 70%, transfer ≥ 25%.
 
 ### Priority 3
 Only after the above:

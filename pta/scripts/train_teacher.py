@@ -77,6 +77,39 @@ def parse_args() -> argparse.Namespace:
         help="Checkpoint directory (default: checkpoints/teacher)",
     )
 
+    # Wrappers (for edge-push tiny-task)
+    parser.add_argument(
+        "--use-reduced-action", action="store_true",
+        help="Use ReducedActionWrapper (7D → 3D position-only)",
+    )
+    parser.add_argument(
+        "--action-repeat", type=int, default=1,
+        help="ActionRepeatWrapper repeat count (e.g. 25 for 20Hz policy)",
+    )
+    parser.add_argument(
+        "--task-layout", type=str, default=None,
+        choices=["flat", "edge_push"],
+        help="Task layout override for scene builder",
+    )
+    parser.add_argument(
+        "--use-residual", action="store_true",
+        help="Use ResidualActionWrapper (scripted base + learned correction)",
+    )
+    parser.add_argument(
+        "--residual-scale", type=float, default=0.3,
+        help="Scale factor for residual corrections (default: 0.3)",
+    )
+
+    # PPO exploration
+    parser.add_argument(
+        "--use-sde", action="store_true", default=False,
+        help="Use State-Dependent Exploration (SDE)",
+    )
+    parser.add_argument(
+        "--log-std-init", type=float, default=None,
+        help="Initial log-std for policy (e.g. -1.0 for std~0.37)",
+    )
+
     # Misc
     parser.add_argument("--verbose", type=int, default=1, help="Verbosity level (0/1/2)")
 
@@ -98,6 +131,13 @@ def main() -> None:
     from pta.utils.paths import CHECKPOINT_DIR, LOG_DIR
 
     # Build config dict from args
+    scene_config: dict = {
+        "particle_material": args.material,
+        "n_envs": 0,
+    }
+    if args.task_layout is not None:
+        scene_config["task_layout"] = args.task_layout
+
     config = {
         "total_timesteps": args.total_timesteps,
         "seed": args.seed,
@@ -113,15 +153,24 @@ def main() -> None:
         "save_freq": args.save_freq,
         "verbose": args.verbose,
         "run_name": f"teacher_ppo_seed{args.seed}",
+        # Wrappers
+        "use_reduced_action": args.use_reduced_action,
+        "action_repeat": args.action_repeat,
+        "use_residual": args.use_residual,
+        "residual_scale": args.residual_scale,
         # Scene / task config
-        "scene_config": {
-            "particle_material": args.material,
-            "n_envs": 0,
-        },
+        "scene_config": scene_config,
         "task_config": {
             "horizon": args.horizon,
         },
     }
+
+    # PPO exploration settings
+    if args.use_sde:
+        config["use_sde"] = True
+        config["sde_sample_freq"] = 4
+    if args.log_std_init is not None:
+        config.setdefault("policy_kwargs", {})["log_std_init"] = args.log_std_init
 
     # Override paths if provided
     if args.log_dir is not None:
@@ -139,6 +188,11 @@ def main() -> None:
     print(f"  Horizon:    {args.horizon}")
     print(f"  LR:         {args.lr}")
     print(f"  Batch size: {args.batch_size}")
+    print(f"  Reduced act: {args.use_reduced_action}")
+    print(f"  Act repeat: {args.action_repeat}")
+    print(f"  Task layout: {args.task_layout or 'default (edge_push)'}")
+    print(f"  Use SDE:    {args.use_sde}")
+    print(f"  Residual:   {args.use_residual} (scale={args.residual_scale})")
     print()
 
     model = train_teacher(config)

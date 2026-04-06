@@ -25,6 +25,7 @@ from pta.envs.wrappers.gym_wrapper import GenesisGymWrapper
 from pta.envs.wrappers.privileged_obs_wrapper import PrivilegedObsWrapper
 from pta.envs.wrappers.reduced_action_wrapper import ReducedActionWrapper
 from pta.envs.wrappers.action_repeat_wrapper import ActionRepeatWrapper
+from pta.envs.wrappers.residual_action_wrapper import ResidualActionWrapper
 from pta.training.utils.checkpoint_io import save_sb3_checkpoint
 from pta.training.utils.logger import ExperimentLogger
 from pta.training.utils.seed import set_seed
@@ -79,11 +80,14 @@ def make_env(
     seed: int = 0,
     use_reduced_action: bool = False,
     action_repeat: int = 1,
+    use_residual: bool = False,
+    residual_scale: float = 0.3,
 ) -> gymnasium.Env:
     """Create a GenesisGymWrapper with optional wrappers.
 
     Wrapper stack (inside-out):
-      GenesisGymWrapper → ReducedActionWrapper → ActionRepeatWrapper → PrivilegedObsWrapper
+      GenesisGymWrapper → ReducedActionWrapper → ResidualActionWrapper
+        → ActionRepeatWrapper → PrivilegedObsWrapper
     """
     import gymnasium
 
@@ -95,6 +99,12 @@ def make_env(
 
     if use_reduced_action:
         env = ReducedActionWrapper(env)
+
+    if use_residual:
+        horizon = task_config.get("horizon", 2000) if task_config else 2000
+        policy_horizon = horizon // max(action_repeat, 1)
+        env = ResidualActionWrapper(env, residual_scale=residual_scale,
+                                    episode_len=policy_horizon)
 
     if action_repeat > 1:
         env = ActionRepeatWrapper(env, repeat=action_repeat)
@@ -142,6 +152,8 @@ def train_teacher(config: Dict[str, Any]) -> PPO:
     scene_config = cfg.get("scene_config")
     use_reduced_action = cfg.get("use_reduced_action", False)
     action_repeat = cfg.get("action_repeat", 1)
+    use_residual = cfg.get("use_residual", False)
+    residual_scale = cfg.get("residual_scale", 0.3)
 
     def _make_env():
         return make_env(
@@ -150,6 +162,8 @@ def train_teacher(config: Dict[str, Any]) -> PPO:
             seed=seed,
             use_reduced_action=use_reduced_action,
             action_repeat=action_repeat,
+            use_residual=use_residual,
+            residual_scale=residual_scale,
         )
 
     vec_env = DummyVecEnv([_make_env])
@@ -162,6 +176,8 @@ def train_teacher(config: Dict[str, Any]) -> PPO:
             seed=seed + 1000,
             use_reduced_action=use_reduced_action,
             action_repeat=action_repeat,
+            use_residual=use_residual,
+            residual_scale=residual_scale,
         )
 
     eval_env = DummyVecEnv([_make_eval_env])

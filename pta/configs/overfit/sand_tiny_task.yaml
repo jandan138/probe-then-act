@@ -11,6 +11,10 @@ scene:
   physics_rate: 500               # Hz (ctrl_dt = 2e-3)
   policy_rate: 20                 # Hz (action_repeat = 25)
   action_repeat: 25
+  # Horizon accounting (physics steps are the canonical unit):
+  #   horizon_physics_steps: 2000       (= 4.0 s × 500 Hz)
+  #   policy_horizon_steps:  80         (= 2000 / action_repeat 25)
+  # CLI --horizon must be set to 2000 (physics steps), NOT 80.
   max_episode_steps: 2000         # 2000 physics steps = 4.0 seconds
   effective_episode_seconds: 4.0
   show_viewer: false
@@ -57,16 +61,16 @@ action:
   scale_pos: 0.05                # metres per action unit
   # Orientation fixed per phase (handled by ReducedActionWrapper)
 
-# Rebalanced reward (approach ≪ scoop ≪ lift ≪ transfer ≪ success)
+# Rebalanced reward — DELTA-based (approach ≪ push-delta ≪ transfer-delta + success)
+# All shaping is incremental: already-transferred particles give zero reward.
 rewards:
-  w_approach: -0.01
-  w_scoop: 2.0
-  w_lift: 3.0
-  w_transfer: 10.0
-  w_success_bonus: 50.0
-  w_spill: -1.0
-  w_time: -0.0001
-  success_threshold: 0.3         # 30% transferred = success for tiny task
+  w_approach: -0.01       # small dense guidance toward source
+  w_push: 5.0             # delta mean_particle_y per physics step
+  w_transfer: 20.0        # delta transfer_frac per physics step
+  w_success_bonus: 10.0   # one-shot when transfer_frac >= threshold
+  w_spill: -2.0           # penalty for particles outside both containers
+  w_time: -0.001          # per-step time penalty
+  success_threshold: 0.3  # 30% transferred = success for tiny task
 
 # Observation noise OFF
 observation_noise: false

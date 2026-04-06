@@ -139,8 +139,11 @@ class ScoopTransferTask(BaseTask):
 
         tp = self.sc.target_pos
         ts = self.sc.target_size
+        # Clamp target bbox y_min to platform edge to avoid overlap with source
+        platform_edge_y = sp[1] + ss[1] / 2
+        target_y_min = max(tp[1] - ts[1] / 2, platform_edge_y)
         self._target_bbox_min = torch.tensor(
-            [tp[0] - ts[0] / 2, tp[1] - ts[1] / 2, 0.0],  # z=0 for settled particles
+            [tp[0] - ts[0] / 2, target_y_min, 0.0],
             device=gs.device, dtype=torch.float32,
         )
         self._target_bbox_max = torch.tensor(
@@ -160,6 +163,11 @@ class ScoopTransferTask(BaseTask):
         # Gripper width state
         self._gripper_width = 0.04  # open
 
+        # Delta-reward state (reset each episode)
+        self._prev_transfer_frac = 0.0
+        self._prev_mean_particle_y = None
+        self._success_triggered = False
+
     # ------------------------------------------------------------------
     # Episode lifecycle
     # ------------------------------------------------------------------
@@ -175,6 +183,9 @@ class ScoopTransferTask(BaseTask):
         self.scene.reset()
         self._step_count = 0
         self._gripper_width = 0.04
+        self._prev_transfer_frac = 0.0
+        self._prev_mean_particle_y = None
+        self._success_triggered = False
 
         # Set robot to home configuration
         self.robot.set_qpos(self._default_qpos)
@@ -315,14 +326,11 @@ class ScoopTransferTask(BaseTask):
     # ------------------------------------------------------------------
 
     def compute_reward(self) -> float:
-        """Reward shaping for edge-push scoop-and-transfer.
+        """Delta-based reward shaping for edge-push scoop-and-transfer.
 
-        For the edge-push layout, the scoop pushes particles off a platform
-        edge into a target container below. Reward phases:
-          1. Approach: EE moves toward particle region on platform
-          2. Push progress: EE y-position advances toward the platform edge
-          3. Transfer: particles reach the target container (dominant)
-          4. Spill penalty: particles outside both source and target
+        All shaping signals are *incremental* so that already-transferred
+        particles do not generate sustained reward, giving PPO meaningful
+        advantage variance between active-push and do-nothing trajectories.
         """
         ee_pos = self._ee_link.get_pos()
         if ee_pos.dim() > 1:
@@ -339,32 +347,37 @@ class ScoopTransferTask(BaseTask):
         transfer_frac = n_in_target / total
         spill_frac = n_spilled / total
 
-        # --- Phase 1: Approach particle region (small guidance) ---
+        # --- Phase 1: Approach — small dense guidance toward source ---
         source_center = torch.tensor(
             [self.sc.source_pos[0], self.sc.source_pos[1],
              self.sc.source_pos[2] + 0.05],
             device=gs.device, dtype=torch.float32,
         )
         dist_to_source = torch.norm(ee_pos - source_center).item()
-        r_approach = -0.01 * dist_to_source  # small, guidance only
+        r_approach = -0.01 * dist_to_source
 
-        # --- Phase 2: Push progress — reward EE moving in +y direction ---
-        # Platform edge is at source_pos[1] + half_y_size
-        # Reward for EE y being past the particle center (pushing forward)
-        ee_y = ee_pos[1].item()
-        # Mean particle y gives a sense of how much has been pushed
-        mean_particle_y = particle_pos[:, 1].mean().item()
-        r_push = 2.0 * max(0.0, mean_particle_y - self.sc.source_pos[1])
+        # --- Phase 2: Push — DELTA mean particle y (only active pushing) ---
+        mean_y = particle_pos[:, 1].mean().item()
+        if self._prev_mean_particle_y is None:
+            self._prev_mean_particle_y = mean_y
+        delta_y = mean_y - self._prev_mean_particle_y
+        r_push = 5.0 * max(0.0, delta_y)
+        self._prev_mean_particle_y = mean_y
 
-        # --- Phase 3: Transfer — dominant reward ---
-        r_transfer = 10.0 * transfer_frac
+        # --- Phase 3: Transfer — DELTA fraction (only NEW transfers) ---
+        delta_transfer = transfer_frac - self._prev_transfer_frac
+        r_transfer = 20.0 * max(0.0, delta_transfer)
+        self._prev_transfer_frac = transfer_frac
 
         # --- Penalties ---
-        r_spill = -1.0 * spill_frac
-        r_time = -0.0001
+        r_spill = -2.0 * spill_frac
+        r_time = -0.001
 
-        # --- Success bonus ---
-        r_success = 50.0 if transfer_frac >= self._success_threshold else 0.0
+        # --- Success bonus (one-shot) ---
+        r_success = 0.0
+        if transfer_frac >= self._success_threshold and not self._success_triggered:
+            r_success = 10.0
+            self._success_triggered = True
 
         reward = r_approach + r_push + r_transfer + r_spill + r_time + r_success
         return float(reward)
