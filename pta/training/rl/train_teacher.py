@@ -86,6 +86,7 @@ def make_env(
     use_joint_residual: bool = False,
     joint_residual_scale: float = 0.1,
     joint_residual_trajectory: str = "edge_push",
+    use_privileged: bool = True,
 ) -> gymnasium.Env:
     """Create a GenesisGymWrapper with optional wrappers.
 
@@ -123,10 +124,11 @@ def make_env(
     if action_repeat > 1:
         env = ActionRepeatWrapper(env, repeat=action_repeat)
 
-    env = PrivilegedObsWrapper(
-        env=env,
-        scene_config=scene_config,
-    )
+    if use_privileged:
+        env = PrivilegedObsWrapper(
+            env=env,
+            scene_config=scene_config,
+        )
     env.reset(seed=seed)
     return env
 
@@ -171,6 +173,7 @@ def train_teacher(config: Dict[str, Any]) -> PPO:
     use_joint_residual = cfg.get("use_joint_residual", False)
     joint_residual_scale = cfg.get("joint_residual_scale", 0.1)
     joint_residual_trajectory = cfg.get("joint_residual_trajectory", "edge_push")
+    use_privileged = cfg.get("use_privileged", True)
 
     def _make_env():
         return make_env(
@@ -184,6 +187,7 @@ def train_teacher(config: Dict[str, Any]) -> PPO:
             use_joint_residual=use_joint_residual,
             joint_residual_scale=joint_residual_scale,
             joint_residual_trajectory=joint_residual_trajectory,
+            use_privileged=use_privileged,
         )
 
     vec_env = DummyVecEnv([_make_env])
@@ -201,6 +205,7 @@ def train_teacher(config: Dict[str, Any]) -> PPO:
             use_joint_residual=use_joint_residual,
             joint_residual_scale=joint_residual_scale,
             joint_residual_trajectory=joint_residual_trajectory,
+            use_privileged=use_privileged,
         )
 
     eval_env = DummyVecEnv([_make_eval_env])
