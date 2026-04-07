@@ -1,0 +1,4 @@
+sequence,episode,success_rate,transfer_efficiency,spill_ratio
+D_noop,1,0.0,0.0,0.0
+D_noop,2,0.0,0.0,0.0
+D_noop,3,0.0,0.0,0.0
