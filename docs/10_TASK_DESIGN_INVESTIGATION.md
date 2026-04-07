@@ -137,6 +137,37 @@ Random action baseline (Sequence C: uniform random 7D actions) on sand:
 
 The 32-87% transfer from the scripted push is entirely due to the robot's pushing strategy, not passive gravity. Different materials respond differently to the same push → material-adaptive control is meaningful.
 
+### Joint-space random baseline (2026-04-07)
+
+The original random baseline (Sequence C) used Cartesian-delta → IK → PD, which is broken. We tested **joint-space random** via `set_qpos()` to verify that random flailing can't accidentally solve the task.
+
+Three modes tested on sand and snow, 3 seeds each:
+
+**Sand:**
+
+| Mode | Transfer % (range) | Spill % (range) | Notes |
+|------|-------------------|-----------------|-------|
+| uniform (full joint range) | 0.1 - 10.8% | 0.6 - 30.4% | One lucky seed hit 10.8%, others ~0% |
+| walk (small perturbations) | ~0.1% | ~1.3% | Barely moves from home pose |
+| near_table (biased toward table) | 2.8 - 8.0% | 86 - 97% | Flails near particles, huge spill |
+| **Scripted push** | **32.2%** | **9.8%** | **3x better than best random, 10x less spill** |
+
+**Snow:**
+
+| Mode | Transfer % (range) | Spill % (range) |
+|------|-------------------|-----------------|
+| uniform | 0.0 - 4.5% | 0 - 28% |
+| walk | 0.0% | 0.0% |
+| near_table | 2.5 - 11.5% | 87 - 96% |
+| **Scripted push** | **87.3%** | **8.3%** |
+
+**Conclusions:**
+1. Random joint-space motion CAN occasionally displace particles (good for RL exploration signal)
+2. But transfer is 3-7x worse than scripted push, with 10x higher spill
+3. The near_table mode destroys most particles (86-97% spill) for only 3-11% transfer
+4. **Intentional, directed pushing is clearly superior** — the task rewards skilled control, not random flailing
+5. Config D is a valid, non-trivial task design
+
 ---
 
 ## 7. Recommendations
