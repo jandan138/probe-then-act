@@ -1,0 +1,13 @@
+material,variant,episode,transfer_efficiency,spill_ratio,n_in_target,n_on_tool,total_particles
+sand,standard,1,0.0,0.3175,0,0,2400
+sand,standard,2,0.0,0.3175,0,0,2400
+sand,standard,3,0.0,0.3175,0,0,2400
+sand,slow_traverse,1,0.0,0.3154166666666667,0,0,2400
+sand,slow_traverse,2,0.0,0.3154166666666667,0,0,2400
+sand,slow_traverse,3,0.0,0.3154166666666667,0,0,2400
+sand,low_lift,1,0.0,0.3120833333333333,0,0,2400
+sand,low_lift,2,0.0,0.3120833333333333,0,0,2400
+sand,low_lift,3,0.0,0.3120833333333333,0,0,2400
+sand,tilted_scoop,1,0.0008333333333333334,0.37083333333333335,2,0,2400
+sand,tilted_scoop,2,0.0008333333333333334,0.37,2,0,2400
+sand,tilted_scoop,3,0.00125,0.37166666666666665,3,0,2400

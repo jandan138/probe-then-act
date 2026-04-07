@@ -73,7 +73,7 @@ _DEFAULT_CONFIG: Dict[str, Any] = {
     # Particles
     "particle_material": "sand",
     "particle_params": {},
-    "particle_pos": (0.55, -0.03, 0.20),  # center of platform for edge_push (0.075m from open edge)
+    "particle_pos": (0.55, 0.02, 0.20),  # 5.5cm from open edge — Config D (material-discriminative)
     "particle_size": (0.12, 0.06, 0.03),
     # Camera
     "camera_res": (128, 128),
