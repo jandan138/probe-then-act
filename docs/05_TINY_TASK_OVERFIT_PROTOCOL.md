@@ -74,19 +74,26 @@ The protocol must log **which phase was reached** in every rollout.
 ## 2.3 Action space
 Use the simplest action space that still supports success.
 
-### Preferred option A
-**3-D Cartesian delta**:
-- `(dx, dy, dz)` only
-- orientation fixed per phase
-- gripper opening fixed
+### Current preferred option (updated 2026-04-07)
+**7-D joint-space residual** via `JointResidualWrapper`:
+- `q_applied = q_base[t] + residual_scale * delta_q`
+- `q_base[t]` is a precomputed scripted trajectory (edge-push or scoop)
+- Policy outputs 7D residual in [-1, 1]
+- Bypasses IK entirely — uses `robot.set_qpos()` directly
+- `residual_scale` default 0.1 rad (try 0.2-0.5 for broader exploration)
+- Observation: 30D (22D base + 7D q_base[t] + 1D step_fraction)
 
-### Preferred option B
-**Waypoint / trajectory parameterization**:
-- policy outputs a small number of waypoints or trajectory parameters
-- controller executes the implied motion
+### Deprecated options
+**3-D Cartesian delta** (Option A):
+- DEPRECATED — Genesis single-step DLS IK has coupling artifact (3-35% y-gain, sign flips)
+- `control_dofs_position()` PD controller cannot track low-z extended configurations (0.68m z-divergence)
+- Do NOT use for learning
+
+**Waypoint parameterization** (Option B):
+- Still valid as an alternative but not yet tested
 
 ### Forbidden in the first tiny-task iteration
-- 7-D free-form delta EE control at high-frequency policy updates
+- Cartesian-delta actions through IK (broken)
 - unconstrained roll/pitch/yaw exploration
 - joint-torque exploration unless a scripted controller already works
 
@@ -269,21 +276,35 @@ A learner is promoted only if all 3 repeated evaluations satisfy the pass thresh
 ## E0 — Scripted feasibility
 - objective: pass Gate 0
 - output: `scripted_eval.csv`, videos, summary table
+- **Status: PASSED** (42.2% transfer, 9.0% spill, 5/5 repeatable)
 
-## E1 — Teacher overfit
+## E1 — Teacher overfit (Cartesian-delta)
 - privileged observations allowed
 - fixed tiny task
 - objective: prove learnability
+- **Status: FAILED** — Cartesian-delta → IK → PD controller path broken (IK coupling artifact + PD z-divergence). Reward oscillated at random baseline (-39.6).
 
-## E2 — Residual overfit
-- scripted base + learned correction
+## E2 — Residual overfit (Cartesian-delta)
+- scripted base + learned correction (Cartesian space)
 - fixed tiny task
 - objective: improve stability and reduce exploration burden
+- **Status: FAILED** — Same IK/PD issues as E1. Deprecated.
 
-## E3 — Student tiny-task
+## E3 — Joint-space residual overfit (NEW, 2026-04-07)
+- `JointResidualWrapper`: `q_base[t] + scale * delta_q`, bypasses IK
+- fixed tiny task, edge-push trajectory
+- **Status: PARTIAL**
+  - v1 (scale=0.1): Converged to scripted baseline (-2.09 reward, ~12.5% transfer). Stable but no improvement beyond base.
+  - v2 (scale=0.2): Best reward -1.20, more exploration but oscillating. 12-15% transfer.
+  - Both dramatically better than E1/E2 (random-level → baseline-level in 20K steps)
+  - Gate 4 targets NOT MET: 12.5% transfer vs. 30% required
+- **Next**: try scoop trajectory, scale=0.3-0.5, curriculum, 1M+ steps
+
+## E4 — Student tiny-task
 - no privileged observations
 - same tiny task
 - objective: verify observability is sufficient
+- **Status: NOT STARTED** — blocked by E3 not passing Gate 4
 
 ### Important
 Do **not** start E3 before E1 or E2 has passed.

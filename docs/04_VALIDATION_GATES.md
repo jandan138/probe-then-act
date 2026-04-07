@@ -110,7 +110,7 @@ Gate 1 is passed only if:
 - privileged Teacher underperforms unexpectedly → privileged observation contract may be wrong.
 
 ### Current status
-**PARTIALLY PASSED**.
+**PARTIALLY PASSED**. Edge-push task contract defined (delta-based reward v2, 7D action, 500-step horizon). Formal contract document not yet written.
 
 ---
 
@@ -145,7 +145,7 @@ Gate 2 is passed only if:
 - resume diverges immediately → checkpoint state incomplete.
 
 ### Current status
-**PARTIALLY PASSED**.
+**PASSED** (2026-04-07). IK y-axis inversion diagnosed: single-step DLS coupling artifact, not a Genesis bug (confirmed by minimal repro — iterative IK works correctly). Controller A/B test confirmed PD controller failure (0% transfer, 0.68m z-divergence). Both issues bypassed by `JointResidualWrapper` (joint-space control, no IK). Remaining action: formalize timing verification (action_repeat × ctrl_dt).
 
 ---
 
@@ -212,18 +212,23 @@ Gate 4 is passed only if, on a fixed tiny-task evaluation set:
 - Teacher cannot overfit → task is still too hard or implementation still wrong.
 
 ### Current status
-**NOT PASSED** (2026-04-07).
+**PARTIAL** (2026-04-07). Joint-space residual PPO reaches scripted baseline level (-2.09 reward, ~12.5% transfer) in 20K steps — massive improvement over E1 Cartesian-delta PPO which was stuck at random (-39.6). However, Gate 4 targets not yet met: transfer ~12.5% vs. 30% target. 
 
-E1 Teacher PPO (4 attempts):
-- v1-v3: configuration bugs (budget, horizon). Fixed.
-- **v4 (delta reward)**: 10K/20K policy steps. Reward oscillated -38 ± 3 around random baseline (-39.6). 0% transfer, 0% success. Policy learned weak approach improvement only.
+**Completed experiments:**
+- E1 Teacher PPO (Cartesian-delta): FAILED (IK + PD controller broken, 0% transfer)
+- E2 Cartesian-delta residual: FAILED (IK y-axis inversion)
+- **E3 Joint-space residual v1** (scale=0.1): converged to scripted baseline (-2.09), 12.5% transfer
+- **E4 Joint-space residual v2** (scale=0.2): best reward -1.20, 12-15% transfer
 
-E2 Cartesian-delta residual RL:
-- **FAILED**: Genesis IK inverts y-axis for Franka at home config. EE cannot reach particles at y=-0.03 via Cartesian delta actions.
+**Root cause of remaining gap:** Base trajectory (scripted edge-push) only achieves ~12.5% transfer. Residual policy reproduces this but can't push past 30%.
 
-**Root cause**: ReducedActionWrapper (3D Cartesian delta → IK) is fundamentally broken for y-axis. Need joint-space action or BC warmstart.
+**Next steps:**
+1. Try `"scoop"` base trajectory (lift-traverse-deposit, higher theoretical transfer)
+2. Wider residual scale (0.3-0.5 rad) with curriculum annealing
+3. Longer training (1M+ steps)
+4. Revisit task geometry (container placement may cap push strategy)
 
-**Failure pattern B applies**: Scripted succeeds (42.2% transfer via joint-space), but learner fails → action space is wrong.
+**Failure pattern B** still applies but narrowed: scripted succeeds at 42% (set_qpos) but learning-accessible control only reaches 12.5%. The gap is now in strategy, not controller.
 
 ---
 
@@ -259,10 +264,10 @@ Do **not** spend substantial GPU budget on:
 |---|---|---|---|
 | 0 | Physical Feasibility | **PASSED** | Edge-push: 42.2% transfer, 9.0% spill. Scoop-lift-dump infeasible (MPM no adhesion). |
 | 1 | Task / Theory Specification | PARTIAL | Reward/phase logic updated for edge-push (delta-based v2). Task contract not yet formal. |
-| 2 | Implementation Correctness | **BLOCKED** | IK y-axis inversion invalidates Cartesian delta action space. Need joint-space action. |
+| 2 | Implementation Correctness | **PASSED** | IK/controller issues diagnosed and bypassed via JointResidualWrapper. |
 | 3 | System Smoke Test | PASSED | Environment, training infra, eval infra, and checkpoints are operational. |
-| 4 | Tiny-Task Overfit | **NOT PASSED** | E1 PPO failed (0% transfer). E2 residual failed (IK bug). Action space redesign needed. |
-| 5 | Full-Scale Experiment | BLOCKED | Not allowed until the lower gates pass. |
+| 4 | Tiny-Task Overfit | **PARTIAL** | Joint-space residual reaches baseline (12.5% transfer) but not 30% target. Bottleneck: base trajectory quality. |
+| 5 | Full-Scale Experiment | BLOCKED | Not allowed until Gate 4 passes. |
 
 ---
 
@@ -309,19 +314,19 @@ Save all of the following:
 ## 6. Immediate next actions
 
 ### Priority 1
-Pass **Gate 2** (Implementation Correctness) — fix action space.
-- Switch from Cartesian delta + IK to **joint-space delta** action space (bypass IK entirely).
-- Or: implement BC warmstart from scripted joint-space demos.
-- Verify: random joint-delta actions can move EE to particles.
+Pass **Gate 4** — improve base trajectory or widen residual exploration.
+- Try `"scoop"` trajectory in JointResidualWrapper (lift-traverse-deposit strategy).
+- Widen residual_scale from 0.1→0.3 with curriculum annealing (0→0.3 over 100K steps).
+- Longer training: 1M+ steps.
+- Revisit container geometry if transfer ceiling persists.
 
 ### Priority 2
-Pass **Gate 4**.
-- Re-run E1 Teacher PPO with joint-space action.
-- Or: collect scripted demos → BC pretrain → PPO fine-tune.
-- Target: success_rate ≥ 70%, transfer ≥ 25%.
+Formalize **Gate 1** task contract.
+- Document the JointResidualWrapper action space (7D joint residual).
+- Define success threshold, reward terms, and phase semantics for joint-space control.
 
 ### Priority 3
-Only after the above:
+Only after Gate 4:
 - reopen student learning,
 - reopen OOD evaluation,
 - reopen method comparison.

@@ -26,6 +26,7 @@ from pta.envs.wrappers.privileged_obs_wrapper import PrivilegedObsWrapper
 from pta.envs.wrappers.reduced_action_wrapper import ReducedActionWrapper
 from pta.envs.wrappers.action_repeat_wrapper import ActionRepeatWrapper
 from pta.envs.wrappers.residual_action_wrapper import ResidualActionWrapper
+from pta.envs.wrappers.joint_residual_wrapper import JointResidualWrapper
 from pta.training.utils.checkpoint_io import save_sb3_checkpoint
 from pta.training.utils.logger import ExperimentLogger
 from pta.training.utils.seed import set_seed
@@ -82,12 +83,19 @@ def make_env(
     action_repeat: int = 1,
     use_residual: bool = False,
     residual_scale: float = 0.3,
+    use_joint_residual: bool = False,
+    joint_residual_scale: float = 0.1,
+    joint_residual_trajectory: str = "edge_push",
 ) -> gymnasium.Env:
     """Create a GenesisGymWrapper with optional wrappers.
 
     Wrapper stack (inside-out):
       GenesisGymWrapper → ReducedActionWrapper → ResidualActionWrapper
         → ActionRepeatWrapper → PrivilegedObsWrapper
+
+    When *use_joint_residual* is True, JointResidualWrapper replaces
+    ResidualActionWrapper.  This bypasses Cartesian IK entirely and
+    operates in joint space.
     """
     import gymnasium
 
@@ -100,7 +108,13 @@ def make_env(
     if use_reduced_action:
         env = ReducedActionWrapper(env)
 
-    if use_residual:
+    if use_joint_residual:
+        env = JointResidualWrapper(
+            env,
+            residual_scale=joint_residual_scale,
+            trajectory=joint_residual_trajectory,
+        )
+    elif use_residual:
         horizon = task_config.get("horizon", 2000) if task_config else 2000
         policy_horizon = horizon // max(action_repeat, 1)
         env = ResidualActionWrapper(env, residual_scale=residual_scale,
@@ -154,6 +168,9 @@ def train_teacher(config: Dict[str, Any]) -> PPO:
     action_repeat = cfg.get("action_repeat", 1)
     use_residual = cfg.get("use_residual", False)
     residual_scale = cfg.get("residual_scale", 0.3)
+    use_joint_residual = cfg.get("use_joint_residual", False)
+    joint_residual_scale = cfg.get("joint_residual_scale", 0.1)
+    joint_residual_trajectory = cfg.get("joint_residual_trajectory", "edge_push")
 
     def _make_env():
         return make_env(
@@ -164,6 +181,9 @@ def train_teacher(config: Dict[str, Any]) -> PPO:
             action_repeat=action_repeat,
             use_residual=use_residual,
             residual_scale=residual_scale,
+            use_joint_residual=use_joint_residual,
+            joint_residual_scale=joint_residual_scale,
+            joint_residual_trajectory=joint_residual_trajectory,
         )
 
     vec_env = DummyVecEnv([_make_env])
@@ -178,6 +198,9 @@ def train_teacher(config: Dict[str, Any]) -> PPO:
             action_repeat=action_repeat,
             use_residual=use_residual,
             residual_scale=residual_scale,
+            use_joint_residual=use_joint_residual,
+            joint_residual_scale=joint_residual_scale,
+            joint_residual_trajectory=joint_residual_trajectory,
         )
 
     eval_env = DummyVecEnv([_make_eval_env])
