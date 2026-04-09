@@ -9,7 +9,7 @@
 > 3. What is the current blocker?
 > 4. What should the team do next, in order?
 >
-> **Last updated: 2026-04-07 (post 48-hour diagnostic sprint)**
+> **Last updated: 2026-04-09 (bowl follow-up note only; core blocker snapshot still reflects the 2026-04-07 sprint)**
 
 ---
 
@@ -121,14 +121,14 @@ Until Gate 4 is passed:
 
 ### Priority A — Try a better base trajectory
 
-**A1. Test the `”scoop”` trajectory** (already in JointResidualWrapper):
-- 215-step lift-traverse-deposit trajectory
-- Fundamentally different strategy: lifts particles over container wall instead of pushing off edge
-- Expected higher transfer if particles can be retained during lift
+**A1. Keep scoop / bowl out of the Gate 4 main line:**
+- Do **not** reopen the scoop / bowl trajectory as the current base strategy for Gate 4.
+- The flat-scene bowl diagnosis is now a documented side-track negative result.
+- If bowl is continued at all, follow `docs/11_BOWL_TOOL_INVESTIGATION.md` and `docs/12_BOWL_TRANSPORT_DIAGNOSIS_RUNBOOK.md`: native contact-quality tuning first, sticky fallback second, no interference with edge-push work.
 
 **A2. Optimize the edge-push trajectory**:
 - Adjust approach angle, push speed, number of passes
-- Particles at y=-0.03 may need different entry angle
+- Particles near the platform edge may need a different entry angle
 - Try deeper push (lower z) or wider sweep pattern
 
 ### Priority B — Widen residual exploration

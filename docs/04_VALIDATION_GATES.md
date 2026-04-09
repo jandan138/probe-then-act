@@ -69,7 +69,7 @@ Gate 0 is considered passed only if all are true:
 - frequent NaNs / explosions → simulator settings or contacts are unstable.
 
 ### Current status
-**PASSED** (2026-04-06). Edge-push task: 42.2% transfer, 9.0% spill, 5/5 repeatable. Task redesigned from scoop-lift-dump to edge-push (elevated platform, scoop pushes particles off +y edge).
+**PASSED** (2026-04-06). Edge-push task: 42.2% transfer, 9.0% spill, 5/5 repeatable. Task redesigned from scoop-lift-dump to edge-push (elevated platform, scoop pushes particles off +y edge). Later bowl follow-up remains a separate flat-scene side-track negative result; see `docs/11_BOWL_TOOL_INVESTIGATION.md`.
 
 ---
 
@@ -223,10 +223,12 @@ Gate 4 is passed only if, on a fixed tiny-task evaluation set:
 **Root cause of remaining gap:** Base trajectory (scripted edge-push) only achieves ~12.5% transfer. Residual policy reproduces this but can't push past 30%.
 
 **Next steps:**
-1. Try `"scoop"` base trajectory (lift-traverse-deposit, higher theoretical transfer)
+1. Improve the **edge-push** base trajectory; do **not** reopen scoop / bowl as the current Gate 4 main line
 2. Wider residual scale (0.3-0.5 rad) with curriculum annealing
 3. Longer training (1M+ steps)
 4. Revisit task geometry (container placement may cap push strategy)
+
+If the bowl side-track is continued separately, follow the native-first then sticky-fallback order in `docs/11_BOWL_TOOL_INVESTIGATION.md` and `docs/12_BOWL_TRANSPORT_DIAGNOSIS_RUNBOOK.md`.
 
 **Failure pattern B** still applies but narrowed: scripted succeeds at 42% (set_qpos) but learning-accessible control only reaches 12.5%. The gap is now in strategy, not controller.
 
@@ -262,7 +264,7 @@ Do **not** spend substantial GPU budget on:
 
 | Gate | Name | Status | Interpretation |
 |---|---|---|---|
-| 0 | Physical Feasibility | **PASSED** | Edge-push: 42.2% transfer, 9.0% spill. Scoop-lift-dump infeasible (MPM no adhesion). |
+| 0 | Physical Feasibility | **PASSED** | Edge-push: 42.2% transfer, 9.0% spill. Scoop-lift-dump infeasible as a mainline transfer task; bowl follow-up remains a separate negative side-track. |
 | 1 | Task / Theory Specification | PARTIAL | Reward/phase logic updated for edge-push (delta-based v2). Task contract not yet formal. |
 | 2 | Implementation Correctness | **PASSED** | IK/controller issues diagnosed and bypassed via JointResidualWrapper. |
 | 3 | System Smoke Test | PASSED | Environment, training infra, eval infra, and checkpoints are operational. |
@@ -315,7 +317,7 @@ Save all of the following:
 
 ### Priority 1
 Pass **Gate 4** — improve base trajectory or widen residual exploration.
-- Try `"scoop"` trajectory in JointResidualWrapper (lift-traverse-deposit strategy).
+- Do **not** reopen scoop / bowl as the current Gate 4 base trajectory; keep bowl work isolated as a side-track under `docs/11` / `docs/12`.
 - Widen residual_scale from 0.1→0.3 with curriculum annealing (0→0.3 over 100K steps).
 - Longer training: 1M+ steps.
 - Revisit container geometry if transfer ceiling persists.
