@@ -69,7 +69,7 @@ Gate 0 is considered passed only if all are true:
 - frequent NaNs / explosions → simulator settings or contacts are unstable.
 
 ### Current status
-**PASSED** (2026-04-06). Edge-push task: 42.2% transfer, 9.0% spill, 5/5 repeatable. Task redesigned from scoop-lift-dump to edge-push (elevated platform, scoop pushes particles off +y edge). Later bowl follow-up remains a separate flat-scene side-track negative result; see `docs/11_BOWL_TOOL_INVESTIGATION.md`.
+**PASSED** (2026-04-06). Edge-push task: 42.2% transfer, 9.0% spill, 5/5 repeatable. Task redesigned from scoop-lift-dump to edge-push (elevated platform, scoop pushes particles off +y edge). Later bowl follow-up remains a separate flat-scene side-track negative result; see `docs/40_investigations/11_BOWL_TOOL_INVESTIGATION.md`.
 
 ---
 
@@ -212,7 +212,7 @@ Gate 4 is passed only if, on a fixed tiny-task evaluation set:
 - Teacher cannot overfit → task is still too hard or implementation still wrong.
 
 ### Current status
-**PARTIAL** (2026-04-07). Joint-space residual PPO reaches scripted baseline level (-2.09 reward, ~12.5% transfer) in 20K steps — massive improvement over E1 Cartesian-delta PPO which was stuck at random (-39.6). However, Gate 4 targets not yet met: transfer ~12.5% vs. 30% target. 
+**PARTIAL** (2026-04-07). Joint-space residual PPO reaches scripted baseline level (-2.09 reward, ~12.5% transfer) in 20K steps — massive improvement over E1 Cartesian-delta PPO which was stuck at random (-39.6). However, Gate 4 targets are still not met: transfer remains far below the formal `0.25` pass threshold and no stable 3× evaluation pass has been shown.
 
 **Completed experiments:**
 - E1 Teacher PPO (Cartesian-delta): FAILED (IK + PD controller broken, 0% transfer)
@@ -220,7 +220,9 @@ Gate 4 is passed only if, on a fixed tiny-task evaluation set:
 - **E3 Joint-space residual v1** (scale=0.1): converged to scripted baseline (-2.09), 12.5% transfer
 - **E4 Joint-space residual v2** (scale=0.2): best reward -1.20, 12-15% transfer
 
-**Root cause of remaining gap:** Base trajectory (scripted edge-push) only achieves ~12.5% transfer. Residual policy reproduces this but can't push past 30%.
+**Root cause of remaining gap:** Base trajectory quality remains the bottleneck in the learning-accessible path. Residual policy reproduces the current joint-space baseline but still falls short of the formal Gate 4 pass criteria.
+
+**2026-04-09 runtime follow-up:** the edge-push codebase has moved beyond the original Gate 4 snapshot. The M7 core runtime path now exists, and longer-running baseline / pipeline jobs may be active before Gate 4 is formally promoted. Those runs should be treated as engineering shakeouts and implementation verification only. They do **not** change the current Gate 4 verdict unless the pass criteria above are actually met on the required evaluation set.
 
 **Next steps:**
 1. Improve the **edge-push** base trajectory; do **not** reopen scoop / bowl as the current Gate 4 main line
@@ -228,7 +230,7 @@ Gate 4 is passed only if, on a fixed tiny-task evaluation set:
 3. Longer training (1M+ steps)
 4. Revisit task geometry (container placement may cap push strategy)
 
-If the bowl side-track is continued separately, follow the native-first then sticky-fallback order in `docs/11_BOWL_TOOL_INVESTIGATION.md` and `docs/12_BOWL_TRANSPORT_DIAGNOSIS_RUNBOOK.md`.
+If the bowl side-track is continued separately, use `docs/40_investigations/11_BOWL_TOOL_INVESTIGATION.md` and `docs/10_protocols/12_BOWL_TRANSPORT_DIAGNOSIS_RUNBOOK.md` as the source of truth. That side-track has already progressed through native tuning, minimal sticky fallback, hidden geometry, and particle constraints without producing useful final carry, so it should not be treated as a near-term Gate 4 rescue path.
 
 **Failure pattern B** still applies but narrowed: scripted succeeds at 42% (set_qpos) but learning-accessible control only reaches 12.5%. The gap is now in strategy, not controller.
 
@@ -317,7 +319,7 @@ Save all of the following:
 
 ### Priority 1
 Pass **Gate 4** — improve base trajectory or widen residual exploration.
-- Do **not** reopen scoop / bowl as the current Gate 4 base trajectory; keep bowl work isolated as a side-track under `docs/11` / `docs/12`.
+- Do **not** reopen scoop / bowl as the current Gate 4 base trajectory; keep bowl work isolated as a side-track under `docs/40_investigations/11_BOWL_TOOL_INVESTIGATION.md` and `docs/10_protocols/12_BOWL_TRANSPORT_DIAGNOSIS_RUNBOOK.md`.
 - Widen residual_scale from 0.1→0.3 with curriculum annealing (0→0.3 over 100K steps).
 - Longer training: 1M+ steps.
 - Revisit container geometry if transfer ceiling persists.
@@ -328,10 +330,12 @@ Formalize **Gate 1** task contract.
 - Define success threshold, reward terms, and phase semantics for joint-space control.
 
 ### Priority 3
-Only after Gate 4:
-- reopen student learning,
-- reopen OOD evaluation,
-- reopen method comparison.
+Only after Gate 4 may the following become **claim-bearing paper evidence**:
+- student learning claims,
+- OOD evaluation claims,
+- method-comparison claims.
+
+Pre-Gate-4 engineering runs may still exist for implementation shakeout, but they must not be treated as promoted scientific evidence.
 
 ---
 

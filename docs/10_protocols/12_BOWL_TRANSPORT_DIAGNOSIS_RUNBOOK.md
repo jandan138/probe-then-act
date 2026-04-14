@@ -430,6 +430,8 @@ Success gate for Phase 1:
 
 If the scan only improves `mid_traverse_n_on_tool` but final carry still collapses, do **not** declare Phase 1 a success.
 
+**2026-04-10 recorded outcome:** this exact failure pattern has now occurred in the sand runs. Native tuning improved some midpoint carry signals, but all tested native configurations still ended with `final_n_on_tool = 0`. Therefore, the bowl side-track has officially crossed the runbook threshold for **Phase 1 native failure**.
+
 ### 14.3 Phase 2 trigger — sticky fallback is allowed only after native failure
 
 Open the fallback path only if all are true:
@@ -453,13 +455,47 @@ Current repo status:
 - activation still requires explicit bowl flags plus the explicit `carry` phase;
 - the default edge-push path does not enable it.
 
-If that is still too weak, the next heavier fallbacks are:
+**2026-04-10 recorded outcome:** a minimal sticky-fallback validation has now been run on sand, and it also failed the final-carry gate (`final_n_on_tool = 0`). This does **not** invalidate Phase 2 as a category; it only means the first guarded sticky variant is too weak.
+
+**Later 2026-04-10 recorded outcome:** two heavier fallbacks were then exercised on sand:
 
 - hidden retention geometry in `panda_bowl.xml`;
-- direct particle position / velocity setters or particle constraints via Genesis internals;
+- Genesis particle constraints.
+
+Hidden geometry still ended with `final_n_on_tool = 0` in scan runs. Particle constraints produced the first weak nonzero terminal signal in retention, but scan-time `final_n_on_tool` still remained `0` and spill stayed high. The bowl line therefore still lacks meaningful final carry, even after progressing beyond minimal sticky fallback.
+
+The heavier fallbacks that have now been exercised are:
+
+- hidden retention geometry in `panda_bowl.xml`;
+- direct particle position / velocity setters or particle constraints via Genesis internals.
+
+The main remaining heavier fallback class is:
+
 - custom carry-phase force fields.
 
-### 14.5 Reporting rule
+The next execution step should now be selected from these heavier fallbacks, still under bowl-only isolation and still reported separately from native Genesis bowl transport.
+
+At this point, however, it is no longer enough to record “which fallback comes next.” The workflow should also explicitly record the emerging interpretation: the bowl can often achieve calm retention, but the simulator still fails to produce a robust, transportable load through dynamic carry.
+
+### 14.5 Reality-gap note
+
+Current evidence suggests a simulator-vs-reality gap at the **carried-load formation** level:
+
+- static bowl retention can exist;
+- midpoint retention can sometimes be improved;
+- but no tested variant has yet produced robust final carry in the flat task.
+
+This means the dominant problem is no longer just “needs more friction” or “needs a slightly deeper bowl.” The stronger interpretation is that the simulated material does not naturally form a stable transported packet under bowl carry, even when local retention is improved.
+
+**2026-04-11 phase-diagnostic addition:** the dedicated phase run shows that the dominant loss happens at **carry onset**. In the current sand diagnosis, `n_on_tool` falls from `122` at `lift_full` to `1` at `carry_early`, and later phases only handle a tiny residue. This means the main question is no longer “does pour kill the payload?” but “does dynamic carry immediately deconfine the load?”
+
+Recommended next discriminator:
+
+- rerun the same phase diagnostic with a **much higher-wall bowl variant**;
+- if `carry_early` survival rises sharply, shallow/open-mouth overflow is a major contributor;
+- if `carry_early` still collapses, then the stronger explanation is that the simulated material never forms a stable transported packet, even with stronger wall containment.
+
+### 14.6 Reporting rule
 
 If Phase 2 is used, label outputs as **sticky fallback / retention fallback**.
 
@@ -470,7 +506,7 @@ Current repo status:
 - the diagnosis script now writes both requested and effective runtime config views;
 - use the effective runtime section, not just the requested override section, when verifying whether bowl tuning or sticky fallback actually became active.
 
-### 14.6 Suggested output naming
+### 14.7 Suggested output naming
 
 Use separate run labels under `results/scoop_debug/<timestamp>/`:
 

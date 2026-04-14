@@ -23,7 +23,7 @@ More concretely:
 - The Cartesian-delta → IK → PD controller path was confirmed broken (0% transfer, 0.68m z-divergence).
 - The IK y-inversion is a single-step DLS coupling artifact, not a Genesis bug (iterative IK works correctly).
 - `JointResidualWrapper` bypasses IK entirely and enables learning.
-- But the scripted edge-push base trajectory only achieves ~12.5% transfer — below the 30% Gate 4 threshold.
+- But the scripted edge-push base trajectory only achieves ~12.5% transfer — still below the formal Gate 4 pass criteria.
 
 Therefore, the right interpretation is:
 
@@ -37,15 +37,15 @@ Therefore, the right interpretation is:
 
 | Issue | Resolution | Evidence |
 |---|---|---|
-| IK y-axis inversion | Not a Genesis bug — single-step DLS coupling artifact | `docs/IK_MINIMAL_REPRO.md`: iterative IK 8/8 sign matches |
+| IK y-axis inversion | Not a Genesis bug — single-step DLS coupling artifact | `docs/40_investigations/IK_MINIMAL_REPRO.md`: iterative IK 8/8 sign matches |
 | PD controller failure | `control_dofs_position()` can't track low-z configs | `results/controller_replay_ab_test.csv`: 0% transfer, z-div 0.68m |
-| Learner stuck at random | Joint-space residual reaches baseline in 20K steps | `docs/GATE4_TRAINING_REPORT.md`: -2.09 vs. -39.6 (E1) |
+| Learner stuck at random | Joint-space residual reaches baseline in 20K steps | `docs/30_records/GATE4_TRAINING_REPORT.md`: -2.09 vs. -39.6 (E1) |
 
 ### What is still blocked
 
 | Issue | Status | Detail |
 |---|---|---|
-| Gate 4 (30% transfer) | **NOT PASSED** | Best: 12.5% transfer (v1) / 12-15% (v2). Threshold: 30%. |
+| Gate 4 (tiny-task pass criteria) | **NOT PASSED** | Best: 12.5% transfer (v1) / 12-15% (v2). Still below the formal Gate 4 thresholds. |
 | Base trajectory quality | **CURRENT BLOCKER** | Scripted edge-push achieves ~12.5% — residual can't improve beyond it |
 | Gate 5 (full-scale) | BLOCKED | Requires Gate 4 |
 
@@ -57,7 +57,7 @@ Therefore, the right interpretation is:
 | 1 — Task/Theory Spec | PARTIAL |
 | 2 — Implementation Correctness | **PASSED** (IK/controller bypassed) |
 | 3 — System Smoke Test | **PASSED** |
-| 4 — Tiny-Task Overfit | **PARTIAL** (12.5% vs. 30% target) |
+| 4 — Tiny-Task Overfit | **PARTIAL** (12.5% transfer, below formal pass thresholds) |
 | 5 — Full-Scale Experiment | BLOCKED |
 
 ---
@@ -93,7 +93,7 @@ Therefore, the right interpretation is:
 
 ### The problem
 
-The scripted edge-push trajectory (3-pass flat push) achieves ~12.5% transfer. The residual policy reproduces this faithfully but cannot discover corrections that push past 30%.
+The scripted edge-push trajectory available to the learner reaches only ~12.5% transfer. The residual policy reproduces this faithfully but still cannot meet the formal Gate 4 pass criteria.
 
 ### Why the residual can't improve enough
 
@@ -112,7 +112,7 @@ The scripted edge-push trajectory (3-pass flat push) achieves ~12.5% transfer. T
 Until Gate 4 is passed:
 - Do NOT revert to Cartesian-delta actions (broken, confirmed).
 - Do NOT launch large multi-material sweeps or OOD campaigns.
-- Do NOT claim the method works based on reward improvements alone (12.5% ≠ 30%).
+- Do NOT claim the method works based on reward improvements alone (12.5% still does not satisfy Gate 4 pass criteria).
 - Do NOT spend GPU on broad hyperparameter searches — focus on strategy.
 
 ---
@@ -124,7 +124,7 @@ Until Gate 4 is passed:
 **A1. Keep scoop / bowl out of the Gate 4 main line:**
 - Do **not** reopen the scoop / bowl trajectory as the current base strategy for Gate 4.
 - The flat-scene bowl diagnosis is now a documented side-track negative result.
-- If bowl is continued at all, follow `docs/11_BOWL_TOOL_INVESTIGATION.md` and `docs/12_BOWL_TRANSPORT_DIAGNOSIS_RUNBOOK.md`: native contact-quality tuning first, sticky fallback second, no interference with edge-push work.
+- If bowl is continued at all, follow `docs/40_investigations/11_BOWL_TOOL_INVESTIGATION.md` and `docs/10_protocols/12_BOWL_TRANSPORT_DIAGNOSIS_RUNBOOK.md`: the side-track has already progressed through native tuning, minimal sticky fallback, hidden geometry, and particle constraints without useful final carry, so treat it as a negative-result / probe-signal branch, not as a rescue path for Gate 4.
 
 **A2. Optimize the edge-push trajectory**:
 - Adjust approach angle, push speed, number of passes
@@ -170,14 +170,14 @@ If residual RL with better trajectory still plateaus:
 - Training curve clearly separates from scripted baseline (not just reproduces it)
 
 ### No-Go
-- All trajectory variants plateau below 30% transfer
+- All trajectory variants remain below the formal Gate 4 pass criteria
 - In that case: revisit task design (is edge-push the right task for this paper?)
 
 ---
 
 ## 8. Canonical One-Sentence Diagnosis
 
-> The joint-space residual control stack works — the learner reaches scripted baseline performance in 20K steps. Gate 4 is blocked by base trajectory quality (~12.5% transfer vs. 30% target), not by the learning infrastructure. Next work should focus on improving the base strategy or widening the residual exploration range.
+> The joint-space residual control stack works — the learner reaches scripted baseline performance in 20K steps. Gate 4 is blocked by base trajectory quality (~12.5% transfer, still below formal pass thresholds), not by the learning infrastructure. Next work should focus on improving the base strategy or widening the residual exploration range.
 
 ---
 
@@ -188,8 +188,8 @@ If residual RL with better trajectory still plateaus:
 | Controller A/B test script | `pta/scripts/controller_replay_ab.py` |
 | Controller A/B results | `results/controller_replay_ab_test.csv` |
 | IK minimal repro script | `pta/scripts/ik_minimal_repro.py` |
-| IK repro report | `docs/IK_MINIMAL_REPRO.md` |
+| IK repro report | `docs/40_investigations/IK_MINIMAL_REPRO.md` |
 | Joint-space residual wrapper | `pta/envs/wrappers/joint_residual_wrapper.py` |
 | Scripted demos (20 episodes) | `checkpoints/demos/scripted_joint_demos.npz` |
-| Gate 4 training report | `docs/GATE4_TRAINING_REPORT.md` |
-| Full sprint results | `docs/08_48HR_SPRINT_RESULTS.md` |
+| Gate 4 training report | `docs/30_records/GATE4_TRAINING_REPORT.md` |
+| Full sprint results | `docs/30_records/08_48HR_SPRINT_RESULTS.md` |

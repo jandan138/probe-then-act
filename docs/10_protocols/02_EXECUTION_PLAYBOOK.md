@@ -103,10 +103,10 @@ Deliverables:
 ## 4. Reading order for new team members
 
 On day 1, every team member must read in this order:
-1. `docs/00_PROJECT_BRIEF.md`
+1. `docs/00_foundation/00_PROJECT_BRIEF.md`
 2. this file
-3. `docs/01_REPO_BLUEPRINT.md`
-4. `docs/03_EXPERIMENT_PROTOCOL.md`
+3. `docs/00_foundation/01_REPO_BLUEPRINT.md`
+4. `docs/10_protocols/03_EXPERIMENT_PROTOCOL.md`
 
 Then they should answer three questions in writing:
 1. What is the paper claim?

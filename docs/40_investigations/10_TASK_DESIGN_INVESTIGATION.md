@@ -51,6 +51,8 @@ MPM particles have no adhesion force to rigid bodies — only contact friction. 
 
 **Conclusion:** Scooping is dead for material transfer in Genesis MPM. But scoop-insertion as a **probe action** (tap, press, partial insert) can reveal material properties.
 
+**2026-04-09/10 follow-up:** the later bowl side-track refined this conclusion rather than overturning it. Under the explicit flat bowl scene, sand and snow show static retention but still fail during dynamic transport, while elastoplastic fails earlier at capture/contact. Native tuning, minimal sticky fallback, hidden retention geometry, and particle constraints have now all been exercised without producing meaningful final carry. The strongest current interpretation is that bowl transfer in Genesis is limited by a simulator-vs-reality gap at the **carried-load formation** level: calm retention can exist, but the material still does not naturally become a stable transported packet. This further strengthens the case for treating scoop/bowl as a **probe-signal / failure-structure side-track**, not as the current Task B transport path. See `docs/40_investigations/11_BOWL_TOOL_INVESTIGATION.md` and `docs/10_protocols/12_BOWL_TRANSPORT_DIAGNOSIS_RUNBOOK.md`.
+
 ---
 
 ## 4. Geometry Sweep (Config A-E)

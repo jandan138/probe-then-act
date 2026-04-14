@@ -68,7 +68,7 @@ Design: `q_applied = q_base[t] + residual_scale * delta_q`
 | Blocked by: IK + PD controller | Blocked by: base trajectory quality |
 | Fix: control stack | Fix: task strategy |
 
-The bottleneck is no longer the learning infrastructure. The scripted edge-push trajectory only achieves ~12.5% transfer — far below the 30% success threshold. The residual policy reproduces this faithfully but can't push past it with ±0.1-0.2 rad corrections.
+The bottleneck is no longer the learning infrastructure. The scripted edge-push trajectory only achieves ~12.5% transfer — still below the formal Gate 4 pass criteria. The residual policy reproduces this faithfully but can't push past it with ±0.1-0.2 rad corrections.
 
 ---
 
@@ -103,7 +103,7 @@ If switching to `control_dofs_position()` for physical realism:
 | 1 | `pta/scripts/controller_replay_ab.py` | ✅ |
 | 2 | `results/controller_replay_ab_test.csv` + plot | ✅ |
 | 3 | `pta/scripts/ik_minimal_repro.py` | ✅ |
-| 4 | `docs/IK_MINIMAL_REPRO.md` | ✅ |
+| 4 | `docs/40_investigations/IK_MINIMAL_REPRO.md` | ✅ |
 | 5 | `pta/envs/wrappers/joint_residual_wrapper.py` | ✅ |
 | 6 | `checkpoints/demos/scripted_joint_demos.npz` | ✅ (20 episodes, 1.45 MB) |
 | 7 | Gate 4 learning curves | ✅ (v1 + v2) |
@@ -113,4 +113,4 @@ If switching to `control_dofs_position()` for physical realism:
 
 ## Canonical Diagnosis Update
 
-> **The joint-space residual control stack works — the learner reaches scripted baseline performance in 20K steps (vs. zero learning with Cartesian-delta IK). Gate 4 is blocked by base trajectory quality (~12.5% transfer vs. 30% target), not by the learning infrastructure. Next work should focus on improving the base strategy or widening the residual exploration range.**
+> **The joint-space residual control stack works — the learner reaches scripted baseline performance in 20K steps (vs. zero learning with Cartesian-delta IK). Gate 4 is blocked by base trajectory quality (~12.5% transfer, still below formal pass thresholds), not by the learning infrastructure. Next work should focus on improving the base strategy or widening the residual exploration range.**

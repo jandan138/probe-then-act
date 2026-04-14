@@ -43,7 +43,7 @@ ScoopTransfer Environment Sanity Check
 
 ### 4. Code Scaffold
 - 126 Python files + 22 YAML configs created
-- Full project structure per docs/01_REPO_BLUEPRINT.md
+- Full project structure per `docs/00_foundation/01_REPO_BLUEPRINT.md`
 - All modules have real type signatures with NotImplementedError bodies
 
 ### 5. PPO Training Verification
@@ -53,7 +53,7 @@ ScoopTransfer Environment Sanity Check
 ### 6. Literature & Novelty Check
 - No direct competitor found (2024-2026)
 - Closest: SCONE (CoRL 2023), AdaptiGraph (RSS 2024), ASID (ICLR 2024)
-- Full report: `docs/05_NOVELTY_CHECK_REPORT.md`
+- Full report: `docs/50_reports/06_NOVELTY_CHECK_REPORT.md`
 
 ### 7. Scripted Baselines
 
@@ -94,7 +94,7 @@ IK effort.
 | Environment implementation | `pta/envs/tasks/scoop_transfer.py` |
 | Scene builder | `pta/envs/builders/scene_builder.py` |
 | Config files | `pta/configs/env/scoop_transfer/*.yaml` |
-| Novelty report | `docs/05_NOVELTY_CHECK_REPORT.md` |
+| Novelty report | `docs/50_reports/06_NOVELTY_CHECK_REPORT.md` |
 | Experiment plan | `refine-logs/EXPERIMENT_PLAN.md` |
 
 ## Exit Criteria Checklist

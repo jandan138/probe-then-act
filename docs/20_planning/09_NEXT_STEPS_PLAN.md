@@ -23,16 +23,18 @@
 
    All materials > 30%. Material gap is 55 percentage points. One config change (`particle_pos y: -0.03 → 0.02`) was enough.
 
-2. **Scooping is dead:** MPM has no particle-rigid adhesion. 0% transfer for all materials during horizontal traverse. However, **capture-phase retention IS material-discriminative** (useful as probe signal).
+2. **Scooping is dead for the main line:** MPM has no particle-rigid adhesion. 0% transfer for all materials during horizontal traverse. However, **capture-phase retention IS material-discriminative** (useful as probe signal).
+
+   **2026-04-09/10 follow-up:** the later bowl side-track did not reverse this mainline conclusion. In the explicit flat bowl scene, sand and snow still fail mainly during dynamic transport, and elastoplastic fails earlier at capture/contact. Native tuning, minimal sticky fallback, hidden geometry, and particle constraints have all been exercised without producing useful final carry. The current best interpretation is a simulator-vs-reality gap at the carried-load level, so the bowl line should remain isolated from the edge-push plan and should be interpreted primarily as a probe-signal / failure-structure branch rather than an imminent Task B transport path.
 
 3. **反直觉排序 (Snow > ElastoPlastic > Sand):**
    - ElastoPlastic particles slide as a cohesive blob → 69.6%
    - Sand scatters granularly → only 32.2%
    - This supports the paper: simple heuristics ("lighter = easier") are wrong
 
-4. **Joint-space residual control is validated** (from 48hr sprint).
+4. **Joint-space residual control is validated** at the implementation level (from the 48hr sprint), but not yet at the claim-bearing Gate 4 / OOD evidence level.
 
-5. **Paper method is 0% implemented** (all stubs).
+5. **Paper method is no longer 0% implemented.** The M7 core runtime path now exists, but its training results are still non-final and should not yet be treated as validated paper evidence.
 
 ### Config D is now the default
 Applied to `pta/envs/builders/scene_builder.py`: `particle_pos: (0.55, 0.02, 0.20)`
@@ -50,11 +52,11 @@ Run scripted baseline (Sequence E) on sand with new config. Expect ~32% transfer
 - Baseline should be ~32% (sand). Goal: maintain or improve.
 
 ### Step 3: Gate 4 evaluation
-- `success_rate >= 70%` (sand: 32% > 30% threshold → success=1 per episode)
-- `transferred_mass_frac >= 0.25` (32% > 25% → pass)
+- `success_rate >= 70%` for the chosen learner on the fixed tiny-task evaluation set
+- `transferred_mass_frac >= 0.25`
 - Stable across 3 eval runs
 
-**Expected: Gate 4 PASSES for sand.** Config D's 32% baseline already exceeds both thresholds.
+**Expectation:** Config D makes Gate 4 look plausibly passable, but it does **not** by itself prove that the learner has passed. Gate 4 remains a learner-side evaluation problem, not a scripted-baseline bookkeeping pass.
 
 ---
 
@@ -64,7 +66,7 @@ Run scripted baseline (Sequence E) on sand with new config. Expect ~32% transfer
 |---|---|---|---|
 | **M1: Reactive PPO** | Lower bound | Fixed strategy fails on OOD materials | Ready (retrain with Config D) |
 | **M8: Privileged Teacher** | Upper bound | Knowing material = best performance | Ready (train_teacher.py works) |
-| **M7: Probe-Then-Act** | Our method | Probing infers material → adapts strategy | Need: belief encoder (~3 days) |
+| **M7: Probe-Then-Act** | Our method | Probing infers material → adapts strategy | Core runtime path implemented; training/evidence still pending |
 
 ### Core paper story
 
@@ -108,6 +110,8 @@ Training on the hardest material (sand) means the learned policy must generalize
 - Evaluate on all materials
 
 ### Phase B: Core Method (Days 8-13, 5 days)
+
+**2026-04-09 runtime follow-up:** the core M7 runtime path is no longer hypothetical. The belief encoder, probe-phase wrapper, task policy, and `train_m7.py` path have been implemented. The remaining work here is no longer “write the first version,” but “run, verify, and stabilize the implemented path, then collect claim-bearing results.”
 
 **B1. Probe Phase Design** (Day 8)
 - Add probe phase to episode: first 3 steps = scripted tap/press
@@ -166,7 +170,7 @@ Training on the hardest material (sand) means the learned policy must generalize
 ## 5. Go/No-Go Checkpoints
 
 ### Checkpoint 1: Day 5 (Gate 4 retest)
-- Sand transfer ≥ 30% with Config D? → Expected YES (scripted = 32%)
+- Does the chosen learner satisfy the Gate 4 pass criteria on Config D? → Scripted 32% suggests the task may be learnable, but does not guarantee learner success.
 
 ### Checkpoint 2: Day 13 (Method trained)
 - M8 > M1 on OOD? (Teacher with privileged info beats reactive?)
@@ -191,11 +195,11 @@ Training on the hardest material (sand) means the learned policy must generalize
 - **RUN** M1 + M8 baselines
 
 ### Phase B (Days 8-13)
-- **IMPLEMENT** `pta/models/belief/latent_belief_encoder.py`
-- **IMPLEMENT** `pta/models/policy/task_policy.py` (or: just append z to obs)
-- **MODIFY** `pta/envs/tasks/scoop_transfer.py` — add probe phase
-- **CREATE** `pta/scripts/train_m7.py`
-- **CREATE** `pta/scripts/train_baselines.py`
+- **VERIFY / STABILIZE** `pta/models/belief/latent_belief_encoder.py`
+- **VERIFY / STABILIZE** `pta/models/policy/task_policy.py`
+- **VERIFY / STABILIZE** probe-phase integration in the edge-push runtime path
+- **RUN / DEBUG** `pta/scripts/train_m7.py`
+- **RUN / DEBUG** `pta/scripts/train_baselines.py`
 
 ### Phase C (Days 14-16)
 - **CREATE** `pta/scripts/run_ood_eval.py`
@@ -205,8 +209,8 @@ Training on the hardest material (sand) means the learned policy must generalize
 
 ## 7. Deprioritized Items
 
-- Level-and-Fill task (Task B)
-- Scooping as transfer mechanism (confirmed dead — MPM no adhesion)
+- Level-and-Fill task (Task B) — still deprioritized; the latest bowl side-track evidence points more toward a simulator-gap / probe-signal interpretation than toward a near-term transportable Task B
+- Scooping as transfer mechanism (confirmed dead for the main line — MPM no adhesion)
 - M2/M3/M4/M5 baselines
 - Risk head / uncertainty calibration
 - Learned probe policy (use scripted probes)
@@ -232,3 +236,5 @@ Training on the hardest material (sand) means the learned policy must generalize
 ## 9. One-Sentence Plan
 
 > Apply Config D (particle y=0.02), pass Gate 4 on sand (Day 5), train M1+M8 baselines (Days 6-8), implement belief encoder + probe-conditioned policy (Days 8-13), evaluate on 3 materials (Days 14-16), write paper with ARIS (Days 16-22).
+
+**2026-04-09 runtime note:** actual execution has moved ahead of this original Day-5 plan. A skip-completed edge-push pipeline is already actively running baseline training, while M7 core code is implemented but not yet scientifically validated. Treat the current training run as engineering progress, not as evidence that Gate 4 or the full paper method has already passed.

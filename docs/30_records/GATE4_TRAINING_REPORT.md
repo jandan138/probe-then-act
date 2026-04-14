@@ -9,7 +9,9 @@ Two training runs tested the `JointResidualWrapper` on the edge-push tiny task:
 - **v1**: `residual_scale=0.1`, `log_std_init=-1.0` (std~0.37)
 - **v2**: `residual_scale=0.2`, `log_std_init=-0.5` (std~0.61)
 
-Both runs showed clear learning signal and separated from random baseline, but plateaued at the scripted baseline level without exceeding the 30% transfer threshold.
+Both runs showed clear learning signal and separated from random baseline, but plateaued at the scripted baseline level without meeting the formal Gate 4 pass criteria.
+
+**2026-04-09/10 follow-up:** the original suggestion to try scoop / bowl as the next Gate 4 base trajectory is now superseded by the expanded flat-scene bowl diagnosis. Bowl remains a side-track negative result; native tuning, minimal sticky fallback, hidden geometry, and particle constraints have all been exercised without useful final carry. The line is now better interpreted as a simulator-gap / probe-signal branch, not as the Gate 4 main line.
 
 ## v1 Results (scale=0.1)
 
@@ -68,7 +70,7 @@ Both runs showed clear learning signal and separated from random baseline, but p
 
 | Gate 4 Target | Status |
 |---|---|
-| success_rate >= 70% (30% transfer) | NOT MET — transfer ~12-15% |
+| success_rate >= 70% with learner meeting tiny-task pass thresholds | NOT MET — transfer ~12-15% |
 | median transferred_mass_frac >= 0.25 | NOT MET — ~0.12 |
 | Stable across >= 3 eval reruns | PARTIAL — v1 very stable, v2 oscillating |
 
@@ -80,19 +82,19 @@ Both runs showed clear learning signal and separated from random baseline, but p
 
 2. **IK bypass confirmed**: The joint-space approach completely avoids the y-axis inversion bug and produces stable, reproducible trajectories.
 
-3. **Bottleneck is the base trajectory, not the residual**: The scripted edge-push trajectory only achieves ~12.5% transfer. The residual policy reproduces this faithfully but can't improve much beyond it. The 30% target requires a fundamentally better base strategy.
+3. **Bottleneck is the base trajectory, not the residual**: The scripted edge-push trajectory only achieves ~12.5% transfer. The residual policy reproduces this faithfully but can't improve much beyond it. A fundamentally better base strategy is still needed to reach the formal Gate 4 pass criteria.
 
 4. **Scale=0.2 slightly outperforms scale=0.1**: Best reward of -1.20 vs -2.04, suggesting the residual can find small improvements with more exploration room.
 
 ## Recommendations
 
-1. **Better base trajectory**: The edge-push scripted trajectory (3-pass flat push) is limited. The scoop-lift-traverse trajectory (`"scoop"`) may achieve higher transfer by lifting particles over container walls rather than pushing them off an edge.
+1. **Better base trajectory**: Improve the edge-push base trajectory first. Do **not** treat scoop / bowl as the current Gate 4 rescue path; that line is now a documented side-track negative result unless separate bowl-side-track work changes the evidence.
 
 2. **Longer training**: 200K steps may not be enough for the residual to find meaningful improvements over a decent base trajectory. Try 1M+ steps.
 
 3. **Curriculum**: Start with scale=0.0 (pure replay) for warmup, then anneal to scale=0.2 over 100K steps.
 
-4. **Hybrid approach**: Use `control_dofs_position` (PD control) instead of `set_qpos` (teleport) in the wrapper for more physically realistic execution.
+4. **Hybrid approach**: Use `control_dofs_position` (PD control) instead of `set_qpos` (teleport) in the wrapper for more physically realistic execution, but do not conflate that controller question with the separate bowl-side-track contact problem.
 
 ## Files
 

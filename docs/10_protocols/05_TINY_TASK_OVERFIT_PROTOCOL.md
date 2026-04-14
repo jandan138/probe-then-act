@@ -2,18 +2,18 @@
 
 > Internal protocol.
 > 
-> Goal: create the smallest believable version of the scooping problem and force at least one learner to solve it reliably.
+> Goal: create the smallest believable version of the manipulation problem and force at least one learner to solve it reliably.
 
 ---
 
 ## 0. Why this protocol exists
 
-The current project has a working simulator and training pipeline, but no method has achieved real scoop-transfer success.
+The current project has a working simulator and training pipeline, but no learner has yet achieved a validated tiny-task success result.
 
 Therefore, the next milestone is **not** "better benchmark performance".
 The next milestone is:
 
-> **Show that the learning stack can overfit a tiny, fixed, easy scooping task.**
+> **Show that the learning stack can overfit a tiny, fixed, easy task under the current mainline setup.**
 
 If this protocol fails, the project should not move to OOD evaluation or full benchmark claims.
 
@@ -60,6 +60,9 @@ Do **not** include any of the following in the tiny-task phase:
 ---
 
 ## 2.2 Task phases
+
+**2026-04-09 note:** the phase list below is legacy/general language for manipulation decomposition. The current Gate 4 main line is edge-push, not bowl transfer.
+
 The task is decomposed into five phases:
 1. **Approach** — move the scoop toward the source region.
 2. **Insert** — penetrate the material with a stable scoop orientation.
@@ -298,16 +301,19 @@ A learner is promoted only if all 3 repeated evaluations satisfy the pass thresh
   - v2 (scale=0.2): Best reward -1.20, more exploration but oscillating. 12-15% transfer.
   - Both dramatically better than E1/E2 (random-level → baseline-level in 20K steps)
   - Gate 4 targets NOT MET: 12.5% transfer vs. 30% required
-- **Next**: try scoop trajectory, scale=0.3-0.5, curriculum, 1M+ steps
+- **Next**: keep edge-push as the Gate 4 main line; widen scale, use curriculum, and train longer. If the bowl side-track is revisited, treat `docs/40_investigations/11_BOWL_TOOL_INVESTIGATION.md` and `docs/10_protocols/12_BOWL_TRANSPORT_DIAGNOSIS_RUNBOOK.md` as the source of truth. That line now reads more as a simulator-gap / probe-signal branch than as an imminent transportable Task B.
 
 ## E4 — Student tiny-task
 - no privileged observations
 - same tiny task
 - objective: verify observability is sufficient
-- **Status: NOT STARTED** — blocked by E3 not passing Gate 4
+- **Status: IMPLEMENTED BUT NOT YET VALIDATED**
+  - the student-side edge-push runtime path now exists,
+  - but no claim-bearing tiny-task student result has been established yet,
+  - and E4 is still not promotable until Gate 4 evidence is actually secured.
 
 ### Important
-Do **not** start E3 before E1 or E2 has passed.
+Do **not** treat E4 as passed merely because its code path exists. Implementation status, active runs, and validated tiny-task evidence are different things.
 
 ---
 

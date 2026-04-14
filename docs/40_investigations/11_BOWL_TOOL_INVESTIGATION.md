@@ -4,7 +4,7 @@
 > **Last updated:** 2026-04-09
 > **Purpose:** Evaluate whether a bowl/ladle-shaped tool could enable scooping in Genesis MPM
 
-> **Execution runbook:** See [docs/12_BOWL_TRANSPORT_DIAGNOSIS_RUNBOOK.md](12_BOWL_TRANSPORT_DIAGNOSIS_RUNBOOK.md) for the flat-only diagnosis procedure and non-interference rules.
+> **Execution runbook:** See [docs/10_protocols/12_BOWL_TRANSPORT_DIAGNOSIS_RUNBOOK.md](../10_protocols/12_BOWL_TRANSPORT_DIAGNOSIS_RUNBOOK.md) for the flat-only diagnosis procedure and non-interference rules.
 
 ---
 
@@ -281,6 +281,8 @@ Primary success gate for this phase:
 - require clearly nonzero `final_n_on_tool` and clearly nonzero final transfer in the explicit flat scene;
 - if native tuning still ends with effective zero final carry, stop calling this a pure tuning problem.
 
+**2026-04-10 status update:** Phase 1 has now been exercised on sand with one minimal native-tuning batch plus two follow-up native settings. All three runs showed the same pattern: static retention remained strong and some settings improved `mid_traverse_n_on_tool`, but every run still ended with `final_n_on_tool = 0` and effectively zero final transfer. Under the documented success gate, this counts as a **native failure**, not a partial success.
+
 Repo touch points for this phase:
 
 - `pta/envs/builders/scene_builder.py` — expose CPIC and rigid-coupling knobs;
@@ -324,13 +326,57 @@ Implemented bowl-only task flags now include:
 - `bowl_sticky_region_min`
 - `bowl_sticky_region_max`
 
-If the local post-step version is still too weak, the next stronger variants are:
+**2026-04-10 status update:** the first minimal sticky-fallback validation has also been run on sand. The runtime gate activated correctly (`flat` + `bowl` + `carry`), but the result still ended with `final_n_on_tool = 0` and effectively zero final transfer. This means the **minimal** sticky fallback is also insufficient as a final-carry solution.
+
+**Later 2026-04-10 follow-up:** two heavier Phase 2 variants have now also been exercised on sand:
+
+- **Hidden retention geometry** (thin invisible bowl lips in `panda_bowl.xml`) improved calm/static retention a little, but still ended with `final_n_on_tool = 0` in the scan runs.
+- **Particle constraints fallback** produced the first weak terminal signal in retention (`traverse_slow end_n_on_tool = 1`), but scan-time `final_n_on_tool` still stayed at `0` with high spill.
+
+This means the bowl side-track has now progressed through four escalating intervention classes — native tuning, minimal sticky, hidden geometry, and particle constraints — without producing meaningful final carry.
+
+The heavier variants that have now been exercised are:
 
 - bowl-local hidden retention geometry in `panda_bowl.xml`;
 - Genesis particle constraints or direct particle position / velocity setters;
+
+The main remaining heavier fallback class is:
+
 - custom carry-phase force fields.
 
-### 9.4 Reporting rule
+Current execution state: the bowl side-track has now progressed past both (1) native-only tuning and (2) minimal sticky fallback, and has already tested the next two heavier variants (hidden geometry and particle constraints). The remaining path is no longer “keep climbing the same ladder and expect transport to suddenly work.” It now needs a clearer scientific interpretation of **why** the ladder keeps failing.
+
+### 9.4 Why the simulator differs from reality
+
+The new evidence suggests the main bowl problem is **not** static retention. Sand can be held in the bowl while calm, and several interventions can slightly improve midpoint retention. The failure is that the material never forms a stable, transportable load packet through the real traverse.
+
+Current best explanation:
+
+1. Genesis MPM-rigid coupling is effectively **friction-dominated**, without the richer particle-tool adhesion / cohesion effects that help real granular loads travel as a coherent packet.
+2. The bowl can therefore hold particles while nearly stationary, but once dynamic carry begins, the load re-fluidizes and sheds as bulk flow.
+3. Hidden lips and local sticky corrections can delay or slightly reduce loss, but they do not create a genuinely stable carried packet.
+4. Particle constraints are the first intervention that produce a nonzero terminal signal at all, which is evidence that stronger explicit binding can help — but the effect is still far too weak to call this working transport.
+
+This points to a **simulator-vs-reality gap** at the carried-load level: Genesis can represent contact and short-term retention, but in this setup it does not naturally produce the kind of cohesive transport packet that a real bowl can sometimes achieve.
+
+**2026-04-11 phase-diagnostic update:** a dedicated phase-resolved sand run was added to distinguish early-carry loss from late-carry/pour loss. The result is unambiguous at the phase level: `n_on_tool` collapses from `122` at `lift_full` to `1` at `carry_early`, then stays in the `0–2` residue range through `carry_mid`, `carry_late`, and `pre_pour`. This means the dominant loss is **carry onset**, not the late carry or pour phase. The bowl is effectively almost empty before the intended pour begins.
+
+The local geometry counters should be read cautiously, but they support the same high-level conclusion: bowl-local occupancy drops from `201` at `lift_full` to `10` at `carry_early`, then to `2` and `0`. So the main failure is not “the bowl holds the load until pour, then dumps it”; it is “the load deconfines almost immediately once dynamic carry starts.”
+
+### 9.5 Next discriminating experiment
+
+The next clean test is **not** another generic tuning sweep. It is a high-wall carry-onset discriminator:
+
+- build a temporary bowl variant with much taller walls / mouth containment;
+- rerun the same phase-diagnostic path;
+- compare `lift_full -> carry_early -> carry_mid` retention against the current bowl.
+
+Interpretation:
+
+- **If high walls sharply improve `carry_early` survival**, then shallow-mouth overflow is a major part of the problem.
+- **If high walls still lose most mass immediately at carry onset**, then the stronger conclusion is that the load never forms a stable transported packet, even with better rim containment.
+
+### 9.6 Reporting rule
 
 If Phase 2 is used, document it as a **sticky fallback / retention fallback**, not as native Genesis bowl transport.
 
@@ -347,8 +393,9 @@ Current bowl diagnosis outputs now distinguish:
 
 This makes it explicit, for example, when a non-flat bowl scene requested bowl tuning flags but those flags did **not** actually activate under the runtime gate.
 
-### 9.5 Final decision gate
+### 9.7 Final decision gate
 
 - **Native tuning succeeds:** bowl remains a simulator-native side-track and may be studied further.
 - **Only sticky fallback succeeds:** bowl can be kept as an engineering demo, but not as physics-faithful evidence.
-- **Neither succeeds:** freeze bowl as a negative result and keep all mainline effort on edge-push.
+- **Only heavy artificial binding succeeds:** bowl can still be used as an engineering ablation, but not as evidence that natural bowl transport is faithfully modeled.
+- **No variant produces useful final carry:** freeze bowl as a negative result / probe-signal side-track and keep all mainline effort on edge-push.

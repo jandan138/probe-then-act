@@ -525,4 +525,3 @@ If none of these hold, pivot the project before paper writing.
    https://genesis-world.readthedocs.io/en/latest/user_guide/getting_started/config_system.html
 7. Genesis documentation, **Non-rigid Coupling**.  
    https://genesis-world.readthedocs.io/en/latest/user_guide/advanced_topics/solvers_and_coupling.html
-

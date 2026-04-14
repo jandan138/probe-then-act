@@ -60,10 +60,12 @@ Chinese may appear in internal discussion documents, but not in the code surface
 probe-then-act/
   README.md
   docs/
-    00_PROJECT_BRIEF.md
-    01_REPO_BLUEPRINT.md
-    02_EXECUTION_PLAYBOOK.md
-    03_EXPERIMENT_PROTOCOL.md
+    00_foundation/
+      00_PROJECT_BRIEF.md
+      01_REPO_BLUEPRINT.md
+    10_protocols/
+      02_EXECUTION_PLAYBOOK.md
+      03_EXPERIMENT_PROTOCOL.md
 
   pta/
     __init__.py
