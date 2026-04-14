@@ -24,11 +24,11 @@ python pta/scripts/train_student.py --method reactive_ppo --seed 42
 ## Documentation
 
 Read in this order:
-1. `docs/00_PROJECT_BRIEF.md` — Research vision
-2. `docs/01_REPO_BLUEPRINT.md` — Repository architecture
-3. `docs/02_EXECUTION_PLAYBOOK.md` — Execution plan
-4. `docs/03_EXPERIMENT_PROTOCOL.md` — Experiment protocol
-5. `docs/05_NOVELTY_CHECK_REPORT.md` — Literature survey results
+1. `docs/00_foundation/00_PROJECT_BRIEF.md` — Research vision
+2. `docs/00_foundation/01_REPO_BLUEPRINT.md` — Repository architecture
+3. `docs/10_protocols/02_EXECUTION_PLAYBOOK.md` — Execution plan
+4. `docs/10_protocols/03_EXPERIMENT_PROTOCOL.md` — Experiment protocol
+5. `docs/50_reports/06_NOVELTY_CHECK_REPORT.md` — Literature survey results
 
 ## Project Status
 

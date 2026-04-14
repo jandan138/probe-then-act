@@ -18,7 +18,7 @@ export LD_LIBRARY_PATH=/usr/lib/wsl/lib:$LD_LIBRARY_PATH
 ```
 
 ## Code Structure
-See `docs/01_REPO_BLUEPRINT.md` for canonical structure. Key modules:
+See `docs/00_foundation/01_REPO_BLUEPRINT.md` for canonical structure. Key modules:
 - `pta/envs/` — Genesis environments, materials, sensors, rewards, metrics
 - `pta/models/` — Encoders, probe policy, belief encoder, task policy
 - `pta/training/` — RL, IL, distillation pipelines
@@ -55,12 +55,12 @@ python pta/scripts/run_eval_main.py --config pta/configs/eval/paper_main.yaml
 - See `Auto-claude-code-research-in-sleep/projects/probe-then-act/AUTOMATION_PLAN.md` for full schedule
 
 ## Key Design Documents
-1. `docs/00_PROJECT_BRIEF.md` — Research vision, method, baselines
-2. `docs/01_REPO_BLUEPRINT.md` — Repo architecture
-3. `docs/02_EXECUTION_PLAYBOOK.md` — Week-by-week execution
-4. `docs/03_EXPERIMENT_PROTOCOL.md` — Hypotheses, experiment matrix, metrics
-5. `docs/04_VALIDATION_GATES.md` — Gate 0–5 workflow (Gate 0 **PASSED**)
-6. `docs/05_TINY_TASK_OVERFIT_PROTOCOL.md` — Tiny-task overfit before scale-up
+1. `docs/00_foundation/00_PROJECT_BRIEF.md` — Research vision, method, baselines
+2. `docs/00_foundation/01_REPO_BLUEPRINT.md` — Repo architecture
+3. `docs/10_protocols/02_EXECUTION_PLAYBOOK.md` — Week-by-week execution
+4. `docs/10_protocols/03_EXPERIMENT_PROTOCOL.md` — Hypotheses, experiment matrix, metrics
+5. `docs/10_protocols/04_VALIDATION_GATES.md` — Gate 0–5 workflow (Gate 0 **PASSED**)
+6. `docs/10_protocols/05_TINY_TASK_OVERFIT_PROTOCOL.md` — Tiny-task overfit before scale-up
 
 ## Current Status (2026-04-06)
 - **Phase 4 (M1 Pivot)** in progress

@@ -19,8 +19,8 @@ The missing piece is an **active information gathering** mechanism: a robot shou
   - Teacher-student learning for manipulation (NVIDIA IsaacGym examples)
   - Domain randomization for sim-to-real (Tobin et al., IROS 2017)
   - POMDP-based manipulation with belief tracking (Kaelbling & Lozano-Pérez)
-- **What I already tried**: Project design phase complete, no experiments yet
-- **What didn't work**: N/A (pre-implementation stage)
+- **What I already tried**: Project design phase complete; edge-push environment, wrappers, and baseline/runtime paths are implemented; training is in progress
+- **What didn't work**: Scoop-and-transfer as the mainline transfer task; Gate 4 still not passed on edge-push
 
 ## Constraints
 - **Compute**: 1x RTX 4090 (24GB VRAM) local, Vast.ai available for scaling
@@ -50,8 +50,14 @@ The missing piece is an **active information gathering** mechanism: a robot shou
 - Foundation model for materials
 
 ## Existing Results
-None — pre-implementation stage. Comprehensive design documents completed:
-- `docs/00_PROJECT_BRIEF.md` — Full research vision and method design
-- `docs/01_REPO_BLUEPRINT.md` — Repository architecture (~100 files planned)
-- `docs/02_EXECUTION_PLAYBOOK.md` — 8-week execution plan with exit criteria
-- `docs/03_EXPERIMENT_PROTOCOL.md` — 4 hypotheses, 8 methods, experiment matrix, metrics
+Current state is no longer pre-implementation. The edge-push mainline has active engineering results, but the scientific program is still only partially validated:
+- Gate 0 passed for edge-push scripted feasibility
+- Gate 2/3 passed for implementation and smoke testing
+- Gate 4 remains partial: learning pipeline improved, but tiny-task pass criteria are still unmet
+- M7 core runtime path is implemented, but no validated M7 claim should be made yet
+
+Canonical design and protocol documents:
+- `docs/00_foundation/00_PROJECT_BRIEF.md` — Full research vision and method design
+- `docs/00_foundation/01_REPO_BLUEPRINT.md` — Repository architecture (~100 files planned)
+- `docs/10_protocols/02_EXECUTION_PLAYBOOK.md` — 8-week execution plan with exit criteria
+- `docs/10_protocols/03_EXPERIMENT_PROTOCOL.md` — 4 hypotheses, 8 methods, experiment matrix, metrics
