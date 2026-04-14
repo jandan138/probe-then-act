@@ -46,6 +46,8 @@ class SceneComponents:
     source_size: tuple = (0.15, 0.15, 0.10)
     target_pos: tuple = (0.5, 0.35, 0.0)
     target_size: tuple = (0.12, 0.12, 0.12)
+    task_layout: str = "edge_push"
+    tool_type: str = "gripper"
 
 
 # ---------------------------------------------------------------------------
@@ -73,7 +75,11 @@ _DEFAULT_CONFIG: Dict[str, Any] = {
     # Particles
     "particle_material": "sand",
     "particle_params": {},
-    "particle_pos": (0.55, 0.02, 0.20),  # 5.5cm from open edge — Config D (material-discriminative)
+    "particle_pos": (
+        0.55,
+        0.02,
+        0.20,
+    ),  # 5.5cm from open edge — Config D (material-discriminative)
     "particle_size": (0.12, 0.06, 0.03),
     # Camera
     "camera_res": (128, 128),
@@ -83,10 +89,67 @@ _DEFAULT_CONFIG: Dict[str, Any] = {
     # Robot
     "robot_pos": (0.0, 0.0, 0.0),
     # Tool
-    "tool_type": "gripper",  # "gripper" or "scoop"
+    "tool_type": "gripper",
+    # Bowl-only contact-quality tuning. Defaults stay OFF so edge paths remain unchanged.
+    "bowl_contact_quality_enabled": False,
+    "bowl_enable_cpic": False,
+    "bowl_substeps_override": None,
+    "bowl_robot_coup_friction": None,
+    "bowl_robot_coup_softness": None,
+    "bowl_robot_sdf_cell_size": None,
+    "bowl_robot_sdf_min_res": None,
+    "bowl_robot_sdf_max_res": None,
     # Build
     "n_envs": 0,  # 0 = single env
 }
+
+
+def _bowl_contact_quality_active(config: Dict[str, Any]) -> bool:
+    return bool(
+        config.get("bowl_contact_quality_enabled", False)
+        and config.get("tool_type") == "bowl"
+        and config.get("task_layout") == "flat"
+    )
+
+
+def _resolve_scene_substeps(config: Dict[str, Any]) -> int:
+    if _bowl_contact_quality_active(config):
+        override = config.get("bowl_substeps_override")
+        if override is not None:
+            return int(override)
+    return int(config["substeps"])
+
+
+def _resolve_mpm_options_kwargs(config: Dict[str, Any]) -> Dict[str, Any]:
+    kwargs = {
+        "lower_bound": config["mpm_lower_bound"],
+        "upper_bound": config["mpm_upper_bound"],
+        "grid_density": config["mpm_grid_density"],
+    }
+    if _bowl_contact_quality_active(config):
+        kwargs["enable_CPIC"] = bool(config.get("bowl_enable_cpic", False))
+    return kwargs
+
+
+def _resolve_robot_material_kwargs(config: Dict[str, Any]) -> Dict[str, Any]:
+    kwargs: Dict[str, Any] = {
+        "needs_coup": True,
+        "coup_friction": 3.0,
+    }
+    if not _bowl_contact_quality_active(config):
+        return kwargs
+
+    optional_keys = {
+        "coup_friction": config.get("bowl_robot_coup_friction"),
+        "coup_softness": config.get("bowl_robot_coup_softness"),
+        "sdf_cell_size": config.get("bowl_robot_sdf_cell_size"),
+        "sdf_min_res": config.get("bowl_robot_sdf_min_res"),
+        "sdf_max_res": config.get("bowl_robot_sdf_max_res"),
+    }
+    for key, value in optional_keys.items():
+        if value is not None:
+            kwargs[key] = value
+    return kwargs
 
 
 class SceneBuilder:
@@ -174,11 +237,10 @@ class SceneBuilder:
         self._configure_robot_gains(robot, tool_type)
 
         # 11. Get link references (depends on tool type)
-        if tool_type == "scoop":
+        if tool_type in {"scoop", "bowl", "bowl_highwall"}:
             ee_link = robot.get_link("scoop")
             left_finger_link = None
             right_finger_link = None
-            # Scoop: 7 arm DOFs, no finger DOFs
             arm_dof_idx = torch.arange(robot.n_dofs, device=gs.device)
             finger_dof_idx = torch.tensor([], dtype=torch.long, device=gs.device)
         else:
@@ -203,6 +265,8 @@ class SceneBuilder:
             right_finger_link=right_finger_link,
             arm_dof_idx=arm_dof_idx,
             finger_dof_idx=finger_dof_idx,
+            task_layout=task_layout,
+            tool_type=tool_type,
         )
 
         # Set source/target positions based on layout
@@ -219,9 +283,17 @@ class SceneBuilder:
             components.target_size = (ets[0], ets[1], etwh)
         else:
             components.source_pos = cfg["source_pos"]
-            components.source_size = (cfg["source_size"][0], cfg["source_size"][1], cfg["source_wall_height"])
+            components.source_size = (
+                cfg["source_size"][0],
+                cfg["source_size"][1],
+                cfg["source_wall_height"],
+            )
             components.target_pos = cfg["target_pos"]
-            components.target_size = (cfg["target_size"][0], cfg["target_size"][1], cfg["target_wall_height"])
+            components.target_size = (
+                cfg["target_size"][0],
+                cfg["target_size"][1],
+                cfg["target_wall_height"],
+            )
 
         return components
 
@@ -246,13 +318,9 @@ class SceneBuilder:
         scene = gs.Scene(
             sim_options=gs.options.SimOptions(
                 dt=ctrl_dt,
-                substeps=config["substeps"],
+                substeps=_resolve_scene_substeps(config),
             ),
-            mpm_options=gs.options.MPMOptions(
-                lower_bound=config["mpm_lower_bound"],
-                upper_bound=config["mpm_upper_bound"],
-                grid_density=config["mpm_grid_density"],
-            ),
+            mpm_options=gs.options.MPMOptions(**_resolve_mpm_options_kwargs(config)),
             rigid_options=gs.options.RigidOptions(
                 dt=ctrl_dt,
                 constraint_solver=gs.constraint_solver.Newton,
@@ -273,9 +341,7 @@ class SceneBuilder:
             morph=gs.morphs.URDF(file="urdf/plane/plane.urdf", fixed=True),
         )
 
-    def _add_edge_push_layout(
-        self, scene: Any, config: Dict[str, Any]
-    ) -> tuple:
+    def _add_edge_push_layout(self, scene: Any, config: Dict[str, Any]) -> tuple:
         """Add edge-push layout: elevated platform + target below edge.
 
         The source is an elevated platform with walls on 3 sides (not +y).
@@ -293,17 +359,32 @@ class SceneBuilder:
 
         # Platform base
         platform = scene.add_entity(
-            material=mat, morph=gs.morphs.Box(pos=pp, size=ps, fixed=True),
-            surface=gs.surfaces.Rough(diffuse_texture=gs.textures.ColorTexture(color=(0.6, 0.6, 0.6))),
+            material=mat,
+            morph=gs.morphs.Box(pos=pp, size=ps, fixed=True),
+            surface=gs.surfaces.Rough(
+                diffuse_texture=gs.textures.ColorTexture(color=(0.6, 0.6, 0.6))
+            ),
         )
 
         # Walls on 3 sides (back -y, left -x, right +x). NO wall on +y (the edge)
-        scene.add_entity(material=mat, morph=gs.morphs.Box(
-            pos=(px, py - half_y, pz + pwh / 2), size=(psx, 0.005, pwh), fixed=True))
-        scene.add_entity(material=mat, morph=gs.morphs.Box(
-            pos=(px - half_x, py, pz + pwh / 2), size=(0.005, psy, pwh), fixed=True))
-        scene.add_entity(material=mat, morph=gs.morphs.Box(
-            pos=(px + half_x, py, pz + pwh / 2), size=(0.005, psy, pwh), fixed=True))
+        scene.add_entity(
+            material=mat,
+            morph=gs.morphs.Box(
+                pos=(px, py - half_y, pz + pwh / 2), size=(psx, 0.005, pwh), fixed=True
+            ),
+        )
+        scene.add_entity(
+            material=mat,
+            morph=gs.morphs.Box(
+                pos=(px - half_x, py, pz + pwh / 2), size=(0.005, psy, pwh), fixed=True
+            ),
+        )
+        scene.add_entity(
+            material=mat,
+            morph=gs.morphs.Box(
+                pos=(px + half_x, py, pz + pwh / 2), size=(0.005, psy, pwh), fixed=True
+            ),
+        )
 
         # Target container below the platform edge
         etp = config.get("edge_target_pos", (0.55, 0.15, 0.01))
@@ -315,17 +396,38 @@ class SceneBuilder:
 
         # Target base
         target = scene.add_entity(
-            material=mat, morph=gs.morphs.Box(pos=etp, size=ets, fixed=True),
-            surface=gs.surfaces.Rough(diffuse_texture=gs.textures.ColorTexture(color=(0.5, 0.5, 0.5))),
+            material=mat,
+            morph=gs.morphs.Box(pos=etp, size=ets, fixed=True),
+            surface=gs.surfaces.Rough(
+                diffuse_texture=gs.textures.ColorTexture(color=(0.5, 0.5, 0.5))
+            ),
         )
 
         # Target walls (3 sides, open on the side facing platform)
-        scene.add_entity(material=mat, morph=gs.morphs.Box(
-            pos=(etx, ety + et_hy, etz + etwh / 2), size=(etsx, 0.005, etwh), fixed=True))
-        scene.add_entity(material=mat, morph=gs.morphs.Box(
-            pos=(etx - et_hx, ety, etz + etwh / 2), size=(0.005, etsy, etwh), fixed=True))
-        scene.add_entity(material=mat, morph=gs.morphs.Box(
-            pos=(etx + et_hx, ety, etz + etwh / 2), size=(0.005, etsy, etwh), fixed=True))
+        scene.add_entity(
+            material=mat,
+            morph=gs.morphs.Box(
+                pos=(etx, ety + et_hy, etz + etwh / 2),
+                size=(etsx, 0.005, etwh),
+                fixed=True,
+            ),
+        )
+        scene.add_entity(
+            material=mat,
+            morph=gs.morphs.Box(
+                pos=(etx - et_hx, ety, etz + etwh / 2),
+                size=(0.005, etsy, etwh),
+                fixed=True,
+            ),
+        )
+        scene.add_entity(
+            material=mat,
+            morph=gs.morphs.Box(
+                pos=(etx + et_hx, ety, etz + etwh / 2),
+                size=(0.005, etsy, etwh),
+                fixed=True,
+            ),
+        )
 
         return platform, target
 
@@ -367,14 +469,22 @@ class SceneBuilder:
         # 4 walls: front (+x), back (-x), left (+y), right (-y)
         wall_configs = [
             # pos (center of wall), size
-            ((bx + half_sx + wall_thickness / 2, by, bz + wall_height / 2),
-             (wall_thickness, sy + 2 * wall_thickness, wall_height)),
-            ((bx - half_sx - wall_thickness / 2, by, bz + wall_height / 2),
-             (wall_thickness, sy + 2 * wall_thickness, wall_height)),
-            ((bx, by + half_sy + wall_thickness / 2, bz + wall_height / 2),
-             (sx, wall_thickness, wall_height)),
-            ((bx, by - half_sy - wall_thickness / 2, bz + wall_height / 2),
-             (sx, wall_thickness, wall_height)),
+            (
+                (bx + half_sx + wall_thickness / 2, by, bz + wall_height / 2),
+                (wall_thickness, sy + 2 * wall_thickness, wall_height),
+            ),
+            (
+                (bx - half_sx - wall_thickness / 2, by, bz + wall_height / 2),
+                (wall_thickness, sy + 2 * wall_thickness, wall_height),
+            ),
+            (
+                (bx, by + half_sy + wall_thickness / 2, bz + wall_height / 2),
+                (sx, wall_thickness, wall_height),
+            ),
+            (
+                (bx, by - half_sy - wall_thickness / 2, bz + wall_height / 2),
+                (sx, wall_thickness, wall_height),
+            ),
         ]
         for w_pos, w_size in wall_configs:
             scene.add_entity(
@@ -415,14 +525,15 @@ class SceneBuilder:
 
         if tool_type == "scoop":
             mjcf_file = "xml/franka_emika_panda/panda_scoop.xml"
+        elif tool_type == "bowl":
+            mjcf_file = "xml/franka_emika_panda/panda_bowl.xml"
+        elif tool_type == "bowl_highwall":
+            mjcf_file = "xml/franka_emika_panda/panda_bowl_highwall.xml"
         else:
             mjcf_file = "xml/franka_emika_panda/panda.xml"
 
         robot = scene.add_entity(
-            material=gs.materials.Rigid(
-                needs_coup=True,
-                coup_friction=3.0,  # high friction for MPM particle interaction
-            ),
+            material=gs.materials.Rigid(**_resolve_robot_material_kwargs(config)),
             morph=gs.morphs.MJCF(
                 file=mjcf_file,
                 pos=robot_pos,
@@ -444,7 +555,7 @@ class SceneBuilder:
     def _configure_robot_gains(self, robot: Any, tool_type: str = "gripper") -> None:
         """Set PD gains and force ranges for the Franka. Must be called
         after scene.build()."""
-        if tool_type == "scoop":
+        if tool_type in {"scoop", "bowl", "bowl_highwall"}:
             # 7 arm DOFs only (no finger DOFs)
             robot.set_dofs_kp(
                 np.array([4500, 4500, 3500, 3500, 2000, 2000, 2000]),

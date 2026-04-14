@@ -8,8 +8,9 @@ corrections (residuals) that are added to the base trajectory.
     a_applied = q_base[t] + residual_scale * delta_q
 
 This avoids the single-step DLS coupling artifact that causes y-axis
-inversion (see docs/IK_MINIMAL_REPRO.md).
+inversion (see docs/40_investigations/IK_MINIMAL_REPRO.md).
 """
+
 from __future__ import annotations
 
 from typing import Any, Dict, Optional, Tuple
@@ -40,8 +41,12 @@ BEHIND_EP = [-0.10, 0.8, 0.0, -1.5, 0.0, 1.5, 0.0]
 PUSH_END_EP = [0.40, 0.8, 0.0, -1.5, 0.0, 1.5, 0.0]
 
 # Franka joint limits (from panda_scoop.xml)
-JOINT_LIMITS_LOW = np.array([-2.8973, -1.7628, -2.8973, -3.0718, -2.8973, -0.0175, -2.8973], dtype=np.float32)
-JOINT_LIMITS_HIGH = np.array([2.8973, 1.7628, 2.8973, -0.0698, 2.8973, 3.7525, 2.8973], dtype=np.float32)
+JOINT_LIMITS_LOW = np.array(
+    [-2.8973, -1.7628, -2.8973, -3.0718, -2.8973, -0.0175, -2.8973], dtype=np.float32
+)
+JOINT_LIMITS_HIGH = np.array(
+    [2.8973, 1.7628, 2.8973, -0.0698, 2.8973, 3.7525, 2.8973], dtype=np.float32
+)
 
 
 def _interpolate(start: list, end: list, n_steps: int) -> np.ndarray:
@@ -135,14 +140,18 @@ class JointResidualWrapper(gymnasium.Wrapper):
 
         # Action space: 7D joint residuals in [-1, 1]
         self.action_space = gymnasium.spaces.Box(
-            low=-1.0, high=1.0, shape=(7,), dtype=np.float32,
+            low=-1.0,
+            high=1.0,
+            shape=(7,),
+            dtype=np.float32,
         )
 
         # Observation space: base obs + q_base(t) (7) + step_fraction (1)
         base_obs_dim = self.env.observation_space.shape[0]
         self._base_obs_dim = base_obs_dim
         self.observation_space = gymnasium.spaces.Box(
-            low=-np.inf, high=np.inf,
+            low=-np.inf,
+            high=np.inf,
             shape=(base_obs_dim + 7 + 1,),
             dtype=np.float32,
         )
@@ -169,7 +178,8 @@ class JointResidualWrapper(gymnasium.Wrapper):
         return self._augment_obs(obs), info
 
     def step(
-        self, residual_action: np.ndarray,
+        self,
+        residual_action: np.ndarray,
     ) -> Tuple[np.ndarray, float, bool, bool, Dict[str, Any]]:
         # Get base joint config for this timestep
         t = min(self._step, self._horizon - 1)
@@ -187,6 +197,8 @@ class JointResidualWrapper(gymnasium.Wrapper):
         self._task.robot.set_qpos(q_tensor)
         for _ in range(self.settle_steps):
             self._task.scene.step()
+            if hasattr(self._task, "post_physics_update"):
+                self._task.post_physics_update()
 
         # Update task step counter to keep reward/done logic in sync
         self._task._step_count = self._step + 1
@@ -200,7 +212,11 @@ class JointResidualWrapper(gymnasium.Wrapper):
             self._step += 1
             return self._augment_obs(obs_np), -10.0, True, False, {"nan_crash": True}
 
-        obs_np = self.env._obs_dict_to_numpy(obs_dict) if hasattr(self.env, '_obs_dict_to_numpy') else self._flatten_obs(obs_dict)
+        obs_np = (
+            self.env._obs_dict_to_numpy(obs_dict)
+            if hasattr(self.env, "_obs_dict_to_numpy")
+            else self._flatten_obs(obs_dict)
+        )
 
         # NaN guard
         if np.isnan(obs_np).any():
@@ -242,5 +258,5 @@ class JointResidualWrapper(gymnasium.Wrapper):
         if len(flat) < self._base_obs_dim:
             flat = np.pad(flat, (0, self._base_obs_dim - len(flat)))
         elif len(flat) > self._base_obs_dim:
-            flat = flat[:self._base_obs_dim]
+            flat = flat[: self._base_obs_dim]
         return flat

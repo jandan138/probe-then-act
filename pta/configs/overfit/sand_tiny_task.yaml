@@ -1,5 +1,5 @@
 # Tiny-Task Overfit Config — Sand-Only, Fixed Parameters
-# Per docs/05_TINY_TASK_OVERFIT_PROTOCOL.md: freeze everything for overfit test.
+# Per docs/10_protocols/05_TINY_TASK_OVERFIT_PROTOCOL.md: freeze everything for overfit test.
 
 task: scoop_transfer
 split: overfit_sand

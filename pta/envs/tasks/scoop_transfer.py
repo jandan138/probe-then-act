@@ -34,8 +34,8 @@ _DEFAULT_TASK_CONFIG: Dict[str, Any] = {
     "ctrl_dt": 2e-3,
     # Action
     "action_dim": 7,  # dx, dy, dz, droll, dpitch, dyaw, gripper
-    "action_scale_pos": 0.05,   # metres per action unit (increased for reachability)
-    "action_scale_rot": 0.05,   # radians per action unit
+    "action_scale_pos": 0.05,  # metres per action unit (increased for reachability)
+    "action_scale_rot": 0.05,  # radians per action unit
     "action_scale_grip": 0.04,  # gripper width per action unit
     # Reward weights
     "w_transfer": 1.0,
@@ -49,7 +49,93 @@ _DEFAULT_TASK_CONFIG: Dict[str, Any] = {
     # IK
     "ik_method": "dls",  # "dls" or "gs"
     "dls_lambda": 0.01,
+    # Bowl-only sticky fallback. Defaults stay OFF so edge paths remain unchanged.
+    "bowl_sticky_fallback_enabled": False,
+    "bowl_sticky_top_slack": 0.02,
+    "bowl_sticky_detection_margin": 0.012,
+    "bowl_sticky_velocity_damping": 0.5,
+    "bowl_sticky_zero_outward_velocity": True,
+    "bowl_sticky_max_snap": 0.01,
+    "bowl_sticky_region_min": (-0.034, 0.013, 0.022),
+    "bowl_sticky_region_max": (0.034, 0.067, 0.10),
+    "bowl_constraint_fallback_enabled": False,
+    "bowl_constraint_stiffness": 1e6,
 }
+
+
+def _quat_conjugate(quat: torch.Tensor) -> torch.Tensor:
+    out = quat.clone()
+    out[..., 1:] = -out[..., 1:]
+    return out
+
+
+def _quat_multiply(lhs: torch.Tensor, rhs: torch.Tensor) -> torch.Tensor:
+    lw, lx, ly, lz = lhs.unbind(-1)
+    rw, rx, ry, rz = rhs.unbind(-1)
+    return torch.stack(
+        (
+            lw * rw - lx * rx - ly * ry - lz * rz,
+            lw * rx + lx * rw + ly * rz - lz * ry,
+            lw * ry - lx * rz + ly * rw + lz * rx,
+            lw * rz + lx * ry - ly * rx + lz * rw,
+        ),
+        dim=-1,
+    )
+
+
+def _quat_rotate(quat: torch.Tensor, vec: torch.Tensor) -> torch.Tensor:
+    zeros = torch.zeros_like(vec[..., :1])
+    vec_quat = torch.cat((zeros, vec), dim=-1)
+    return _quat_multiply(_quat_multiply(quat, vec_quat), _quat_conjugate(quat))[
+        ..., 1:
+    ]
+
+
+def _quat_rotate_inverse(quat: torch.Tensor, vec: torch.Tensor) -> torch.Tensor:
+    return _quat_rotate(_quat_conjugate(quat), vec)
+
+
+def _should_apply_bowl_sticky_fallback(
+    *,
+    enabled: bool,
+    tool_type: str,
+    task_layout: str,
+    phase: str,
+) -> bool:
+    return (
+        enabled
+        and tool_type in {"bowl", "bowl_highwall"}
+        and task_layout == "flat"
+        and phase == "carry"
+    )
+
+
+def _should_apply_bowl_constraint_fallback(
+    *,
+    enabled: bool,
+    tool_type: str,
+    task_layout: str,
+    phase: str,
+) -> bool:
+    return (
+        enabled
+        and tool_type in {"bowl", "bowl_highwall"}
+        and task_layout == "flat"
+        and phase == "carry"
+    )
+
+
+def _project_points_into_local_box(
+    local_points: torch.Tensor,
+    region_min: torch.Tensor,
+    region_max: torch.Tensor,
+    max_snap: float,
+) -> torch.Tensor:
+    clipped = torch.minimum(torch.maximum(local_points, region_min), region_max)
+    if max_snap <= 0:
+        return clipped
+    delta = torch.clamp(clipped - local_points, min=-max_snap, max=max_snap)
+    return local_points + delta
 
 
 class ScoopTransferTask(BaseTask):
@@ -109,9 +195,11 @@ class ScoopTransferTask(BaseTask):
         raw_qpos = cfg["default_qpos"]
         if not self._has_fingers and len(raw_qpos) > self._n_arm_dof:
             # Strip finger entries for scoop mode
-            raw_qpos = raw_qpos[:self._n_arm_dof]
+            raw_qpos = raw_qpos[: self._n_arm_dof]
         self._default_qpos = torch.tensor(
-            raw_qpos, dtype=torch.float32, device=gs.device,
+            raw_qpos,
+            dtype=torch.float32,
+            device=gs.device,
         )
 
         # Reward weights
@@ -129,12 +217,18 @@ class ScoopTransferTask(BaseTask):
         sp = self.sc.source_pos
         ss = self.sc.source_size
         self._source_bbox_min = torch.tensor(
-            [sp[0] - ss[0] / 2, sp[1] - ss[1] / 2, 0.0],  # z=0 to capture ground-settled particles
-            device=gs.device, dtype=torch.float32,
+            [
+                sp[0] - ss[0] / 2,
+                sp[1] - ss[1] / 2,
+                0.0,
+            ],  # z=0 to capture ground-settled particles
+            device=gs.device,
+            dtype=torch.float32,
         )
         self._source_bbox_max = torch.tensor(
             [sp[0] + ss[0] / 2, sp[1] + ss[1] / 2, sp[2] + ss[2] + 0.10],
-            device=gs.device, dtype=torch.float32,
+            device=gs.device,
+            dtype=torch.float32,
         )
 
         tp = self.sc.target_pos
@@ -144,11 +238,13 @@ class ScoopTransferTask(BaseTask):
         target_y_min = max(tp[1] - ts[1] / 2, platform_edge_y)
         self._target_bbox_min = torch.tensor(
             [tp[0] - ts[0] / 2, target_y_min, 0.0],
-            device=gs.device, dtype=torch.float32,
+            device=gs.device,
+            dtype=torch.float32,
         )
         self._target_bbox_max = torch.tensor(
             [tp[0] + ts[0] / 2, tp[1] + ts[1] / 2, tp[2] + ts[2] + 0.10],
-            device=gs.device, dtype=torch.float32,
+            device=gs.device,
+            dtype=torch.float32,
         )
 
         # Save initial state for fast resets
@@ -168,6 +264,29 @@ class ScoopTransferTask(BaseTask):
         self._prev_mean_particle_y = None
         self._success_triggered = False
 
+        self._tool_type = getattr(self.sc, "tool_type", "gripper")
+        self._task_layout = getattr(self.sc, "task_layout", "edge_push")
+        self._bowl_transport_phase = "off"
+        self._bowl_sticky_fallback_enabled = bool(cfg["bowl_sticky_fallback_enabled"])
+        self._bowl_sticky_top_slack = float(cfg["bowl_sticky_top_slack"])
+        self._bowl_sticky_detection_margin = float(cfg["bowl_sticky_detection_margin"])
+        self._bowl_sticky_velocity_damping = float(cfg["bowl_sticky_velocity_damping"])
+        self._bowl_sticky_zero_outward_velocity = bool(
+            cfg["bowl_sticky_zero_outward_velocity"]
+        )
+        self._bowl_sticky_max_snap = float(cfg["bowl_sticky_max_snap"])
+        self._bowl_sticky_region_min = torch.tensor(
+            cfg["bowl_sticky_region_min"], device=gs.device, dtype=torch.float32
+        )
+        self._bowl_sticky_region_max = torch.tensor(
+            cfg["bowl_sticky_region_max"], device=gs.device, dtype=torch.float32
+        )
+        self._bowl_constraint_fallback_enabled = bool(
+            cfg["bowl_constraint_fallback_enabled"]
+        )
+        self._bowl_constraint_stiffness = float(cfg["bowl_constraint_stiffness"])
+        self._bowl_constraints_active = False
+
     # ------------------------------------------------------------------
     # Episode lifecycle
     # ------------------------------------------------------------------
@@ -186,6 +305,8 @@ class ScoopTransferTask(BaseTask):
         self._prev_transfer_frac = 0.0
         self._prev_mean_particle_y = None
         self._success_triggered = False
+        self._bowl_transport_phase = "off"
+        self._clear_bowl_particle_constraints()
 
         # Set robot to home configuration
         self.robot.set_qpos(self._default_qpos)
@@ -216,7 +337,8 @@ class ScoopTransferTask(BaseTask):
             # Pad with zeros
             pad = torch.zeros(
                 self._action_dim - action.shape[-1],
-                device=action.device, dtype=action.dtype,
+                device=action.device,
+                dtype=action.dtype,
             )
             action = torch.cat([action, pad])
 
@@ -240,11 +362,12 @@ class ScoopTransferTask(BaseTask):
             self.robot.control_dofs_position(full_qpos)
         else:
             # Scoop mode: arm-only, no gripper
-            self.robot.control_dofs_position(qpos[:self._n_arm_dof])
+            self.robot.control_dofs_position(qpos[: self._n_arm_dof])
 
         # Step physics
         try:
             self.scene.step()
+            self.post_physics_update()
         except Exception:
             # NaN constraint forces — treat as episode failure, return zeros
             dummy_obs = {
@@ -266,6 +389,118 @@ class ScoopTransferTask(BaseTask):
         info["step"] = self._step_count
 
         return obs, reward, done, info
+
+    def set_bowl_transport_phase(self, phase: str) -> None:
+        self._bowl_transport_phase = phase
+
+    def post_physics_update(self) -> None:
+        self._maybe_apply_bowl_constraint_fallback()
+        self._maybe_apply_bowl_sticky_fallback()
+
+    def _bowl_candidate_mask(self) -> torch.Tensor | None:
+        particle_pos = self.particles.get_particles_pos()
+        if particle_pos.dim() == 3:
+            particle_pos = particle_pos[0]
+
+        ee_pos = self._ee_link.get_pos()
+        ee_quat = self._ee_link.get_quat()
+        if ee_pos.dim() > 1:
+            ee_pos = ee_pos.squeeze(0)
+            ee_quat = ee_quat.squeeze(0)
+
+        local_pos = _quat_rotate_inverse(ee_quat, particle_pos - ee_pos.unsqueeze(0))
+        detect_min = self._bowl_sticky_region_min - self._bowl_sticky_detection_margin
+        detect_max = self._bowl_sticky_region_max.clone()
+        detect_max[2] += (
+            self._bowl_sticky_top_slack + self._bowl_sticky_detection_margin
+        )
+        candidate_mask = ((local_pos >= detect_min) & (local_pos <= detect_max)).all(
+            dim=-1
+        )
+        if not bool(candidate_mask.any()):
+            return None
+        return candidate_mask.unsqueeze(0)
+
+    def _clear_bowl_particle_constraints(self) -> None:
+        if self._bowl_constraints_active:
+            self.particles.remove_particle_constraints()
+            self._bowl_constraints_active = False
+
+    def _maybe_apply_bowl_constraint_fallback(self) -> None:
+        if not _should_apply_bowl_constraint_fallback(
+            enabled=self._bowl_constraint_fallback_enabled,
+            tool_type=self._tool_type,
+            task_layout=self._task_layout,
+            phase=self._bowl_transport_phase,
+        ):
+            self._clear_bowl_particle_constraints()
+            return
+
+        candidate_mask = self._bowl_candidate_mask()
+        if candidate_mask is None:
+            self._clear_bowl_particle_constraints()
+            return
+
+        self.particles.set_particle_constraints(
+            candidate_mask,
+            self._ee_link.idx,
+            stiffness=self._bowl_constraint_stiffness,
+        )
+        self._bowl_constraints_active = True
+
+    def _maybe_apply_bowl_sticky_fallback(self) -> None:
+        if not _should_apply_bowl_sticky_fallback(
+            enabled=self._bowl_sticky_fallback_enabled,
+            tool_type=self._tool_type,
+            task_layout=self._task_layout,
+            phase=self._bowl_transport_phase,
+        ):
+            return
+
+        particle_pos = self.particles.get_particles_pos()
+        particle_vel = self.particles.get_particles_vel()
+        if particle_pos.dim() == 3:
+            particle_pos = particle_pos[0]
+            particle_vel = particle_vel[0]
+
+        ee_pos = self._ee_link.get_pos()
+        ee_quat = self._ee_link.get_quat()
+        if ee_pos.dim() > 1:
+            ee_pos = ee_pos.squeeze(0)
+            ee_quat = ee_quat.squeeze(0)
+
+        local_pos = _quat_rotate_inverse(ee_quat, particle_pos - ee_pos.unsqueeze(0))
+        local_vel = _quat_rotate_inverse(ee_quat, particle_vel)
+
+        candidate_mask_2d = self._bowl_candidate_mask()
+        if candidate_mask_2d is None:
+            return
+
+        candidate_mask = candidate_mask_2d.squeeze(0)
+        idx = candidate_mask.nonzero(as_tuple=False).squeeze(-1)
+        cand_local_pos = local_pos[idx]
+        target_max = self._bowl_sticky_region_max.clone()
+        target_max[2] += self._bowl_sticky_top_slack
+        projected_local_pos = _project_points_into_local_box(
+            cand_local_pos,
+            self._bowl_sticky_region_min,
+            target_max,
+            self._bowl_sticky_max_snap,
+        )
+        projected_world_pos = ee_pos.unsqueeze(0) + _quat_rotate(
+            ee_quat, projected_local_pos
+        )
+
+        cand_local_vel = local_vel[idx] * self._bowl_sticky_velocity_damping
+        if self._bowl_sticky_zero_outward_velocity:
+            cand_local_vel[:, 2] = torch.minimum(
+                cand_local_vel[:, 2],
+                torch.zeros_like(cand_local_vel[:, 2]),
+            )
+        projected_world_vel = _quat_rotate(ee_quat, cand_local_vel)
+
+        self.particles.set_particles_pos(projected_world_pos, particles_idx_local=idx)
+        self.particles.set_particles_vel(projected_world_vel, particles_idx_local=idx)
 
     # ------------------------------------------------------------------
     # Observation
@@ -312,7 +547,8 @@ class ScoopTransferTask(BaseTask):
         # Step fraction
         step_frac = torch.tensor(
             [self._step_count / max(self._horizon, 1)],
-            device=gs.device, dtype=torch.float32,
+            device=gs.device,
+            dtype=torch.float32,
         )
 
         obs = {
@@ -349,9 +585,13 @@ class ScoopTransferTask(BaseTask):
 
         # --- Phase 1: Approach — small dense guidance toward source ---
         source_center = torch.tensor(
-            [self.sc.source_pos[0], self.sc.source_pos[1],
-             self.sc.source_pos[2] + 0.05],
-            device=gs.device, dtype=torch.float32,
+            [
+                self.sc.source_pos[0],
+                self.sc.source_pos[1],
+                self.sc.source_pos[2] + 0.05,
+            ],
+            device=gs.device,
+            dtype=torch.float32,
         )
         dist_to_source = torch.norm(ee_pos - source_center).item()
         r_approach = -0.01 * dist_to_source
@@ -435,9 +675,9 @@ class ScoopTransferTask(BaseTask):
         pos = self.particles.get_particles_pos()  # (n_particles, 3) for n_envs=0
         if pos.dim() == 3:
             pos = pos[0]
-        inside = (
-            (pos >= self._target_bbox_min) & (pos <= self._target_bbox_max)
-        ).all(dim=-1)
+        inside = ((pos >= self._target_bbox_min) & (pos <= self._target_bbox_max)).all(
+            dim=-1
+        )
         return int(inside.sum().item())
 
     def _count_spilled_particles(self) -> int:
@@ -512,23 +752,19 @@ class ScoopTransferTask(BaseTask):
                 # Single-env: jacobian is (6, n_dof)
                 jac_T = jacobian.T  # (n_dof, 6)
                 lam = self._dls_lambda
-                lam_I = (lam ** 2) * torch.eye(
-                    jacobian.shape[0], device=gs.device
-                )
+                lam_I = (lam**2) * torch.eye(jacobian.shape[0], device=gs.device)
                 delta_q = (
-                    jac_T @ torch.inverse(jacobian @ jac_T + lam_I)
-                    @ delta_pose
+                    jac_T @ torch.inverse(jacobian @ jac_T + lam_I) @ delta_pose
                 )  # (n_dof,)
                 qpos = current_qpos.squeeze(0) + delta_q
             else:
                 # Batched: jacobian is (B, 6, n_dof)
                 jac_T = jacobian.transpose(1, 2)
                 lam = self._dls_lambda
-                lam_I = (lam ** 2) * torch.eye(
-                    jacobian.shape[1], device=gs.device
-                )
+                lam_I = (lam**2) * torch.eye(jacobian.shape[1], device=gs.device)
                 delta_q = (
-                    jac_T @ torch.inverse(jacobian @ jac_T + lam_I)
+                    jac_T
+                    @ torch.inverse(jacobian @ jac_T + lam_I)
                     @ delta_pose.unsqueeze(0).unsqueeze(-1)
                 ).squeeze(-1)
                 qpos = current_qpos + delta_q
