@@ -82,6 +82,7 @@ import torch
 # Waypoint interpolation
 # ---------------------------------------------------------------------------
 
+
 def interpolate_waypoints(
     env: Any,
     start_qpos: List[float],
@@ -102,12 +103,16 @@ def interpolate_waypoints(
         env.robot.set_qpos(qpos)
         for _ in range(settle_per_step):
             env.scene.step()
+            if hasattr(env, "post_physics_update"):
+                env.post_physics_update()
 
 
 def settle(env: Any, n_steps: int = 20) -> None:
     """Run physics steps without changing robot pose."""
     for _ in range(n_steps):
         env.scene.step()
+        if hasattr(env, "post_physics_update"):
+            env.post_physics_update()
 
 
 # ---------------------------------------------------------------------------
@@ -152,7 +157,6 @@ PROBE_DOWN_R = [0.1, 1.5, 0.0, -0.7, 0.0, 0.9, 0.0, 0.04, 0.04]
 # ---------------------------------------------------------------------------
 # Scoop-tool waypoints (7-D: 7 arm joints, NO finger joints)
 # ---------------------------------------------------------------------------
-# Used with panda_scoop.xml where the gripper is replaced by a rigid scoop.
 
 HOME_S = [0.0, -0.785, 0.0, -2.356, 0.0, 1.571, 0.785]
 EXTEND_FWD_S = [0.0, 0.5, 0.0, -1.8, 0.0, 1.8, 0.0]
@@ -191,9 +195,20 @@ DEPOSIT_S = [0.7, 1.1, 0.0, -1.2, 0.0, 1.2, 0.0]
 DUMP_S = [0.7, 1.1, 0.0, -1.2, 0.0, 1.2, 1.5]
 
 
+BOWL_APPROACH_S = [-0.10, 1.05, 0.0, -1.45, 0.0, 1.45, -0.55]
+BOWL_INSERT_S = [0.00, 1.34, 0.0, -1.02, 0.0, 1.02, -1.20]
+BOWL_CAPTURE_S = [0.06, 1.18, 0.0, -1.20, 0.0, 1.18, -0.75]
+BOWL_LIFT_S = [0.06, 0.88, 0.0, -1.46, 0.0, 1.42, -0.70]
+BOWL_TRAVERSE_FAST_S = [0.68, 0.88, 0.0, -1.46, 0.0, 1.42, -0.70]
+BOWL_TRAVERSE_MID_S = [0.38, 0.88, 0.0, -1.46, 0.0, 1.42, -0.70]
+BOWL_POUR_S = [0.68, 1.02, 0.0, -1.20, 0.0, 1.20, 1.35]
+BOWL_SETTLE_S = [0.68, 0.92, 0.0, -1.28, 0.0, 1.26, 0.45]
+
+
 # ---------------------------------------------------------------------------
 # Scripted sequences
 # ---------------------------------------------------------------------------
+
 
 def run_sequence_a(env: Any, horizon: int = 200) -> Dict[str, float]:
     """Sequence A: Scripted Scoop-and-Deposit via joint waypoints.
@@ -217,7 +232,9 @@ def run_sequence_a(env: Any, horizon: int = 200) -> Dict[str, float]:
     # Phase 3: Continue sweep through gap to target
     interpolate_waypoints(env, SCOOP_PAST_SOURCE, SCOOP_MIDWAY, 30, settle_per_step=2)
     interpolate_waypoints(env, SCOOP_MIDWAY, SCOOP_AT_TARGET, 30, settle_per_step=2)
-    interpolate_waypoints(env, SCOOP_AT_TARGET, SCOOP_PAST_TARGET, 20, settle_per_step=2)
+    interpolate_waypoints(
+        env, SCOOP_AT_TARGET, SCOOP_PAST_TARGET, 20, settle_per_step=2
+    )
 
     # Phase 4: Settle particles
     settle(env, 50)
@@ -256,7 +273,9 @@ def run_sequence_b(env: Any, horizon: int = 200) -> Dict[str, float]:
     interpolate_waypoints(env, SCOOP_MID, SCOOP_PAST_SOURCE, 25, settle_per_step=2)
     interpolate_waypoints(env, SCOOP_PAST_SOURCE, SCOOP_MIDWAY, 25, settle_per_step=2)
     interpolate_waypoints(env, SCOOP_MIDWAY, SCOOP_AT_TARGET, 25, settle_per_step=2)
-    interpolate_waypoints(env, SCOOP_AT_TARGET, SCOOP_PAST_TARGET, 15, settle_per_step=2)
+    interpolate_waypoints(
+        env, SCOOP_AT_TARGET, SCOOP_PAST_TARGET, 15, settle_per_step=2
+    )
 
     # Phase 2: Settle
     settle(env, 40)
@@ -337,47 +356,126 @@ def run_sequence_e_scoop(env: Any, horizon: int = 200) -> Dict[str, float]:
     return metrics
 
 
+def _bowl_traverse_steps(traverse_speed: float) -> int:
+    if traverse_speed <= 0.25:
+        return 120
+    if traverse_speed <= 0.6:
+        return 70
+    return 35
+
+
+def run_sequence_f_bowl(
+    env: Any,
+    horizon: int = 200,
+    traverse_speed: float = 0.5,
+) -> Dict[str, float]:
+    env.reset()
+
+    traverse_steps = _bowl_traverse_steps(traverse_speed)
+    phase_reached = "approach"
+
+    interpolate_waypoints(env, HOME_S, EXTEND_FWD_S, 15, settle_per_step=1)
+    interpolate_waypoints(env, EXTEND_FWD_S, BOWL_APPROACH_S, 30, settle_per_step=2)
+
+    phase_reached = "insert"
+    interpolate_waypoints(env, BOWL_APPROACH_S, BOWL_INSERT_S, 45, settle_per_step=3)
+
+    phase_reached = "capture"
+    interpolate_waypoints(env, BOWL_INSERT_S, BOWL_CAPTURE_S, 35, settle_per_step=3)
+    settle(env, 10)
+
+    phase_reached = "lift"
+    interpolate_waypoints(env, BOWL_CAPTURE_S, BOWL_LIFT_S, 35, settle_per_step=3)
+    settle(env, 10)
+
+    phase_reached = "traverse"
+    interpolate_waypoints(
+        env, BOWL_LIFT_S, BOWL_TRAVERSE_MID_S, traverse_steps // 2, settle_per_step=2
+    )
+    interpolate_waypoints(
+        env,
+        BOWL_TRAVERSE_MID_S,
+        BOWL_TRAVERSE_FAST_S,
+        traverse_steps - traverse_steps // 2,
+        settle_per_step=2,
+    )
+    settle(env, 10)
+
+    phase_reached = "pour"
+    interpolate_waypoints(env, BOWL_TRAVERSE_FAST_S, BOWL_POUR_S, 30, settle_per_step=3)
+    interpolate_waypoints(env, BOWL_POUR_S, BOWL_SETTLE_S, 20, settle_per_step=3)
+    settle(env, 40)
+
+    metrics = env.compute_metrics()
+    metrics["phase_reached"] = phase_reached
+    metrics["traverse_speed"] = traverse_speed
+    metrics["traverse_steps"] = traverse_steps
+    return metrics
+
+
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
+
 
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Run scripted baselines for ScoopTransfer"
     )
     parser.add_argument(
-        "--n-episodes", type=int, default=5,
+        "--n-episodes",
+        type=int,
+        default=5,
         help="Number of episodes per sequence (default: 5)",
     )
     parser.add_argument(
-        "--horizon", type=int, default=200,
+        "--horizon",
+        type=int,
+        default=200,
         help="Max steps per episode (default: 200)",
     )
     parser.add_argument(
-        "--material", type=str, default="sand",
+        "--material",
+        type=str,
+        default="sand",
         help="MPM material family (default: sand)",
     )
     parser.add_argument(
-        "--output", type=str,
+        "--output",
+        type=str,
         default="results/tables/scripted_baselines.csv",
         help="CSV output path (default: results/tables/scripted_baselines.csv)",
     )
     parser.add_argument(
-        "--tool-type", type=str, default="gripper",
-        choices=["gripper", "scoop"],
-        help="Tool type: gripper (9-DOF) or scoop (7-DOF, panda_scoop.xml)",
+        "--tool-type",
+        type=str,
+        default="gripper",
+        choices=["gripper", "scoop", "bowl"],
+        help="Tool type: gripper (9-DOF), scoop (7-DOF), or bowl (7-DOF)",
     )
     parser.add_argument(
-        "--sequence", type=str, default=None,
+        "--sequence",
+        type=str,
+        default=None,
         help="Run only a specific sequence (A, B, C, D, E). Default: all applicable.",
     )
     parser.add_argument(
-        "--source-wall-height", type=float, default=None,
+        "--source-wall-height",
+        type=float,
+        default=None,
         help="Override source container wall height (0 for no walls).",
     )
     parser.add_argument(
-        "--target-wall-height", type=float, default=None,
+        "--target-wall-height",
+        type=float,
+        default=None,
         help="Override target container wall height (0 for no walls).",
+    )
+    parser.add_argument(
+        "--traverse-speed",
+        type=float,
+        default=0.5,
+        help="Traverse speed tag for bowl Sequence F (default: 0.5)",
     )
     args = parser.parse_args()
 
@@ -423,8 +521,12 @@ def main() -> None:
     print(f"  OK ({build_time:.1f}s, {env._total_particles} particles)")
 
     # Report bbox info
-    print(f"  Source AABB z: [{env._source_bbox_min[2]:.3f}, {env._source_bbox_max[2]:.3f}]")
-    print(f"  Target AABB z: [{env._target_bbox_min[2]:.3f}, {env._target_bbox_max[2]:.3f}]")
+    print(
+        f"  Source AABB z: [{env._source_bbox_min[2]:.3f}, {env._source_bbox_max[2]:.3f}]"
+    )
+    print(
+        f"  Target AABB z: [{env._target_bbox_min[2]:.3f}, {env._target_bbox_max[2]:.3f}]"
+    )
     print(f"  NOTE: particles settle to z~0.02 (below source AABB z_min=0.04)")
     print(f"        -> spill_ratio ~1.0 is expected for all baselines")
     print()
@@ -432,26 +534,37 @@ def main() -> None:
     # Define sequences
     all_sequence_runners: Dict[str, Callable] = {
         "A_scoop_deposit": lambda ep: run_sequence_a(env, horizon),
-        "B_probe_scoop":   lambda ep: run_sequence_b(env, horizon),
-        "C_random":        lambda ep: run_sequence_c(env, horizon, seed=ep * 100 + 42),
-        "D_noop":          lambda ep: run_sequence_d(env, horizon),
-        "E_scoop_tool":    lambda ep: run_sequence_e_scoop(env, horizon),
+        "B_probe_scoop": lambda ep: run_sequence_b(env, horizon),
+        "C_random": lambda ep: run_sequence_c(env, horizon, seed=ep * 100 + 42),
+        "D_noop": lambda ep: run_sequence_d(env, horizon),
+        "E_scoop_tool": lambda ep: run_sequence_e_scoop(env, horizon),
+        "F_bowl_tool": lambda ep: run_sequence_f_bowl(
+            env, horizon, traverse_speed=args.traverse_speed
+        ),
     }
 
     # Filter sequences based on args
     if args.sequence:
         seq_key = args.sequence.upper()
-        matched = {k: v for k, v in all_sequence_runners.items() if k.startswith(seq_key)}
+        matched = {
+            k: v for k, v in all_sequence_runners.items() if k.startswith(seq_key)
+        }
         if not matched:
-            print(f"ERROR: Unknown sequence '{args.sequence}'. Available: A, B, C, D, E")
+            print(
+                f"ERROR: Unknown sequence '{args.sequence}'. Available: A, B, C, D, E, F"
+            )
             sys.exit(1)
         sequence_runners = matched
     elif args.tool_type == "scoop":
-        # For scoop tool, only run E by default (A/B use 9-DOF waypoints)
         sequence_runners = {"E_scoop_tool": all_sequence_runners["E_scoop_tool"]}
+    elif args.tool_type == "bowl":
+        sequence_runners = {"F_bowl_tool": all_sequence_runners["F_bowl_tool"]}
     else:
-        # Gripper: run A-D (E requires scoop)
-        sequence_runners = {k: v for k, v in all_sequence_runners.items() if k != "E_scoop_tool"}
+        sequence_runners = {
+            k: v
+            for k, v in all_sequence_runners.items()
+            if k not in {"E_scoop_tool", "F_bowl_tool"}
+        }
 
     all_rows: List[Dict[str, Any]] = []
 
@@ -474,14 +587,16 @@ def main() -> None:
             n_in = info.get("n_in_target", 0)
             n_sp = info.get("n_spilled", 0)
 
-            ep_metrics.append({
-                "success_rate": success,
-                "transfer_efficiency": te,
-                "spill_ratio": sr,
-            })
+            ep_metrics.append(
+                {
+                    "success_rate": success,
+                    "transfer_efficiency": te,
+                    "spill_ratio": sr,
+                }
+            )
 
             print(
-                f"    ep {ep+1}/{n_episodes}  "
+                f"    ep {ep + 1}/{n_episodes}  "
                 f"success={success:.0f}  "
                 f"transfer={te:.4f}  "
                 f"spill={sr:.4f}  "
@@ -490,13 +605,15 @@ def main() -> None:
                 f"({dt:.1f}s)"
             )
 
-            all_rows.append({
-                "sequence": seq_name,
-                "episode": ep + 1,
-                "success_rate": success,
-                "transfer_efficiency": te,
-                "spill_ratio": sr,
-            })
+            all_rows.append(
+                {
+                    "sequence": seq_name,
+                    "episode": ep + 1,
+                    "success_rate": success,
+                    "transfer_efficiency": te,
+                    "spill_ratio": sr,
+                }
+            )
 
         successes = [m["success_rate"] for m in ep_metrics]
         transfers = [m["transfer_efficiency"] for m in ep_metrics]
@@ -511,7 +628,9 @@ def main() -> None:
     # Summary table
     print("[3/4] Summary Table")
     print("-" * 70)
-    print(f"{'Sequence':<20s} {'Success%':>10s} {'TransferEff':>14s} {'SpillRatio':>14s}")
+    print(
+        f"{'Sequence':<20s} {'Success%':>10s} {'TransferEff':>14s} {'SpillRatio':>14s}"
+    )
     print("-" * 70)
 
     for seq_name in sequence_runners:
@@ -540,8 +659,13 @@ def main() -> None:
     with open(args.output, "w", newline="") as f:
         writer = csv.DictWriter(
             f,
-            fieldnames=["sequence", "episode", "success_rate",
-                         "transfer_efficiency", "spill_ratio"],
+            fieldnames=[
+                "sequence",
+                "episode",
+                "success_rate",
+                "transfer_efficiency",
+                "spill_ratio",
+            ],
         )
         writer.writeheader()
         writer.writerows(all_rows)

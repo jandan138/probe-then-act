@@ -27,14 +27,12 @@ echo "============================================================"
 # ============================================================
 
 echo ""
-echo ">>> Phase A1: Gate 4 Retest (Config D, 200K steps)"
-echo ">>> Started: $(date)"
-python pta/scripts/train_baselines.py --method gate4 --total-timesteps 200000 --seed 42 --eval-freq 5000
-echo ">>> Gate 4 completed: $(date)"
+echo ">>> SKIPPING: Gate 4 already completed (Apr 8)"
+echo ">>> SKIPPING: M1 seed=42 already completed (Apr 8-9, 500K)"
 
 echo ""
-echo ">>> Phase A2: M1 Reactive PPO (3 seeds × 500K)"
-for seed in 42 0 1; do
+echo ">>> Phase A2: M1 Reactive PPO (remaining seeds × 500K)"
+for seed in 0 1; do
     echo ">>> M1 seed=$seed started: $(date)"
     python pta/scripts/train_baselines.py --method m1 --seed $seed --total-timesteps 500000
     echo ">>> M1 seed=$seed completed: $(date)"

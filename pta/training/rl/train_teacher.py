@@ -212,29 +212,43 @@ def train_teacher(config: Dict[str, Any]) -> PPO:
 
     # -- PPO model ---------------------------------------------------------
     policy_kwargs = cfg.get("policy_kwargs", {})
+    resume_from = cfg.get("resume_from")
 
-    model = PPO(
-        policy=cfg["policy"],
-        env=vec_env,
-        learning_rate=cfg["learning_rate"],
-        n_steps=cfg["n_steps"],
-        batch_size=cfg["batch_size"],
-        n_epochs=cfg["n_epochs"],
-        gamma=cfg["gamma"],
-        gae_lambda=cfg["gae_lambda"],
-        clip_range=cfg["clip_range"],
-        ent_coef=cfg["entropy_coef"],
-        vf_coef=cfg["value_loss_coef"],
-        max_grad_norm=cfg["max_grad_norm"],
-        normalize_advantage=cfg["normalize_advantage"],
-        use_sde=cfg.get("use_sde", False),
-        sde_sample_freq=cfg.get("sde_sample_freq", -1),
-        policy_kwargs=policy_kwargs,
-        tensorboard_log=cfg["tensorboard_log"],
-        seed=seed,
-        verbose=cfg["verbose"],
-        device="auto",
-    )
+    if resume_from:
+        resume_path = Path(resume_from)
+        if not resume_path.exists():
+            raise FileNotFoundError(f"Resume checkpoint not found: {resume_path}")
+        print(f"Resuming from checkpoint: {resume_path}")
+        model = PPO.load(
+            resume_path,
+            env=vec_env,
+            tensorboard_log=cfg["tensorboard_log"],
+            device="auto",
+        )
+        print(f"  Loaded num_timesteps: {model.num_timesteps}")
+    else:
+        model = PPO(
+            policy=cfg["policy"],
+            env=vec_env,
+            learning_rate=cfg["learning_rate"],
+            n_steps=cfg["n_steps"],
+            batch_size=cfg["batch_size"],
+            n_epochs=cfg["n_epochs"],
+            gamma=cfg["gamma"],
+            gae_lambda=cfg["gae_lambda"],
+            clip_range=cfg["clip_range"],
+            ent_coef=cfg["entropy_coef"],
+            vf_coef=cfg["value_loss_coef"],
+            max_grad_norm=cfg["max_grad_norm"],
+            normalize_advantage=cfg["normalize_advantage"],
+            use_sde=cfg.get("use_sde", False),
+            sde_sample_freq=cfg.get("sde_sample_freq", -1),
+            policy_kwargs=policy_kwargs,
+            tensorboard_log=cfg["tensorboard_log"],
+            seed=seed,
+            verbose=cfg["verbose"],
+            device="auto",
+        )
 
     # -- Callbacks ---------------------------------------------------------
     checkpoint_callback = CheckpointCallback(
@@ -276,6 +290,7 @@ def train_teacher(config: Dict[str, Any]) -> PPO:
     model.learn(
         total_timesteps=total_timesteps,
         callback=callbacks,
+        reset_num_timesteps=False if resume_from else True,
         progress_bar=True,
     )
 

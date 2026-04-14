@@ -51,6 +51,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--residual-scale", type=float, default=0.2)
     parser.add_argument("--horizon", type=int, default=500)
     parser.add_argument("--eval-freq", type=int, default=10_000)
+    parser.add_argument(
+        "--resume-from", type=str, default=None,
+        help="Path to SB3 checkpoint zip to resume training from",
+    )
     return parser.parse_args()
 
 
@@ -135,6 +139,9 @@ def main() -> None:
             "tensorboard_log": str(_PROJECT_ROOT / "logs" / f"m8_teacher_seed{seed}" / "tb"),
         }
 
+    if args.resume_from:
+        config["resume_from"] = args.resume_from
+
     print("=" * 60)
     print(f"Probe-Then-Act: {method.upper()} Training")
     print("=" * 60)
@@ -144,6 +151,8 @@ def main() -> None:
     print(f"  Material:   {args.material}")
     print(f"  Privileged: {config.get('use_privileged', True)}")
     print(f"  Residual:   scale={args.residual_scale}")
+    if args.resume_from:
+        print(f"  Resume:     {args.resume_from}")
     print()
 
     model = train_teacher(config)
