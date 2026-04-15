@@ -51,7 +51,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--total-timesteps", type=int, default=500_000)
     parser.add_argument("--material", type=str, default="sand")
-    parser.add_argument("--residual-scale", type=float, default=0.2)
+    parser.add_argument("--residual-scale", type=float, default=0.05)
     parser.add_argument("--horizon", type=int, default=500)
     parser.add_argument("--latent-dim", type=int, default=16)
     parser.add_argument("--n-probes", type=int, default=3)
