@@ -259,11 +259,6 @@ class ScoopTransferTask(BaseTask):
         # Gripper width state
         self._gripper_width = 0.04  # open
 
-        # Delta-reward state (reset each episode)
-        self._prev_transfer_frac = 0.0
-        self._prev_mean_particle_y = None
-        self._success_triggered = False
-
         self._tool_type = getattr(self.sc, "tool_type", "gripper")
         self._task_layout = getattr(self.sc, "task_layout", "edge_push")
         self._bowl_transport_phase = "off"
@@ -302,9 +297,6 @@ class ScoopTransferTask(BaseTask):
         self.scene.reset()
         self._step_count = 0
         self._gripper_width = 0.04
-        self._prev_transfer_frac = 0.0
-        self._prev_mean_particle_y = None
-        self._success_triggered = False
         self._bowl_transport_phase = "off"
         self._clear_bowl_particle_constraints()
 
@@ -597,11 +589,15 @@ class ScoopTransferTask(BaseTask):
     # ------------------------------------------------------------------
 
     def compute_reward(self) -> float:
-        """Delta-based reward shaping for edge-push scoop-and-transfer.
+        """Cumulative reward shaping for edge-push scoop-and-transfer.
 
-        All shaping signals are *incremental* so that already-transferred
-        particles do not generate sustained reward, giving PPO meaningful
-        advantage variance between active-push and do-nothing trajectories.
+        All shaping signals are *absolute* (cumulative): the reward at each
+        step reflects the current state, not the delta from the previous step.
+        This gives PPO a stable learning signal with meaningful advantages.
+
+        Coefficients are balanced so that transfer reward dominates spill penalty
+        at equal percentages (10:1 ratio), preventing the 50:1 asymmetry that
+        caused all 500K training runs to fail.
         """
         ee_pos = self._ee_link.get_pos()
         if ee_pos.dim() > 1:
@@ -631,28 +627,20 @@ class ScoopTransferTask(BaseTask):
         dist_to_source = torch.norm(ee_pos - source_center).item()
         r_approach = -0.01 * dist_to_source
 
-        # --- Phase 2: Push — DELTA mean particle y (only active pushing) ---
+        # --- Phase 2: Push — cumulative mean particle y displacement ---
         mean_y = particle_pos[:, 1].mean().item()
-        if self._prev_mean_particle_y is None:
-            self._prev_mean_particle_y = mean_y
-        delta_y = mean_y - self._prev_mean_particle_y
-        r_push = 5.0 * max(0.0, delta_y)
-        self._prev_mean_particle_y = mean_y
+        source_y = self.sc.source_pos[1]
+        r_push = 2.0 * max(0.0, mean_y - source_y)
 
-        # --- Phase 3: Transfer — DELTA fraction (only NEW transfers) ---
-        delta_transfer = transfer_frac - self._prev_transfer_frac
-        r_transfer = 20.0 * max(0.0, delta_transfer)
-        self._prev_transfer_frac = transfer_frac
+        # --- Phase 3: Transfer — cumulative fraction in target ---
+        r_transfer = 10.0 * transfer_frac
 
-        # --- Penalties ---
-        r_spill = -2.0 * spill_frac
-        r_time = -0.001
+        # --- Penalties (cumulative) ---
+        r_spill = -1.0 * spill_frac
+        r_time = -0.0001
 
-        # --- Success bonus (one-shot) ---
-        r_success = 0.0
-        if transfer_frac >= self._success_threshold and not self._success_triggered:
-            r_success = 10.0
-            self._success_triggered = True
+        # --- Success bonus (every step while above threshold) ---
+        r_success = 50.0 if transfer_frac >= self._success_threshold else 0.0
 
         reward = r_approach + r_push + r_transfer + r_spill + r_time + r_success
         return float(reward)
