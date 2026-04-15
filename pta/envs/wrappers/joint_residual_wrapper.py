@@ -92,6 +92,9 @@ def build_edge_push_trajectory() -> np.ndarray:
         pieces.append(_interpolate(BEHIND_EP, PUSH_END_EP, 100))
         if i < 2:
             pieces.append(_interpolate(PUSH_END_EP, BEHIND_EP, 30))
+    # Settle: hold final position for 80 steps to let particles fall into target
+    settle = np.tile(pieces[-1][-1:], (80, 1))
+    pieces.append(settle)
     return np.concatenate(pieces, axis=0)
 
 
