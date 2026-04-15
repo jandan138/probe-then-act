@@ -373,6 +373,7 @@ class ScoopTransferTask(BaseTask):
             dummy_obs = {
                 "proprio": torch.zeros(37, device=gs.device),
                 "step_fraction": torch.tensor([1.0], device=gs.device),
+                "particle_stats": torch.zeros(3, device=gs.device),
             }
             return dummy_obs, -10.0, True, {"step": self._step_count, "nan_crash": True}
 
@@ -551,9 +552,43 @@ class ScoopTransferTask(BaseTask):
             dtype=torch.float32,
         )
 
+        # --- Particle statistics (closed-loop feedback for policy) ---
+        particle_pos = self.particles.get_particles_pos()
+        if particle_pos.dim() == 3:
+            particle_pos = particle_pos[0]
+        n_total = max(particle_pos.shape[0], 1)
+
+        mean_particle_y = particle_pos[:, 1].mean()
+
+        # Transfer fraction: particles inside target AABB
+        n_in_target = (
+            (particle_pos >= self._target_bbox_min)
+            & (particle_pos <= self._target_bbox_max)
+        ).all(dim=-1).sum().float()
+        transfer_frac = n_in_target / n_total
+
+        # Spill fraction: particles outside both source and target
+        in_source = (
+            (particle_pos >= self._source_bbox_min)
+            & (particle_pos <= self._source_bbox_max)
+        ).all(dim=-1)
+        in_target = (
+            (particle_pos >= self._target_bbox_min)
+            & (particle_pos <= self._target_bbox_max)
+        ).all(dim=-1)
+        n_spilled = (~(in_source | in_target)).sum().float()
+        spill_frac = (n_spilled / n_total).clamp(0.0, 1.0)
+
+        particle_stats = torch.stack([
+            mean_particle_y.squeeze(),
+            transfer_frac.squeeze(),
+            spill_frac.squeeze(),
+        ]).to(dtype=torch.float32)
+
         obs = {
             "proprio": proprio,
             "step_fraction": step_frac,
+            "particle_stats": particle_stats,
         }
         return obs
 
