@@ -260,7 +260,33 @@ def test_write_handoff_files_creates_machine_and_human_records(tmp_path):
         "- M1 seeds: [42, 0, 1]\n"
         "- M7 seeds: [42, 0, 1]\n"
         "- OOD eval complete: True\n"
+        "- Main results: results/main_results.csv\n"
+        "- OOD per-seed results: results/ood_eval_per_seed.csv\n"
+        "- Handoff record: results/orchestration/aris_handoff_ready.json\n"
     )
+
+
+def test_execute_decision_writes_handoff_records_for_handoff_action(tmp_path):
+    from pta.scripts.cron_aris_orchestrator import execute_decision
+
+    state = {
+        "m8": {"completed": True},
+        "m1": {"completed_seeds": [42, 0, 1]},
+        "m7": {"completed_seeds": [42, 0, 1]},
+        "ood_eval": {"completed": True},
+        "aris": {"blocked": False},
+    }
+
+    result = execute_decision(tmp_path, state, {"action": "handoff_aris"})
+
+    assert result["action"] == "handoff_aris"
+    assert json.loads(result["records"]["json"].read_text(encoding="utf-8")) == {
+        "aris": {"blocked": False, "ready": True},
+        "m1": {"completed_seeds": [42, 0, 1]},
+        "m7": {"completed_seeds": [42, 0, 1]},
+        "m8": {"completed": True},
+        "ood_eval": {"completed": True},
+    }
 
 
 def test_decide_next_step_stays_blocked_when_handoff_failed():

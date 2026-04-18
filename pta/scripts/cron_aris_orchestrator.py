@@ -165,10 +165,24 @@ def write_handoff_files(project_root: Path, state: dict) -> dict[str, Path]:
         f"- M8 complete: {state['m8']['completed']}\n"
         f"- M1 seeds: {state['m1']['completed_seeds']}\n"
         f"- M7 seeds: {state['m7']['completed_seeds']}\n"
-        f"- OOD eval complete: {state['ood_eval']['completed']}\n",
+        f"- OOD eval complete: {state['ood_eval']['completed']}\n"
+        "- Main results: results/main_results.csv\n"
+        "- OOD per-seed results: results/ood_eval_per_seed.csv\n"
+        "- Handoff record: results/orchestration/aris_handoff_ready.json\n",
         encoding="utf-8",
     )
     return {"json": json_path, "summary": summary_path}
+
+
+def execute_decision(
+    project_root: Path, state: dict, decision: dict[str, object]
+) -> dict[str, object]:
+    if decision["action"] == "handoff_aris":
+        return {
+            "action": "handoff_aris",
+            "records": write_handoff_files(project_root, state),
+        }
+    raise ValueError(f"Unsupported action: {decision['action']}")
 
 
 def reconcile_state(project_root: Path, ps_output: str) -> dict:
