@@ -233,6 +233,38 @@ def test_decide_next_step_hands_off_after_ood_eval():
     assert decision == {"action": "handoff_aris"}
 
 
+def test_write_handoff_files_creates_machine_and_human_records(tmp_path):
+    from pta.scripts.cron_aris_orchestrator import write_handoff_files
+
+    state = {
+        "m8": {"completed": True},
+        "m1": {"completed_seeds": [42, 0, 1]},
+        "m7": {"completed_seeds": [42, 0, 1]},
+        "ood_eval": {"completed": True},
+    }
+
+    records = write_handoff_files(tmp_path, state)
+
+    assert records["json"].exists()
+    assert records["summary"].exists()
+
+
+def test_decide_next_step_stays_blocked_when_handoff_failed():
+    from pta.scripts.cron_aris_orchestrator import decide_next_step
+
+    state = {
+        "m8": {"running": False, "completed": True},
+        "m1": {"running": False, "completed_seeds": [42, 0, 1]},
+        "m7": {"running": False, "completed_seeds": [42, 0, 1]},
+        "ood_eval": {"completed": True},
+        "aris": {"blocked": True},
+    }
+
+    decision = decide_next_step(state)
+
+    assert decision == {"action": "blocked", "stage": "aris"}
+
+
 def test_first_missing_seed_returns_none_for_empty_expected():
     from pta.scripts.cron_aris_orchestrator import _first_missing_seed
 

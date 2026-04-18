@@ -75,6 +75,9 @@ def _first_missing_seed(done: list[int], expected: list[int]) -> int | None:
 
 
 def decide_next_step(state: dict) -> dict[str, object]:
+    if state.get("aris", {}).get("blocked"):
+        return {"action": "blocked", "stage": "aris"}
+
     if state["m8"]["running"]:
         return {"action": "wait", "stage": "m8"}
 
@@ -145,6 +148,23 @@ def load_state(state_path: Path) -> dict:
 def save_state(state_path: Path, state: dict) -> None:
     state_path.parent.mkdir(parents=True, exist_ok=True)
     state_path.write_text(json.dumps(state, indent=2, sort_keys=True), encoding="utf-8")
+
+
+def write_handoff_files(project_root: Path, state: dict) -> dict[str, Path]:
+    out_dir = project_root / "results" / "orchestration"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    json_path = out_dir / "aris_handoff_ready.json"
+    summary_path = out_dir / "aris_handoff_summary.md"
+    json_path.write_text(json.dumps(state, indent=2, sort_keys=True), encoding="utf-8")
+    summary_path.write_text(
+        "# ARIS Handoff Ready\n\n"
+        f"- M8 complete: {state['m8']['completed']}\n"
+        f"- M1 seeds: {state['m1']['completed_seeds']}\n"
+        f"- M7 seeds: {state['m7']['completed_seeds']}\n"
+        f"- OOD eval complete: {state['ood_eval']['completed']}\n",
+        encoding="utf-8",
+    )
+    return {"json": json_path, "summary": summary_path}
 
 
 def reconcile_state(project_root: Path, ps_output: str) -> dict:
