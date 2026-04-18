@@ -1,3 +1,6 @@
+from pathlib import Path
+
+
 def test_detect_run_completion_from_final_checkpoint(tmp_path):
     from pta.scripts.cron_aris_orchestrator import detect_run_completion
 
@@ -360,3 +363,13 @@ def test_load_state_defaults_when_missing(tmp_path):
 
     assert loaded["stage"] == "bootstrap"
     assert loaded["m1"]["completed_seeds"] == []
+
+
+def test_cron_aris_orchestrator_has_cli_entrypoint_guard():
+    script_path = (
+        Path(__file__).resolve().parents[1] / "pta/scripts/cron_aris_orchestrator.py"
+    )
+    source = script_path.read_text(encoding="utf-8")
+
+    assert 'if __name__ == "__main__":' in source
+    assert "raise SystemExit(main())" in source

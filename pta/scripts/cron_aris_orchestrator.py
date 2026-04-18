@@ -161,3 +161,7 @@ def main() -> int:
     append_log(log_path, "coordinator tick")
     save_state(state_path, state)
     return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
