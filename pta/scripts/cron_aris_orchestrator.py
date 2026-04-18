@@ -230,28 +230,65 @@ def append_log(log_path: Path, message: str) -> None:
         handle.write(message + "\n")
 
 
-def main(project_root: Path | None = None, ps_output: str = "") -> int:
-    if project_root is None:
-        project_root = Path(__file__).resolve().parents[2]
+def read_ps_output() -> str:
+    process = subprocess.run(
+        [
+            "bash",
+            "-lc",
+            "ps -eo pid,etimes,cmd | grep -E 'train_baselines.py|train_m7.py|run_ood_eval_v2.py' | grep -v grep || true",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return process.stdout
+
+
+def run_coordinator(project_root: Path) -> int:
     state_path = project_root / "results" / "orchestration" / "aris_state.json"
-    log_path = project_root / "logs" / "orchestration" / "cron_aris_orchestrator.log"
+    log_dir = project_root / "logs" / "orchestration"
     persisted_state = load_state(state_path)
-    state = reconcile_state(project_root=project_root, ps_output=ps_output)
+    state = reconcile_state(project_root=project_root, ps_output=read_ps_output())
     state["aris"] = {
         "ready": persisted_state.get("aris", {}).get("ready", False),
         "blocked": persisted_state.get("aris", {}).get("blocked", False),
     }
     decision = decide_next_step(state)
-    append_log(log_path, "coordinator tick")
+    state["stage"] = decision["action"]
 
-    if decision["action"] == "handoff_aris":
+    if decision["action"] in {
+        "launch_m8_resume",
+        "launch_m1",
+        "launch_m7",
+        "run_ood_eval",
+    }:
+        command = build_command(decision)
+        pid = launch_detached(
+            command,
+            log_dir / f"{decision['action']}.log",
+            project_root,
+        )
+        state["last_launch"] = {
+            "action": decision["action"],
+            "pid": pid,
+            "command": command,
+        }
+    elif decision["action"] == "handoff_aris":
         execute_decision(project_root, state, decision)
         state["aris"]["ready"] = True
-    elif decision["action"] == "blocked":
-        append_log(log_path, "aris handoff blocked")
 
     save_state(state_path, state)
+    append_log(
+        log_dir / "cron_aris_orchestrator.log",
+        json.dumps({"decision": decision}, sort_keys=True),
+    )
     return 0
+
+
+def main(project_root: Path | None = None) -> int:
+    if project_root is None:
+        project_root = Path(__file__).resolve().parents[2]
+    return run_coordinator(project_root)
 
 
 if __name__ == "__main__":

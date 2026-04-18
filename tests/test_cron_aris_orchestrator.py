@@ -519,8 +519,33 @@ def test_reconcile_state_marks_ood_eval_complete_from_corrected_outputs(tmp_path
     assert state["ood_eval"]["completed"] is True
 
 
-def test_main_executes_handoff_branch_when_pipeline_is_ready(tmp_path):
+def test_run_coordinator_launches_next_stage_once_when_m8_done(tmp_path, monkeypatch):
+    from pta.scripts import cron_aris_orchestrator as mod
+
+    commands = []
+
+    def fake_launch(command, log_path, cwd):
+        commands.append(command)
+        return 99999
+
+    monkeypatch.setattr(mod, "launch_detached", fake_launch)
+    monkeypatch.setattr(mod, "read_ps_output", lambda: "")
+
+    m8_dir = tmp_path / "checkpoints" / "m8_teacher_seed42"
+    m8_dir.mkdir(parents=True)
+    (m8_dir / "scoop_transfer_teacher_final.zip").write_text("ok")
+
+    exit_code = mod.run_coordinator(project_root=tmp_path)
+
+    assert exit_code == 0
+    assert len(commands) == 1
+    assert "--method m1 --seed 42" in commands[0]
+
+
+def test_main_executes_handoff_branch_when_pipeline_is_ready(tmp_path, monkeypatch):
     from pta.scripts.cron_aris_orchestrator import main
+
+    from pta.scripts import cron_aris_orchestrator as mod
 
     m8_dir = tmp_path / "checkpoints" / "m8_teacher_seed42"
     m8_dir.mkdir(parents=True)
@@ -540,7 +565,9 @@ def test_main_executes_handoff_branch_when_pipeline_is_ready(tmp_path):
     (results_dir / "main_results.csv").write_text("method,split\n")
     (results_dir / "ood_eval_per_seed.csv").write_text("method,seed,split\n")
 
-    assert main(project_root=tmp_path, ps_output="") == 0
+    monkeypatch.setattr(mod, "read_ps_output", lambda: "")
+
+    assert main(project_root=tmp_path) == 0
     assert (
         json.loads(
             (results_dir / "orchestration" / "aris_handoff_ready.json").read_text(
