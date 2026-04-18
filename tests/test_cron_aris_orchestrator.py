@@ -1,4 +1,5 @@
 import json
+import os
 from pathlib import Path
 
 
@@ -126,7 +127,7 @@ def test_decide_next_step_launches_m8_resume_when_not_completed():
     assert decide_next_step(state) == {"action": "launch_m8_resume"}
 
 
-def test_decide_next_step_prioritizes_m8_resume_over_running_m1():
+def test_decide_next_step_waits_for_running_m1_before_m8_recovery():
     from pta.scripts.cron_aris_orchestrator import decide_next_step
 
     state = {
@@ -136,7 +137,7 @@ def test_decide_next_step_prioritizes_m8_resume_over_running_m1():
         "ood_eval": {"completed": False},
     }
 
-    assert decide_next_step(state) == {"action": "launch_m8_resume"}
+    assert decide_next_step(state) == {"action": "wait", "stage": "m1"}
 
 
 def test_decide_next_step_waits_on_running_m1_after_m8_completion():
@@ -167,7 +168,7 @@ def test_decide_next_step_launches_first_missing_m1_seed():
     assert decision == {"action": "launch_m1", "seed": 0}
 
 
-def test_decide_next_step_prioritizes_missing_m1_over_running_m7():
+def test_decide_next_step_waits_for_running_m7_before_missing_m1_recovery():
     from pta.scripts.cron_aris_orchestrator import decide_next_step
 
     state = {
@@ -177,7 +178,7 @@ def test_decide_next_step_prioritizes_missing_m1_over_running_m7():
         "ood_eval": {"completed": False},
     }
 
-    assert decide_next_step(state) == {"action": "launch_m1", "seed": 0}
+    assert decide_next_step(state) == {"action": "wait", "stage": "m7"}
 
 
 def test_decide_next_step_launches_first_missing_m7_seed():
@@ -258,7 +259,7 @@ def test_write_handoff_files_creates_machine_and_human_records(tmp_path):
         "aris": {"blocked": False},
     }
 
-    records = write_handoff_files(tmp_path, state)
+    records = write_handoff_files(tmp_path, state, ready=True)
 
     assert json.loads(records["json"].read_text(encoding="utf-8")) == {
         "aris": {"blocked": False, "ready": True},
@@ -548,14 +549,47 @@ def test_reconcile_state_does_not_mark_ood_eval_complete_from_main_results_alone
 def test_reconcile_state_marks_ood_eval_complete_from_corrected_outputs(tmp_path):
     from pta.scripts.cron_aris_orchestrator import reconcile_state
 
+    m8_dir = tmp_path / "checkpoints" / "m8_teacher_seed42"
+    m8_dir.mkdir(parents=True)
+    checkpoint = m8_dir / "scoop_transfer_teacher_final.zip"
+    checkpoint.write_text("ok")
+
     results_dir = tmp_path / "results"
     results_dir.mkdir(parents=True)
-    (results_dir / "main_results.csv").write_text("method,split\n")
-    (results_dir / "ood_eval_per_seed.csv").write_text("method,seed,split\n")
+    main_results = results_dir / "main_results.csv"
+    per_seed = results_dir / "ood_eval_per_seed.csv"
+    main_results.write_text("method,split\n")
+    per_seed.write_text("method,seed,split\n")
+    os.utime(checkpoint, (100, 100))
+    os.utime(main_results, (200, 200))
+    os.utime(per_seed, (200, 200))
 
     state = reconcile_state(project_root=tmp_path, ps_output="")
 
     assert state["ood_eval"]["completed"] is True
+
+
+def test_reconcile_state_rejects_stale_ood_eval_outputs(tmp_path):
+    from pta.scripts.cron_aris_orchestrator import reconcile_state
+
+    m8_dir = tmp_path / "checkpoints" / "m8_teacher_seed42"
+    m8_dir.mkdir(parents=True)
+    checkpoint = m8_dir / "scoop_transfer_teacher_final.zip"
+    checkpoint.write_text("ok")
+
+    results_dir = tmp_path / "results"
+    results_dir.mkdir(parents=True)
+    main_results = results_dir / "main_results.csv"
+    per_seed = results_dir / "ood_eval_per_seed.csv"
+    main_results.write_text("method,split\n")
+    per_seed.write_text("method,seed,split\n")
+    os.utime(checkpoint, (200, 200))
+    os.utime(main_results, (100, 100))
+    os.utime(per_seed, (100, 100))
+
+    state = reconcile_state(project_root=tmp_path, ps_output="")
+
+    assert state["ood_eval"]["completed"] is False
 
 
 def test_run_coordinator_launches_next_stage_once_when_m8_done(tmp_path, monkeypatch):
@@ -633,39 +667,49 @@ def test_run_coordinator_does_not_relaunch_ood_eval_when_it_is_active(
 def test_run_coordinator_executes_configured_handoff_command(tmp_path, monkeypatch):
     from pta.scripts import cron_aris_orchestrator as mod
 
-    launches = []
+    calls = []
 
-    def fake_launch(command, log_path, cwd):
-        launches.append((command, log_path, cwd))
-        return 43210
+    def fake_run(command, log_path, cwd):
+        calls.append((command, log_path, cwd))
+        return {"command": command, "returncode": 0}
 
-    monkeypatch.setattr(mod, "launch_detached", fake_launch)
+    monkeypatch.setattr(mod, "run_handoff_command", fake_run)
     monkeypatch.setattr(mod, "read_ps_output", lambda: "")
 
     m8_dir = tmp_path / "checkpoints" / "m8_teacher_seed42"
     m8_dir.mkdir(parents=True)
-    (m8_dir / "scoop_transfer_teacher_final.zip").write_text("ok")
+    m8_final = m8_dir / "scoop_transfer_teacher_final.zip"
+    m8_final.write_text("ok")
+    os.utime(m8_final, (100, 100))
 
     for seed in [42, 0, 1]:
         m1_dir = tmp_path / "checkpoints" / f"m1_reactive_seed{seed}"
         m1_dir.mkdir(parents=True)
-        (m1_dir / "scoop_transfer_teacher_final.zip").write_text("ok")
+        m1_final = m1_dir / "scoop_transfer_teacher_final.zip"
+        m1_final.write_text("ok")
+        os.utime(m1_final, (100, 100))
 
         m7_dir = tmp_path / "checkpoints" / f"m7_pta_seed{seed}"
         m7_dir.mkdir(parents=True)
-        (m7_dir / "m7_pta_final.zip").write_text("ok")
+        m7_final = m7_dir / "m7_pta_final.zip"
+        m7_final.write_text("ok")
+        os.utime(m7_final, (100, 100))
 
     results_dir = tmp_path / "results"
     results_dir.mkdir(parents=True)
-    (results_dir / "main_results.csv").write_text("method,split\n")
-    (results_dir / "ood_eval_per_seed.csv").write_text("method,seed,split\n")
+    main_results = results_dir / "main_results.csv"
+    per_seed = results_dir / "ood_eval_per_seed.csv"
+    main_results.write_text("method,split\n")
+    per_seed.write_text("method,seed,split\n")
+    os.utime(main_results, (200, 200))
+    os.utime(per_seed, (200, 200))
     command_file = results_dir / "orchestration" / "aris_handoff_command.txt"
     command_file.parent.mkdir(parents=True)
     command_file.write_text("python -m pta.scripts.fake_aris_handoff --ready\n")
 
     assert mod.run_coordinator(project_root=tmp_path) == 0
 
-    assert launches == [
+    assert calls == [
         (
             "python -m pta.scripts.fake_aris_handoff --ready",
             tmp_path / "logs" / "orchestration" / "handoff_aris.log",
@@ -677,8 +721,65 @@ def test_run_coordinator_executes_configured_handoff_command(tmp_path, monkeypat
         (results_dir / "orchestration" / "aris_state.json").read_text(encoding="utf-8")
     )
     assert state["aris"]["ready"] is True
-    assert state["last_launch"]["action"] == "handoff_aris"
-    assert state["last_launch"]["pid"] == 43210
+    assert state["last_handoff"]["action"] == "handoff_aris"
+    assert state["last_handoff"]["returncode"] == 0
+
+
+def test_run_coordinator_keeps_aris_unready_after_failed_handoff_and_retries(
+    tmp_path, monkeypatch
+):
+    from pta.scripts import cron_aris_orchestrator as mod
+
+    attempts = []
+
+    def fake_run(command, log_path, cwd):
+        attempts.append((command, log_path, cwd))
+        return {"command": command, "returncode": 1}
+
+    monkeypatch.setattr(mod, "run_handoff_command", fake_run)
+    monkeypatch.setattr(mod, "read_ps_output", lambda: "")
+
+    m8_dir = tmp_path / "checkpoints" / "m8_teacher_seed42"
+    m8_dir.mkdir(parents=True)
+    checkpoint = m8_dir / "scoop_transfer_teacher_final.zip"
+    checkpoint.write_text("ok")
+    os.utime(checkpoint, (100, 100))
+
+    for seed in [42, 0, 1]:
+        m1_dir = tmp_path / "checkpoints" / f"m1_reactive_seed{seed}"
+        m1_dir.mkdir(parents=True)
+        m1_final = m1_dir / "scoop_transfer_teacher_final.zip"
+        m1_final.write_text("ok")
+        os.utime(m1_final, (100, 100))
+
+        m7_dir = tmp_path / "checkpoints" / f"m7_pta_seed{seed}"
+        m7_dir.mkdir(parents=True)
+        m7_final = m7_dir / "m7_pta_final.zip"
+        m7_final.write_text("ok")
+        os.utime(m7_final, (100, 100))
+
+    results_dir = tmp_path / "results"
+    results_dir.mkdir(parents=True)
+    main_results = results_dir / "main_results.csv"
+    per_seed = results_dir / "ood_eval_per_seed.csv"
+    main_results.write_text("method,split\n")
+    per_seed.write_text("method,seed,split\n")
+    os.utime(main_results, (200, 200))
+    os.utime(per_seed, (200, 200))
+
+    command_file = results_dir / "orchestration" / "aris_handoff_command.txt"
+    command_file.parent.mkdir(parents=True)
+    command_file.write_text("python -m pta.scripts.fake_aris_handoff --ready\n")
+
+    assert mod.run_coordinator(project_root=tmp_path) == 0
+    assert mod.run_coordinator(project_root=tmp_path) == 0
+
+    state = json.loads(
+        (results_dir / "orchestration" / "aris_state.json").read_text(encoding="utf-8")
+    )
+    assert state["aris"]["ready"] is False
+    assert state["aris"]["blocked"] is False
+    assert len(attempts) == 2
 
 
 def test_run_coordinator_skips_handoff_when_already_ready(tmp_path, monkeypatch):
@@ -738,6 +839,48 @@ def test_run_coordinator_skips_handoff_when_already_ready(tmp_path, monkeypatch)
     assert state["stage"] != "handoff_aris"
 
 
+def test_decide_next_step_waits_for_running_m1_instead_of_relaunching_m8():
+    from pta.scripts.cron_aris_orchestrator import decide_next_step
+
+    state = {
+        "m8": {"running": False, "completed": False},
+        "m1": {"running": True, "completed_seeds": []},
+        "m7": {"running": False, "completed_seeds": []},
+        "ood_eval": {"running": False, "completed": False},
+        "aris": {"ready": False, "blocked": False},
+    }
+
+    assert decide_next_step(state) == {"action": "wait", "stage": "m1"}
+
+
+def test_decide_next_step_waits_for_running_m7_instead_of_launching_missing_m1():
+    from pta.scripts.cron_aris_orchestrator import decide_next_step
+
+    state = {
+        "m8": {"running": False, "completed": True},
+        "m1": {"running": False, "completed_seeds": [42]},
+        "m7": {"running": True, "completed_seeds": []},
+        "ood_eval": {"running": False, "completed": False},
+        "aris": {"ready": False, "blocked": False},
+    }
+
+    assert decide_next_step(state) == {"action": "wait", "stage": "m7"}
+
+
+def test_decide_next_step_waits_for_running_ood_eval_instead_of_launching_missing_m7():
+    from pta.scripts.cron_aris_orchestrator import decide_next_step
+
+    state = {
+        "m8": {"running": False, "completed": True},
+        "m1": {"running": False, "completed_seeds": [42, 0, 1]},
+        "m7": {"running": False, "completed_seeds": [42]},
+        "ood_eval": {"running": True, "completed": False},
+        "aris": {"ready": False, "blocked": False},
+    }
+
+    assert decide_next_step(state) == {"action": "wait", "stage": "ood_eval"}
+
+
 def test_main_executes_handoff_branch_when_pipeline_is_ready(tmp_path, monkeypatch):
     from pta.scripts.cron_aris_orchestrator import main
 
@@ -745,21 +888,31 @@ def test_main_executes_handoff_branch_when_pipeline_is_ready(tmp_path, monkeypat
 
     m8_dir = tmp_path / "checkpoints" / "m8_teacher_seed42"
     m8_dir.mkdir(parents=True)
-    (m8_dir / "scoop_transfer_teacher_final.zip").write_text("ok")
+    m8_final = m8_dir / "scoop_transfer_teacher_final.zip"
+    m8_final.write_text("ok")
+    os.utime(m8_final, (100, 100))
 
     for seed in [42, 0, 1]:
         m1_dir = tmp_path / "checkpoints" / f"m1_reactive_seed{seed}"
         m1_dir.mkdir(parents=True)
-        (m1_dir / "scoop_transfer_teacher_final.zip").write_text("ok")
+        m1_final = m1_dir / "scoop_transfer_teacher_final.zip"
+        m1_final.write_text("ok")
+        os.utime(m1_final, (100, 100))
 
         m7_dir = tmp_path / "checkpoints" / f"m7_pta_seed{seed}"
         m7_dir.mkdir(parents=True)
-        (m7_dir / "m7_pta_final.zip").write_text("ok")
+        m7_final = m7_dir / "m7_pta_final.zip"
+        m7_final.write_text("ok")
+        os.utime(m7_final, (100, 100))
 
     results_dir = tmp_path / "results"
     results_dir.mkdir(parents=True)
-    (results_dir / "main_results.csv").write_text("method,split\n")
-    (results_dir / "ood_eval_per_seed.csv").write_text("method,seed,split\n")
+    main_results = results_dir / "main_results.csv"
+    per_seed = results_dir / "ood_eval_per_seed.csv"
+    main_results.write_text("method,split\n")
+    per_seed.write_text("method,seed,split\n")
+    os.utime(main_results, (200, 200))
+    os.utime(per_seed, (200, 200))
 
     monkeypatch.setattr(mod, "read_ps_output", lambda: "")
 

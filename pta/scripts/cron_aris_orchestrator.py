@@ -75,12 +75,33 @@ def _first_missing_seed(done: list[int], expected: list[int]) -> int | None:
     return None
 
 
+def outputs_newer_than_dependencies(
+    output_paths: list[Path], dependency_paths: list[Path]
+) -> bool:
+    if not dependency_paths:
+        return False
+    if any(not path.exists() for path in output_paths):
+        return False
+    newest_dependency = max(path.stat().st_mtime_ns for path in dependency_paths)
+    oldest_output = min(path.stat().st_mtime_ns for path in output_paths)
+    return oldest_output > newest_dependency
+
+
 def decide_next_step(state: dict) -> dict[str, object]:
     if state.get("aris", {}).get("blocked"):
         return {"action": "blocked", "stage": "aris"}
 
     if state.get("aris", {}).get("ready"):
         return {"action": "ready", "stage": "aris"}
+
+    if state["ood_eval"].get("running"):
+        return {"action": "wait", "stage": "ood_eval"}
+
+    if state["m7"]["running"]:
+        return {"action": "wait", "stage": "m7"}
+
+    if state["m1"]["running"]:
+        return {"action": "wait", "stage": "m1"}
 
     if state["m8"]["running"]:
         return {"action": "wait", "stage": "m8"}
@@ -99,9 +120,6 @@ def decide_next_step(state: dict) -> dict[str, object]:
     missing_m7 = _first_missing_seed(state["m7"]["completed_seeds"], M7_SEEDS)
     if missing_m7 is not None:
         return {"action": "launch_m7", "seed": missing_m7}
-
-    if state["ood_eval"].get("running"):
-        return {"action": "wait", "stage": "ood_eval"}
 
     if not state["ood_eval"]["completed"]:
         return {"action": "run_ood_eval"}
@@ -166,47 +184,71 @@ def save_state(state_path: Path, state: dict) -> None:
     state_path.write_text(json.dumps(state, indent=2, sort_keys=True), encoding="utf-8")
 
 
-def write_handoff_files(project_root: Path, state: dict) -> dict[str, Path]:
+def write_handoff_files(
+    project_root: Path, state: dict, *, ready: bool
+) -> dict[str, Path]:
     out_dir = project_root / "results" / "orchestration"
     out_dir.mkdir(parents=True, exist_ok=True)
     json_path = out_dir / "aris_handoff_ready.json"
     summary_path = out_dir / "aris_handoff_summary.md"
     handoff_state = json.loads(json.dumps(state))
-    handoff_state.setdefault("aris", {})["ready"] = True
+    handoff_state.setdefault("aris", {})["ready"] = ready
     json_path.write_text(
         json.dumps(handoff_state, indent=2, sort_keys=True), encoding="utf-8"
     )
+    heading = "# ARIS Handoff Ready\n\n" if ready else "# ARIS Handoff Pending\n\n"
     summary_path.write_text(
-        "# ARIS Handoff Ready\n\n"
-        f"- M8 complete: {state['m8']['completed']}\n"
-        f"- M1 seeds: {state['m1']['completed_seeds']}\n"
-        f"- M7 seeds: {state['m7']['completed_seeds']}\n"
-        f"- OOD eval complete: {state['ood_eval']['completed']}\n"
-        "- Main results: results/main_results.csv\n"
-        "- OOD per-seed results: results/ood_eval_per_seed.csv\n"
-        "- Handoff record: results/orchestration/aris_handoff_ready.json\n",
+        (
+            heading
+            + f"- M8 complete: {state['m8']['completed']}\n"
+            + f"- M1 seeds: {state['m1']['completed_seeds']}\n"
+            + f"- M7 seeds: {state['m7']['completed_seeds']}\n"
+            + f"- OOD eval complete: {state['ood_eval']['completed']}\n"
+            + "- Main results: results/main_results.csv\n"
+            + "- OOD per-seed results: results/ood_eval_per_seed.csv\n"
+            + "- Handoff record: results/orchestration/aris_handoff_ready.json\n"
+        ),
         encoding="utf-8",
     )
     return {"json": json_path, "summary": summary_path}
+
+
+def run_handoff_command(command: str, log_path: Path, cwd: Path) -> dict[str, object]:
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    with log_path.open("a", encoding="utf-8") as handle:
+        completed = subprocess.run(
+            shlex.split(command),
+            cwd=cwd,
+            stdout=handle,
+            stderr=handle,
+            stdin=subprocess.DEVNULL,
+            check=False,
+        )
+    return {"command": command, "returncode": completed.returncode}
 
 
 def execute_decision(
     project_root: Path, state: dict, decision: dict[str, object]
 ) -> dict[str, object]:
     if decision["action"] == "handoff_aris":
+        command = read_handoff_command(project_root)
+        if command is None:
+            return {
+                "action": "handoff_aris",
+                "records": write_handoff_files(project_root, state, ready=True),
+                "returncode": 0,
+            }
+
         result = {
             "action": "handoff_aris",
-            "records": write_handoff_files(project_root, state),
-        }
-        command = read_handoff_command(project_root)
-        if command is not None:
-            pid = launch_detached(
+            **run_handoff_command(
                 command,
                 project_root / "logs" / "orchestration" / "handoff_aris.log",
                 project_root,
-            )
-            result["pid"] = pid
-            result["command"] = command
+            ),
+        }
+        if result["returncode"] == 0:
+            result["records"] = write_handoff_files(project_root, state, ready=True)
         return result
     raise ValueError(f"Unsupported action: {decision['action']}")
 
@@ -215,6 +257,7 @@ def reconcile_state(project_root: Path, ps_output: str) -> dict:
     state = json.loads(json.dumps(DEFAULT_STATE))
     processes = parse_ps_output(ps_output)
     cmds = [row["cmd"] for row in processes]
+    completed_checkpoints: list[Path] = []
 
     state["m8"]["running"] = any(
         "train_baselines.py --method m8 --seed 42" in cmd for cmd in cmds
@@ -226,27 +269,37 @@ def reconcile_state(project_root: Path, ps_output: str) -> dict:
     state["ood_eval"]["running"] = any("run_ood_eval_v2.py" in cmd for cmd in cmds)
 
     m8_dir = project_root / "checkpoints" / "m8_teacher_seed42"
-    state["m8"]["completed"] = detect_run_completion(
-        m8_dir, "scoop_transfer_teacher_final.zip"
-    ).completed
+    m8_status = detect_run_completion(m8_dir, "scoop_transfer_teacher_final.zip")
+    state["m8"]["completed"] = m8_status.completed
+    if m8_status.final_checkpoint is not None:
+        completed_checkpoints.append(m8_status.final_checkpoint)
 
     for seed in M1_SEEDS:
         m1_dir = project_root / "checkpoints" / f"m1_reactive_seed{seed}"
-        if detect_run_completion(m1_dir, "scoop_transfer_teacher_final.zip").completed:
+        m1_status = detect_run_completion(m1_dir, "scoop_transfer_teacher_final.zip")
+        if m1_status.completed:
             state["m1"]["completed_seeds"].append(seed)
+            if m1_status.final_checkpoint is not None:
+                completed_checkpoints.append(m1_status.final_checkpoint)
 
     for seed in M7_SEEDS:
         m7_dir = project_root / "checkpoints" / f"m7_pta_seed{seed}"
-        if (
-            detect_run_completion(m7_dir, "m7_pta_final.zip").completed
-            or detect_run_completion(m7_dir, "m7_pta_final").completed
-        ):
+        m7_status = detect_run_completion(m7_dir, "m7_pta_final.zip")
+        if not m7_status.completed:
+            m7_status = detect_run_completion(m7_dir, "m7_pta_final")
+        if m7_status.completed:
             state["m7"]["completed_seeds"].append(seed)
+            if m7_status.final_checkpoint is not None:
+                completed_checkpoints.append(m7_status.final_checkpoint)
 
     results_dir = project_root / "results"
-    state["ood_eval"]["completed"] = all(
-        (results_dir / name).exists()
-        for name in ["main_results.csv", "ood_eval_per_seed.csv"]
+    ood_outputs = [
+        results_dir / "main_results.csv",
+        results_dir / "ood_eval_per_seed.csv",
+    ]
+    state["ood_eval"]["completed"] = outputs_newer_than_dependencies(
+        ood_outputs,
+        completed_checkpoints,
     )
     return state
 
@@ -320,14 +373,16 @@ def run_coordinator(project_root: Path) -> int:
         log_entry.update({"command": command, "pid": pid})
     elif decision["action"] == "handoff_aris":
         result = execute_decision(project_root, state, decision)
-        state["aris"]["ready"] = True
-        if "command" in result and "pid" in result:
-            state["last_launch"] = {
+        state["aris"]["ready"] = result.get("returncode", 0) == 0
+        if "command" in result:
+            state["last_handoff"] = {
                 "action": decision["action"],
-                "pid": result["pid"],
                 "command": result["command"],
+                "returncode": result["returncode"],
             }
-            log_entry.update({"command": result["command"], "pid": result["pid"]})
+            log_entry.update(
+                {"command": result["command"], "returncode": result["returncode"]}
+            )
 
     save_state(state_path, state)
     append_log(
