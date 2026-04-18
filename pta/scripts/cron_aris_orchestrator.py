@@ -23,7 +23,7 @@ DEFAULT_STATE = {
     "m1": {"running": False, "completed_seeds": []},
     "m7": {"running": False, "completed_seeds": []},
     "ood_eval": {"running": False, "completed": False},
-    "aris": {"ready": False, "blocked": False},
+    "aris": {"ready": False, "blocked": False, "failure_reason": None},
 }
 
 
@@ -249,6 +249,10 @@ def execute_decision(
         }
         if result["returncode"] == 0:
             result["records"] = write_handoff_files(project_root, state, ready=True)
+        else:
+            result["failure_reason"] = (
+                f"handoff command failed with exit code {result['returncode']}"
+            )
         return result
     raise ValueError(f"Unsupported action: {decision['action']}")
 
@@ -347,6 +351,7 @@ def run_coordinator(project_root: Path) -> int:
     state["aris"] = {
         "ready": persisted_state.get("aris", {}).get("ready", False),
         "blocked": persisted_state.get("aris", {}).get("blocked", False),
+        "failure_reason": persisted_state.get("aris", {}).get("failure_reason"),
     }
     decision = decide_next_step(state)
     state["stage"] = decision["action"]
@@ -374,14 +379,22 @@ def run_coordinator(project_root: Path) -> int:
     elif decision["action"] == "handoff_aris":
         result = execute_decision(project_root, state, decision)
         state["aris"]["ready"] = result.get("returncode", 0) == 0
+        state["aris"]["blocked"] = result.get("returncode", 0) != 0
+        state["aris"]["failure_reason"] = result.get("failure_reason")
         if "command" in result:
             state["last_handoff"] = {
                 "action": decision["action"],
                 "command": result["command"],
                 "returncode": result["returncode"],
             }
+            if "failure_reason" in result:
+                state["last_handoff"]["failure_reason"] = result["failure_reason"]
             log_entry.update(
-                {"command": result["command"], "returncode": result["returncode"]}
+                {
+                    "command": result["command"],
+                    "returncode": result["returncode"],
+                    "failure_reason": result.get("failure_reason"),
+                }
             )
 
     save_state(state_path, state)

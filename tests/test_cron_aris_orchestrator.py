@@ -725,7 +725,7 @@ def test_run_coordinator_executes_configured_handoff_command(tmp_path, monkeypat
     assert state["last_handoff"]["returncode"] == 0
 
 
-def test_run_coordinator_keeps_aris_unready_after_failed_handoff_and_retries(
+def test_run_coordinator_blocks_after_failed_handoff_and_records_reason(
     tmp_path, monkeypatch
 ):
     from pta.scripts import cron_aris_orchestrator as mod
@@ -778,8 +778,11 @@ def test_run_coordinator_keeps_aris_unready_after_failed_handoff_and_retries(
         (results_dir / "orchestration" / "aris_state.json").read_text(encoding="utf-8")
     )
     assert state["aris"]["ready"] is False
-    assert state["aris"]["blocked"] is False
-    assert len(attempts) == 2
+    assert state["aris"]["blocked"] is True
+    assert state["aris"]["failure_reason"] == (
+        "handoff command failed with exit code 1"
+    )
+    assert len(attempts) == 1
 
 
 def test_run_coordinator_skips_handoff_when_already_ready(tmp_path, monkeypatch):
