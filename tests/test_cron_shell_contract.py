@@ -17,7 +17,7 @@ def test_cron_wrapper_exports_required_env_vars():
     assert (
         "cd /home/zhuzihou/dev/probe-then-act/.worktrees/aris-resume-stage-d" in wrapper
     )
-    assert "python pta/scripts/cron_aris_orchestrator.py" in wrapper
+    assert "python3 pta/scripts/cron_aris_orchestrator.py" in wrapper
 
 
 def test_install_script_prints_exact_90_minute_schedule():
