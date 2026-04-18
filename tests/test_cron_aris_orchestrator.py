@@ -1,6 +1,3 @@
-from pathlib import Path
-
-
 def test_detect_run_completion_from_final_checkpoint(tmp_path):
     from pta.scripts.cron_aris_orchestrator import detect_run_completion
 
@@ -27,7 +24,40 @@ def test_detect_active_process_from_ps_output():
     assert "train_baselines.py" in processes[0]["cmd"]
 
 
-def test_choose_latest_resume_checkpoint(tmp_path):
+def test_parse_ps_output_skips_header_malformed_and_empty_lines():
+    from pta.scripts.cron_aris_orchestrator import parse_ps_output
+
+    output = """\
+PID ELAPSED CMD
+21934 40730 python pta/scripts/train_baselines.py --method m8 --seed 42
+malformed
+
+22001 15 python pta/scripts/train_m7.py --seed 0
+"""
+
+    processes = parse_ps_output(output)
+
+    assert processes == [
+        {
+            "pid": 21934,
+            "elapsed": 40730,
+            "cmd": "python pta/scripts/train_baselines.py --method m8 --seed 42",
+        },
+        {
+            "pid": 22001,
+            "elapsed": 15,
+            "cmd": "python pta/scripts/train_m7.py --seed 0",
+        },
+    ]
+
+
+def test_parse_ps_output_returns_empty_list_for_empty_input():
+    from pta.scripts.cron_aris_orchestrator import parse_ps_output
+
+    assert parse_ps_output("") == []
+
+
+def test_choose_latest_resume_checkpoint_prefers_final_checkpoint(tmp_path):
     from pta.scripts.cron_aris_orchestrator import choose_latest_resume_checkpoint
 
     ckpt_dir = tmp_path / "checkpoints" / "m8_teacher_seed42"
@@ -38,3 +68,26 @@ def test_choose_latest_resume_checkpoint(tmp_path):
     result = choose_latest_resume_checkpoint(ckpt_dir)
 
     assert result.name == "scoop_transfer_teacher_final.zip"
+
+
+def test_choose_latest_resume_checkpoint_uses_highest_step_number(tmp_path):
+    from pta.scripts.cron_aris_orchestrator import choose_latest_resume_checkpoint
+
+    ckpt_dir = tmp_path / "checkpoints" / "m8_teacher_seed0"
+    ckpt_dir.mkdir(parents=True)
+    (ckpt_dir / "scoop_transfer_teacher_9_steps.zip").write_text("a")
+    (ckpt_dir / "scoop_transfer_teacher_100_steps.zip").write_text("b")
+    (ckpt_dir / "scoop_transfer_teacher_1000_steps.zip").write_text("c")
+
+    result = choose_latest_resume_checkpoint(ckpt_dir)
+
+    assert result.name == "scoop_transfer_teacher_1000_steps.zip"
+
+
+def test_choose_latest_resume_checkpoint_returns_none_for_empty_directory(tmp_path):
+    from pta.scripts.cron_aris_orchestrator import choose_latest_resume_checkpoint
+
+    ckpt_dir = tmp_path / "checkpoints" / "m8_teacher_seed1"
+    ckpt_dir.mkdir(parents=True)
+
+    assert choose_latest_resume_checkpoint(ckpt_dir) is None
