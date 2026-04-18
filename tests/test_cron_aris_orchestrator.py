@@ -240,3 +240,61 @@ def test_first_missing_seed_ignores_extra_completed_seeds():
     from pta.scripts.cron_aris_orchestrator import _first_missing_seed
 
     assert _first_missing_seed(done=[99, 42, 7], expected=[42, 0, 1]) == 0
+
+
+def test_build_m1_command_uses_hotfix_scale():
+    from pta.scripts.cron_aris_orchestrator import build_command
+
+    command = build_command({"action": "launch_m1", "seed": 42})
+
+    assert "train_baselines.py --method m1 --seed 42" in command
+    assert "--residual-scale 0.05" in command
+
+
+def test_build_m7_command_uses_hotfix_scale():
+    from pta.scripts.cron_aris_orchestrator import build_command
+
+    command = build_command({"action": "launch_m7", "seed": 0})
+
+    assert "train_m7.py --seed 0" in command
+    assert "--residual-scale 0.05" in command
+
+
+def test_build_ood_eval_command_uses_corrected_script_defaults():
+    from pta.scripts.cron_aris_orchestrator import build_command
+
+    command = build_command({"action": "run_ood_eval"})
+
+    assert "run_ood_eval_v2.py" in command
+    assert "--residual-scale 0.05" in command
+
+
+def test_launch_detached_creates_log_directory_and_returns_pid(tmp_path, monkeypatch):
+    from pta.scripts.cron_aris_orchestrator import launch_detached
+
+    recorded: dict[str, object] = {}
+
+    class DummyProcess:
+        pid = 4321
+
+    def fake_popen(args, cwd, stdout, stderr):
+        recorded["args"] = args
+        recorded["cwd"] = cwd
+        recorded["stdout_name"] = stdout.name
+        recorded["stderr_name"] = stderr.name
+        return DummyProcess()
+
+    monkeypatch.setattr(
+        "pta.scripts.cron_aris_orchestrator.subprocess.Popen", fake_popen
+    )
+
+    log_path = tmp_path / "logs" / "orchestrator.log"
+    pid = launch_detached("python pta/scripts/train_m7.py --seed 0", log_path, tmp_path)
+
+    assert pid == 4321
+    assert log_path.parent.is_dir()
+    assert recorded["cwd"] == tmp_path
+    assert recorded["stdout_name"] == str(log_path)
+    assert recorded["stderr_name"] == str(log_path)
+    assert recorded["args"][0:2] == ["bash", "-lc"]
+    assert str(log_path) in recorded["args"][2]

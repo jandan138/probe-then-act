@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 import re
+import subprocess
 
 
 @dataclass
@@ -86,3 +87,38 @@ def decide_next_step(state: dict) -> dict[str, object]:
         return {"action": "run_ood_eval"}
 
     return {"action": "handoff_aris"}
+
+
+def build_command(decision: dict[str, object]) -> str:
+    action = decision["action"]
+    if action == "launch_m8_resume":
+        return (
+            "python pta/scripts/train_baselines.py --method m8 --seed 42 "
+            "--total-timesteps 500000 --residual-scale 0.05 "
+            "--resume-from checkpoints/m8_teacher_seed42/scoop_transfer_teacher_final.zip"
+        )
+    if action == "launch_m1":
+        return (
+            f"python pta/scripts/train_baselines.py --method m1 --seed {decision['seed']} "
+            "--total-timesteps 500000 --residual-scale 0.05"
+        )
+    if action == "launch_m7":
+        return (
+            f"python pta/scripts/train_m7.py --seed {decision['seed']} "
+            "--total-timesteps 500000 --residual-scale 0.05"
+        )
+    if action == "run_ood_eval":
+        return "python pta/scripts/run_ood_eval_v2.py --residual-scale 0.05"
+    raise ValueError(f"Unsupported action: {action}")
+
+
+def launch_detached(command: str, log_path: Path, cwd: Path) -> int:
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    with log_path.open("a", encoding="utf-8") as handle:
+        process = subprocess.Popen(
+            ["bash", "-lc", f"setsid -f {command} >> '{log_path}' 2>&1 < /dev/null"],
+            cwd=cwd,
+            stdout=handle,
+            stderr=handle,
+        )
+    return process.pid
