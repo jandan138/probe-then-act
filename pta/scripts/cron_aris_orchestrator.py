@@ -79,6 +79,9 @@ def decide_next_step(state: dict) -> dict[str, object]:
     if state.get("aris", {}).get("blocked"):
         return {"action": "blocked", "stage": "aris"}
 
+    if state.get("aris", {}).get("ready"):
+        return {"action": "ready", "stage": "aris"}
+
     if state["m8"]["running"]:
         return {"action": "wait", "stage": "m8"}
 

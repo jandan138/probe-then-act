@@ -681,6 +681,63 @@ def test_run_coordinator_executes_configured_handoff_command(tmp_path, monkeypat
     assert state["last_launch"]["pid"] == 43210
 
 
+def test_run_coordinator_skips_handoff_when_already_ready(tmp_path, monkeypatch):
+    from pta.scripts import cron_aris_orchestrator as mod
+
+    launches = []
+
+    def fake_launch(command, log_path, cwd):
+        launches.append((command, log_path, cwd))
+        return 43210
+
+    monkeypatch.setattr(mod, "launch_detached", fake_launch)
+    monkeypatch.setattr(mod, "read_ps_output", lambda: "")
+
+    m8_dir = tmp_path / "checkpoints" / "m8_teacher_seed42"
+    m8_dir.mkdir(parents=True)
+    (m8_dir / "scoop_transfer_teacher_final.zip").write_text("ok")
+
+    for seed in [42, 0, 1]:
+        m1_dir = tmp_path / "checkpoints" / f"m1_reactive_seed{seed}"
+        m1_dir.mkdir(parents=True)
+        (m1_dir / "scoop_transfer_teacher_final.zip").write_text("ok")
+
+        m7_dir = tmp_path / "checkpoints" / f"m7_pta_seed{seed}"
+        m7_dir.mkdir(parents=True)
+        (m7_dir / "m7_pta_final.zip").write_text("ok")
+
+    results_dir = tmp_path / "results"
+    results_dir.mkdir(parents=True)
+    (results_dir / "main_results.csv").write_text("method,split\n")
+    (results_dir / "ood_eval_per_seed.csv").write_text("method,seed,split\n")
+
+    orchestration_dir = results_dir / "orchestration"
+    orchestration_dir.mkdir(parents=True)
+    (orchestration_dir / "aris_handoff_command.txt").write_text(
+        "python -m pta.scripts.fake_aris_handoff --ready\n"
+    )
+    ready_json = orchestration_dir / "aris_handoff_ready.json"
+    ready_summary = orchestration_dir / "aris_handoff_summary.md"
+    ready_json.write_text('{"existing": true}\n', encoding="utf-8")
+    ready_summary.write_text("existing summary\n", encoding="utf-8")
+    (orchestration_dir / "aris_state.json").write_text(
+        json.dumps({"aris": {"ready": True, "blocked": False}}),
+        encoding="utf-8",
+    )
+
+    assert mod.run_coordinator(project_root=tmp_path) == 0
+
+    assert launches == []
+    assert ready_json.read_text(encoding="utf-8") == '{"existing": true}\n'
+    assert ready_summary.read_text(encoding="utf-8") == "existing summary\n"
+
+    state = json.loads(
+        (orchestration_dir / "aris_state.json").read_text(encoding="utf-8")
+    )
+    assert state["aris"]["ready"] is True
+    assert state["stage"] != "handoff_aris"
+
+
 def test_main_executes_handoff_branch_when_pipeline_is_ready(tmp_path, monkeypatch):
     from pta.scripts.cron_aris_orchestrator import main
 
