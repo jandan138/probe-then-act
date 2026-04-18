@@ -519,6 +519,38 @@ def test_reconcile_state_marks_ood_eval_complete_from_corrected_outputs(tmp_path
     assert state["ood_eval"]["completed"] is True
 
 
+def test_main_executes_handoff_branch_when_pipeline_is_ready(tmp_path):
+    from pta.scripts.cron_aris_orchestrator import main
+
+    m8_dir = tmp_path / "checkpoints" / "m8_teacher_seed42"
+    m8_dir.mkdir(parents=True)
+    (m8_dir / "scoop_transfer_teacher_final.zip").write_text("ok")
+
+    for seed in [42, 0, 1]:
+        m1_dir = tmp_path / "checkpoints" / f"m1_reactive_seed{seed}"
+        m1_dir.mkdir(parents=True)
+        (m1_dir / "scoop_transfer_teacher_final.zip").write_text("ok")
+
+        m7_dir = tmp_path / "checkpoints" / f"m7_pta_seed{seed}"
+        m7_dir.mkdir(parents=True)
+        (m7_dir / "m7_pta_final.zip").write_text("ok")
+
+    results_dir = tmp_path / "results"
+    results_dir.mkdir(parents=True)
+    (results_dir / "main_results.csv").write_text("method,split\n")
+    (results_dir / "ood_eval_per_seed.csv").write_text("method,seed,split\n")
+
+    assert main(project_root=tmp_path, ps_output="") == 0
+    assert (
+        json.loads(
+            (results_dir / "orchestration" / "aris_handoff_ready.json").read_text(
+                encoding="utf-8"
+            )
+        )["aris"]["ready"]
+        is True
+    )
+
+
 def test_cron_aris_orchestrator_has_cli_entrypoint_guard():
     script_path = (
         Path(__file__).resolve().parents[1] / "pta/scripts/cron_aris_orchestrator.py"

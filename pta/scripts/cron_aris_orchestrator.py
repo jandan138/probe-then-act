@@ -230,12 +230,26 @@ def append_log(log_path: Path, message: str) -> None:
         handle.write(message + "\n")
 
 
-def main() -> int:
-    project_root = Path(__file__).resolve().parents[2]
+def main(project_root: Path | None = None, ps_output: str = "") -> int:
+    if project_root is None:
+        project_root = Path(__file__).resolve().parents[2]
     state_path = project_root / "results" / "orchestration" / "aris_state.json"
     log_path = project_root / "logs" / "orchestration" / "cron_aris_orchestrator.log"
-    state = load_state(state_path)
+    persisted_state = load_state(state_path)
+    state = reconcile_state(project_root=project_root, ps_output=ps_output)
+    state["aris"] = {
+        "ready": persisted_state.get("aris", {}).get("ready", False),
+        "blocked": persisted_state.get("aris", {}).get("blocked", False),
+    }
+    decision = decide_next_step(state)
     append_log(log_path, "coordinator tick")
+
+    if decision["action"] == "handoff_aris":
+        execute_decision(project_root, state, decision)
+        state["aris"]["ready"] = True
+    elif decision["action"] == "blocked":
+        append_log(log_path, "aris handoff blocked")
+
     save_state(state_path, state)
     return 0
 
