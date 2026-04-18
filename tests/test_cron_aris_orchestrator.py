@@ -219,6 +219,19 @@ def test_decide_next_step_runs_ood_eval_after_training_stages_complete():
     assert decide_next_step(state) == {"action": "run_ood_eval"}
 
 
+def test_decide_next_step_waits_when_ood_eval_is_running():
+    from pta.scripts.cron_aris_orchestrator import decide_next_step
+
+    state = {
+        "m8": {"running": False, "completed": True},
+        "m1": {"running": False, "completed_seeds": [42, 0, 1]},
+        "m7": {"running": False, "completed_seeds": [42, 0, 1]},
+        "ood_eval": {"running": True, "completed": False},
+    }
+
+    assert decide_next_step(state) == {"action": "wait", "stage": "ood_eval"}
+
+
 def test_decide_next_step_hands_off_after_ood_eval():
     from pta.scripts.cron_aris_orchestrator import decide_next_step
 
@@ -342,6 +355,22 @@ def test_build_ood_eval_command_uses_corrected_script_defaults():
 
     assert "run_ood_eval_v2.py" in command
     assert "--residual-scale 0.05" in command
+
+
+def test_build_m8_resume_command_uses_latest_available_checkpoint(tmp_path):
+    from pta.scripts.cron_aris_orchestrator import build_command
+
+    ckpt_dir = tmp_path / "checkpoints" / "m8_teacher_seed42"
+    ckpt_dir.mkdir(parents=True)
+    latest = ckpt_dir / "scoop_transfer_teacher_1000_steps.zip"
+    latest.write_text("ok")
+
+    command = build_command(
+        {"action": "launch_m8_resume"},
+        project_root=tmp_path,
+    )
+
+    assert str(latest.relative_to(tmp_path)) in command
 
 
 def test_launch_detached_uses_direct_process_launch(tmp_path, monkeypatch):
@@ -492,6 +521,16 @@ def test_reconcile_state_marks_running_stages_from_ps_output(tmp_path):
     assert state["m7"]["running"] is True
 
 
+def test_reconcile_state_marks_ood_eval_running_from_ps_output(tmp_path):
+    from pta.scripts.cron_aris_orchestrator import reconcile_state
+
+    ps_output = "104 8 python pta/scripts/run_ood_eval_v2.py --residual-scale 0.05"
+
+    state = reconcile_state(project_root=tmp_path, ps_output=ps_output)
+
+    assert state["ood_eval"]["running"] is True
+
+
 def test_reconcile_state_does_not_mark_ood_eval_complete_from_main_results_alone(
     tmp_path,
 ):
@@ -540,6 +579,106 @@ def test_run_coordinator_launches_next_stage_once_when_m8_done(tmp_path, monkeyp
     assert exit_code == 0
     assert len(commands) == 1
     assert "--method m1 --seed 42" in commands[0]
+
+    state = json.loads(
+        (tmp_path / "results" / "orchestration" / "aris_state.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    log_text = (
+        tmp_path / "logs" / "orchestration" / "cron_aris_orchestrator.log"
+    ).read_text(encoding="utf-8")
+
+    assert state["last_launch"]["command"] == commands[0]
+    assert state["last_launch"]["pid"] == 99999
+    assert "last_check_time" in state
+    assert '"timestamp":' in log_text
+    assert '"pid": 99999' in log_text
+    assert commands[0] in log_text
+
+
+def test_run_coordinator_does_not_relaunch_ood_eval_when_it_is_active(
+    tmp_path, monkeypatch
+):
+    from pta.scripts import cron_aris_orchestrator as mod
+
+    launched = []
+
+    monkeypatch.setattr(
+        mod, "launch_detached", lambda *args, **kwargs: launched.append(args)
+    )
+    monkeypatch.setattr(
+        mod,
+        "read_ps_output",
+        lambda: "104 8 python pta/scripts/run_ood_eval_v2.py --residual-scale 0.05",
+    )
+
+    m8_dir = tmp_path / "checkpoints" / "m8_teacher_seed42"
+    m8_dir.mkdir(parents=True)
+    (m8_dir / "scoop_transfer_teacher_final.zip").write_text("ok")
+
+    for seed in [42, 0, 1]:
+        m1_dir = tmp_path / "checkpoints" / f"m1_reactive_seed{seed}"
+        m1_dir.mkdir(parents=True)
+        (m1_dir / "scoop_transfer_teacher_final.zip").write_text("ok")
+
+        m7_dir = tmp_path / "checkpoints" / f"m7_pta_seed{seed}"
+        m7_dir.mkdir(parents=True)
+        (m7_dir / "m7_pta_final.zip").write_text("ok")
+
+    assert mod.run_coordinator(project_root=tmp_path) == 0
+    assert launched == []
+
+
+def test_run_coordinator_executes_configured_handoff_command(tmp_path, monkeypatch):
+    from pta.scripts import cron_aris_orchestrator as mod
+
+    launches = []
+
+    def fake_launch(command, log_path, cwd):
+        launches.append((command, log_path, cwd))
+        return 43210
+
+    monkeypatch.setattr(mod, "launch_detached", fake_launch)
+    monkeypatch.setattr(mod, "read_ps_output", lambda: "")
+
+    m8_dir = tmp_path / "checkpoints" / "m8_teacher_seed42"
+    m8_dir.mkdir(parents=True)
+    (m8_dir / "scoop_transfer_teacher_final.zip").write_text("ok")
+
+    for seed in [42, 0, 1]:
+        m1_dir = tmp_path / "checkpoints" / f"m1_reactive_seed{seed}"
+        m1_dir.mkdir(parents=True)
+        (m1_dir / "scoop_transfer_teacher_final.zip").write_text("ok")
+
+        m7_dir = tmp_path / "checkpoints" / f"m7_pta_seed{seed}"
+        m7_dir.mkdir(parents=True)
+        (m7_dir / "m7_pta_final.zip").write_text("ok")
+
+    results_dir = tmp_path / "results"
+    results_dir.mkdir(parents=True)
+    (results_dir / "main_results.csv").write_text("method,split\n")
+    (results_dir / "ood_eval_per_seed.csv").write_text("method,seed,split\n")
+    command_file = results_dir / "orchestration" / "aris_handoff_command.txt"
+    command_file.parent.mkdir(parents=True)
+    command_file.write_text("python -m pta.scripts.fake_aris_handoff --ready\n")
+
+    assert mod.run_coordinator(project_root=tmp_path) == 0
+
+    assert launches == [
+        (
+            "python -m pta.scripts.fake_aris_handoff --ready",
+            tmp_path / "logs" / "orchestration" / "handoff_aris.log",
+            tmp_path,
+        )
+    ]
+
+    state = json.loads(
+        (results_dir / "orchestration" / "aris_state.json").read_text(encoding="utf-8")
+    )
+    assert state["aris"]["ready"] is True
+    assert state["last_launch"]["action"] == "handoff_aris"
+    assert state["last_launch"]["pid"] == 43210
 
 
 def test_main_executes_handoff_branch_when_pipeline_is_ready(tmp_path, monkeypatch):

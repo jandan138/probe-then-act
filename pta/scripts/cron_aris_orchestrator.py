@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 import re
 import shlex
@@ -21,7 +22,7 @@ DEFAULT_STATE = {
     "m8": {"running": False, "completed": False},
     "m1": {"running": False, "completed_seeds": []},
     "m7": {"running": False, "completed_seeds": []},
-    "ood_eval": {"completed": False},
+    "ood_eval": {"running": False, "completed": False},
     "aris": {"ready": False, "blocked": False},
 }
 
@@ -96,19 +97,31 @@ def decide_next_step(state: dict) -> dict[str, object]:
     if missing_m7 is not None:
         return {"action": "launch_m7", "seed": missing_m7}
 
+    if state["ood_eval"].get("running"):
+        return {"action": "wait", "stage": "ood_eval"}
+
     if not state["ood_eval"]["completed"]:
         return {"action": "run_ood_eval"}
 
     return {"action": "handoff_aris"}
 
 
-def build_command(decision: dict[str, object]) -> str:
+def build_command(decision: dict[str, object], project_root: Path | None = None) -> str:
     action = decision["action"]
     if action == "launch_m8_resume":
+        resume_path = Path(
+            "checkpoints/m8_teacher_seed42/scoop_transfer_teacher_final.zip"
+        )
+        if project_root is not None:
+            latest = choose_latest_resume_checkpoint(
+                project_root / "checkpoints" / "m8_teacher_seed42"
+            )
+            if latest is not None:
+                resume_path = latest.relative_to(project_root)
         return (
             "python pta/scripts/train_baselines.py --method m8 --seed 42 "
             "--total-timesteps 500000 --residual-scale 0.05 "
-            "--resume-from checkpoints/m8_teacher_seed42/scoop_transfer_teacher_final.zip"
+            f"--resume-from {resume_path}"
         )
     if action == "launch_m1":
         return (
@@ -178,10 +191,20 @@ def execute_decision(
     project_root: Path, state: dict, decision: dict[str, object]
 ) -> dict[str, object]:
     if decision["action"] == "handoff_aris":
-        return {
+        result = {
             "action": "handoff_aris",
             "records": write_handoff_files(project_root, state),
         }
+        command = read_handoff_command(project_root)
+        if command is not None:
+            pid = launch_detached(
+                command,
+                project_root / "logs" / "orchestration" / "handoff_aris.log",
+                project_root,
+            )
+            result["pid"] = pid
+            result["command"] = command
+        return result
     raise ValueError(f"Unsupported action: {decision['action']}")
 
 
@@ -197,6 +220,7 @@ def reconcile_state(project_root: Path, ps_output: str) -> dict:
         "train_baselines.py --method m1" in cmd for cmd in cmds
     )
     state["m7"]["running"] = any("train_m7.py" in cmd for cmd in cmds)
+    state["ood_eval"]["running"] = any("run_ood_eval_v2.py" in cmd for cmd in cmds)
 
     m8_dir = project_root / "checkpoints" / "m8_teacher_seed42"
     state["m8"]["completed"] = detect_run_completion(
@@ -230,6 +254,20 @@ def append_log(log_path: Path, message: str) -> None:
         handle.write(message + "\n")
 
 
+def read_handoff_command(project_root: Path) -> str | None:
+    command_path = (
+        project_root / "results" / "orchestration" / "aris_handoff_command.txt"
+    )
+    if not command_path.exists():
+        return None
+    command = command_path.read_text(encoding="utf-8").strip()
+    return command or None
+
+
+def timestamp_now() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
 def read_ps_output() -> str:
     process = subprocess.run(
         [
@@ -249,12 +287,15 @@ def run_coordinator(project_root: Path) -> int:
     log_dir = project_root / "logs" / "orchestration"
     persisted_state = load_state(state_path)
     state = reconcile_state(project_root=project_root, ps_output=read_ps_output())
+    check_time = timestamp_now()
     state["aris"] = {
         "ready": persisted_state.get("aris", {}).get("ready", False),
         "blocked": persisted_state.get("aris", {}).get("blocked", False),
     }
     decision = decide_next_step(state)
     state["stage"] = decision["action"]
+    state["last_check_time"] = check_time
+    log_entry: dict[str, object] = {"timestamp": check_time, "decision": decision}
 
     if decision["action"] in {
         "launch_m8_resume",
@@ -262,7 +303,7 @@ def run_coordinator(project_root: Path) -> int:
         "launch_m7",
         "run_ood_eval",
     }:
-        command = build_command(decision)
+        command = build_command(decision, project_root=project_root)
         pid = launch_detached(
             command,
             log_dir / f"{decision['action']}.log",
@@ -273,14 +314,22 @@ def run_coordinator(project_root: Path) -> int:
             "pid": pid,
             "command": command,
         }
+        log_entry.update({"command": command, "pid": pid})
     elif decision["action"] == "handoff_aris":
-        execute_decision(project_root, state, decision)
+        result = execute_decision(project_root, state, decision)
         state["aris"]["ready"] = True
+        if "command" in result and "pid" in result:
+            state["last_launch"] = {
+                "action": decision["action"],
+                "pid": result["pid"],
+                "command": result["command"],
+            }
+            log_entry.update({"command": result["command"], "pid": result["pid"]})
 
     save_state(state_path, state)
     append_log(
         log_dir / "cron_aris_orchestrator.log",
-        json.dumps({"decision": decision}, sort_keys=True),
+        json.dumps(log_entry, sort_keys=True),
     )
     return 0
 
