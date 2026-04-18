@@ -365,6 +365,31 @@ def test_load_state_defaults_when_missing(tmp_path):
     assert loaded["m1"]["completed_seeds"] == []
 
 
+def test_reconcile_state_marks_m1_seed_complete_from_final_zip(tmp_path):
+    from pta.scripts.cron_aris_orchestrator import reconcile_state
+
+    project_root = tmp_path
+    run_dir = project_root / "checkpoints" / "m1_reactive_seed42"
+    run_dir.mkdir(parents=True)
+    (run_dir / "scoop_transfer_teacher_final.zip").write_text("ok")
+
+    state = reconcile_state(project_root=project_root, ps_output="")
+
+    assert 42 in state["m1"]["completed_seeds"]
+
+
+def test_reconcile_state_marks_ood_eval_complete_from_csv(tmp_path):
+    from pta.scripts.cron_aris_orchestrator import reconcile_state
+
+    results_dir = tmp_path / "results"
+    results_dir.mkdir(parents=True)
+    (results_dir / "main_results.csv").write_text("method,split\n")
+
+    state = reconcile_state(project_root=tmp_path, ps_output="")
+
+    assert state["ood_eval"]["completed"] is True
+
+
 def test_cron_aris_orchestrator_has_cli_entrypoint_guard():
     script_path = (
         Path(__file__).resolve().parents[1] / "pta/scripts/cron_aris_orchestrator.py"

@@ -147,6 +147,43 @@ def save_state(state_path: Path, state: dict) -> None:
     state_path.write_text(json.dumps(state, indent=2, sort_keys=True), encoding="utf-8")
 
 
+def reconcile_state(project_root: Path, ps_output: str) -> dict:
+    state = json.loads(json.dumps(DEFAULT_STATE))
+    processes = parse_ps_output(ps_output)
+    cmds = [row["cmd"] for row in processes]
+
+    state["m8"]["running"] = any(
+        "train_baselines.py --method m8 --seed 42" in cmd for cmd in cmds
+    )
+    state["m1"]["running"] = any(
+        "train_baselines.py --method m1" in cmd for cmd in cmds
+    )
+    state["m7"]["running"] = any("train_m7.py" in cmd for cmd in cmds)
+
+    m8_dir = project_root / "checkpoints" / "m8_teacher_seed42"
+    state["m8"]["completed"] = detect_run_completion(
+        m8_dir, "scoop_transfer_teacher_final.zip"
+    ).completed
+
+    for seed in M1_SEEDS:
+        m1_dir = project_root / "checkpoints" / f"m1_reactive_seed{seed}"
+        if detect_run_completion(m1_dir, "scoop_transfer_teacher_final.zip").completed:
+            state["m1"]["completed_seeds"].append(seed)
+
+    for seed in M7_SEEDS:
+        m7_dir = project_root / "checkpoints" / f"m7_pta_seed{seed}"
+        if (
+            detect_run_completion(m7_dir, "m7_pta_final.zip").completed
+            or detect_run_completion(m7_dir, "m7_pta_final").completed
+        ):
+            state["m7"]["completed_seeds"].append(seed)
+
+    state["ood_eval"]["completed"] = (
+        project_root / "results" / "main_results.csv"
+    ).exists()
+    return state
+
+
 def append_log(log_path: Path, message: str) -> None:
     log_path.parent.mkdir(parents=True, exist_ok=True)
     with log_path.open("a", encoding="utf-8") as handle:
