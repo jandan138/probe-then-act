@@ -91,3 +91,49 @@ def test_choose_latest_resume_checkpoint_returns_none_for_empty_directory(tmp_pa
     ckpt_dir.mkdir(parents=True)
 
     assert choose_latest_resume_checkpoint(ckpt_dir) is None
+
+
+def test_decide_next_step_returns_running_when_process_active():
+    from pta.scripts.cron_aris_orchestrator import decide_next_step
+
+    state = {
+        "m8": {"running": True, "completed": False},
+        "m1": {"running": False, "completed_seeds": []},
+        "m7": {"running": False, "completed_seeds": []},
+        "ood_eval": {"completed": False},
+    }
+
+    decision = decide_next_step(state)
+
+    assert decision["action"] == "wait"
+    assert decision["stage"] == "m8"
+
+
+def test_decide_next_step_launches_first_missing_m1_seed():
+    from pta.scripts.cron_aris_orchestrator import decide_next_step
+
+    state = {
+        "m8": {"running": False, "completed": True},
+        "m1": {"running": False, "completed_seeds": [42]},
+        "m7": {"running": False, "completed_seeds": []},
+        "ood_eval": {"completed": False},
+    }
+
+    decision = decide_next_step(state)
+
+    assert decision == {"action": "launch_m1", "seed": 0}
+
+
+def test_decide_next_step_hands_off_after_ood_eval():
+    from pta.scripts.cron_aris_orchestrator import decide_next_step
+
+    state = {
+        "m8": {"running": False, "completed": True},
+        "m1": {"running": False, "completed_seeds": [42, 0, 1]},
+        "m7": {"running": False, "completed_seeds": [42, 0, 1]},
+        "ood_eval": {"completed": True},
+    }
+
+    decision = decide_next_step(state)
+
+    assert decision == {"action": "handoff_aris"}
