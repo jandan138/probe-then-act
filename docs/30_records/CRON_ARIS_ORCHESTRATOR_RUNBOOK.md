@@ -21,11 +21,11 @@ Paste both lines so the job runs every 90 minutes.
 
 If the orchestrator appears stalled after reboot or interruption, Inspect the current state file:
 
-`results/orchestration/aris_state.json`
+`cat results/orchestration/aris_state.json`
 
 Inspect the coordinator log:
 
-`logs/orchestration/cron_aris_orchestrator.log`
+`tail -n 50 logs/orchestration/cron_aris_orchestrator.log`
 
 After inspection, wait for the next cron tick or run the manual recovery command:
 
