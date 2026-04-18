@@ -178,9 +178,11 @@ def reconcile_state(project_root: Path, ps_output: str) -> dict:
         ):
             state["m7"]["completed_seeds"].append(seed)
 
-    state["ood_eval"]["completed"] = (
-        project_root / "results" / "main_results.csv"
-    ).exists()
+    results_dir = project_root / "results"
+    state["ood_eval"]["completed"] = all(
+        (results_dir / name).exists()
+        for name in ["main_results.csv", "ood_eval_per_seed.csv"]
+    )
     return state
 
 

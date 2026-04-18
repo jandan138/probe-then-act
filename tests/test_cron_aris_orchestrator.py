@@ -378,12 +378,69 @@ def test_reconcile_state_marks_m1_seed_complete_from_final_zip(tmp_path):
     assert 42 in state["m1"]["completed_seeds"]
 
 
-def test_reconcile_state_marks_ood_eval_complete_from_csv(tmp_path):
+def test_reconcile_state_marks_m8_complete_from_final_zip(tmp_path):
+    from pta.scripts.cron_aris_orchestrator import reconcile_state
+
+    run_dir = tmp_path / "checkpoints" / "m8_teacher_seed42"
+    run_dir.mkdir(parents=True)
+    (run_dir / "scoop_transfer_teacher_final.zip").write_text("ok")
+
+    state = reconcile_state(project_root=tmp_path, ps_output="")
+
+    assert state["m8"]["completed"] is True
+
+
+def test_reconcile_state_marks_m7_seed_complete_from_final_artifact(tmp_path):
+    from pta.scripts.cron_aris_orchestrator import reconcile_state
+
+    run_dir = tmp_path / "checkpoints" / "m7_pta_seed0"
+    run_dir.mkdir(parents=True)
+    (run_dir / "m7_pta_final.zip").write_text("ok")
+
+    state = reconcile_state(project_root=tmp_path, ps_output="")
+
+    assert 0 in state["m7"]["completed_seeds"]
+
+
+def test_reconcile_state_marks_running_stages_from_ps_output(tmp_path):
+    from pta.scripts.cron_aris_orchestrator import reconcile_state
+
+    ps_output = "\n".join(
+        [
+            "101 5 python pta/scripts/train_baselines.py --method m8 --seed 42",
+            "102 6 python pta/scripts/train_baselines.py --method m1 --seed 0",
+            "103 7 python pta/scripts/train_m7.py --seed 1",
+        ]
+    )
+
+    state = reconcile_state(project_root=tmp_path, ps_output=ps_output)
+
+    assert state["m8"]["running"] is True
+    assert state["m1"]["running"] is True
+    assert state["m7"]["running"] is True
+
+
+def test_reconcile_state_does_not_mark_ood_eval_complete_from_main_results_alone(
+    tmp_path,
+):
     from pta.scripts.cron_aris_orchestrator import reconcile_state
 
     results_dir = tmp_path / "results"
     results_dir.mkdir(parents=True)
     (results_dir / "main_results.csv").write_text("method,split\n")
+
+    state = reconcile_state(project_root=tmp_path, ps_output="")
+
+    assert state["ood_eval"]["completed"] is False
+
+
+def test_reconcile_state_marks_ood_eval_complete_from_corrected_outputs(tmp_path):
+    from pta.scripts.cron_aris_orchestrator import reconcile_state
+
+    results_dir = tmp_path / "results"
+    results_dir.mkdir(parents=True)
+    (results_dir / "main_results.csv").write_text("method,split\n")
+    (results_dir / "ood_eval_per_seed.csv").write_text("method,seed,split\n")
 
     state = reconcile_state(project_root=tmp_path, ps_output="")
 
