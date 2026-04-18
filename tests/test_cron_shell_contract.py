@@ -32,3 +32,13 @@ def test_install_script_prints_exact_90_minute_schedule():
         "0 */3 * * * /home/zhuzihou/dev/probe-then-act/.worktrees/aris-resume-stage-d/pta/scripts/run_cron_aris_orchestrator.sh",
         "30 1-22/3 * * * /home/zhuzihou/dev/probe-then-act/.worktrees/aris-resume-stage-d/pta/scripts/run_cron_aris_orchestrator.sh",
     ]
+
+
+def test_runbook_mentions_cron_install_and_recovery_steps():
+    text = Path("docs/30_records/CRON_ARIS_ORCHESTRATOR_RUNBOOK.md").read_text(
+        encoding="utf-8"
+    )
+
+    assert "crontab -e" in text
+    assert "results/orchestration/aris_state.json" in text
+    assert "logs/orchestration/cron_aris_orchestrator.log" in text

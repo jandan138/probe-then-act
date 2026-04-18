@@ -52,6 +52,7 @@ python pta/scripts/run_eval_main.py --config pta/configs/eval/paper_main.yaml
 - `RESEARCH_BRIEF.md` — Input for `/research-lit` and `/novelty-check`
 - `refine-logs/EXPERIMENT_PLAN.md` — Input for `/experiment-bridge`
 - `NARRATIVE_REPORT.md` — Input for `/paper-writing`
+- `docs/30_records/CRON_ARIS_ORCHESTRATOR_RUNBOOK.md` — Cron install, state, log, and recovery steps
 - See `Auto-claude-code-research-in-sleep/projects/probe-then-act/AUTOMATION_PLAN.md` for full schedule
 
 ## Key Design Documents
