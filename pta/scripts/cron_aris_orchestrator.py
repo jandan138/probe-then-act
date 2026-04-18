@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 import re
+import shlex
 import subprocess
 
 
@@ -116,9 +117,11 @@ def launch_detached(command: str, log_path: Path, cwd: Path) -> int:
     log_path.parent.mkdir(parents=True, exist_ok=True)
     with log_path.open("a", encoding="utf-8") as handle:
         process = subprocess.Popen(
-            ["bash", "-lc", f"setsid -f {command} >> '{log_path}' 2>&1 < /dev/null"],
+            shlex.split(command),
             cwd=cwd,
             stdout=handle,
             stderr=handle,
+            stdin=subprocess.DEVNULL,
+            start_new_session=True,
         )
     return process.pid

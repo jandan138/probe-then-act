@@ -269,7 +269,7 @@ def test_build_ood_eval_command_uses_corrected_script_defaults():
     assert "--residual-scale 0.05" in command
 
 
-def test_launch_detached_creates_log_directory_and_returns_pid(tmp_path, monkeypatch):
+def test_launch_detached_uses_direct_process_launch(tmp_path, monkeypatch):
     from pta.scripts.cron_aris_orchestrator import launch_detached
 
     recorded: dict[str, object] = {}
@@ -277,11 +277,13 @@ def test_launch_detached_creates_log_directory_and_returns_pid(tmp_path, monkeyp
     class DummyProcess:
         pid = 4321
 
-    def fake_popen(args, cwd, stdout, stderr):
+    def fake_popen(args, cwd, stdout, stderr, stdin, start_new_session):
         recorded["args"] = args
         recorded["cwd"] = cwd
         recorded["stdout_name"] = stdout.name
         recorded["stderr_name"] = stderr.name
+        recorded["stdin"] = stdin
+        recorded["start_new_session"] = start_new_session
         return DummyProcess()
 
     monkeypatch.setattr(
@@ -296,5 +298,44 @@ def test_launch_detached_creates_log_directory_and_returns_pid(tmp_path, monkeyp
     assert recorded["cwd"] == tmp_path
     assert recorded["stdout_name"] == str(log_path)
     assert recorded["stderr_name"] == str(log_path)
-    assert recorded["args"][0:2] == ["bash", "-lc"]
-    assert str(log_path) in recorded["args"][2]
+    assert recorded["args"] == ["python", "pta/scripts/train_m7.py", "--seed", "0"]
+    assert recorded["stdin"] is __import__("subprocess").DEVNULL
+    assert recorded["start_new_session"] is True
+
+
+def test_launch_detached_returns_spawned_process_pid_not_wrapper_pid(
+    tmp_path, monkeypatch
+):
+    from pta.scripts.cron_aris_orchestrator import launch_detached
+
+    class DummyProcess:
+        def __init__(self, pid):
+            self.pid = pid
+
+    wrapper_pid = 111
+    child_pid = 9876
+
+    def fake_popen(args, cwd, stdout, stderr, stdin, start_new_session):
+        assert args == [
+            "python",
+            "pta/scripts/train_baselines.py",
+            "--method",
+            "m1",
+            "--seed",
+            "42",
+        ]
+        return DummyProcess(child_pid)
+
+    monkeypatch.setattr(
+        "pta.scripts.cron_aris_orchestrator.subprocess.Popen", fake_popen
+    )
+
+    log_path = tmp_path / "logs" / "orchestrator.log"
+    pid = launch_detached(
+        "python pta/scripts/train_baselines.py --method m1 --seed 42",
+        log_path,
+        tmp_path,
+    )
+
+    assert pid == child_pid
+    assert pid != wrapper_pid
