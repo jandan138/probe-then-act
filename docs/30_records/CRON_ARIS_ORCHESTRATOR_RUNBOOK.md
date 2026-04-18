@@ -19,6 +19,16 @@ Paste both lines so the job runs every 90 minutes.
 
 ## Recovery
 
-After reboot, wait for the next cron tick or run manually:
+If the orchestrator appears stalled after reboot or interruption, Inspect the current state file:
+
+`results/orchestration/aris_state.json`
+
+Inspect the coordinator log:
+
+`logs/orchestration/cron_aris_orchestrator.log`
+
+After inspection, wait for the next cron tick or run the manual recovery command:
 
 `bash pta/scripts/run_cron_aris_orchestrator.sh`
+
+rerunning is safe because the coordinator reconstructs state from artifacts and processes before deciding whether to launch the next step.

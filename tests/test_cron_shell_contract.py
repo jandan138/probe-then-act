@@ -38,7 +38,17 @@ def test_runbook_mentions_cron_install_and_recovery_steps():
     text = Path("docs/30_records/CRON_ARIS_ORCHESTRATOR_RUNBOOK.md").read_text(
         encoding="utf-8"
     )
+    claude = Path("CLAUDE.md").read_text(encoding="utf-8")
 
+    assert "bash pta/scripts/install_cron_aris_orchestrator.sh" in text
     assert "crontab -e" in text
+    assert "Inspect the current state file" in text
     assert "results/orchestration/aris_state.json" in text
+    assert "Inspect the coordinator log" in text
     assert "logs/orchestration/cron_aris_orchestrator.log" in text
+    assert "bash pta/scripts/run_cron_aris_orchestrator.sh" in text
+    assert "rerunning is safe" in text
+    assert "reconstructs state from artifacts and processes" in text
+
+    assert "docs/30_records/CRON_ARIS_ORCHESTRATOR_RUNBOOK.md" in claude
+    assert "Cron install, state, log, and recovery steps" in claude
