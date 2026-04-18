@@ -122,11 +122,24 @@ def test_decide_next_step_launches_m8_resume_when_not_completed():
     assert decide_next_step(state) == {"action": "launch_m8_resume"}
 
 
-def test_decide_next_step_waits_on_running_m1_even_if_m8_incomplete():
+def test_decide_next_step_prioritizes_m8_resume_over_running_m1():
     from pta.scripts.cron_aris_orchestrator import decide_next_step
 
     state = {
         "m8": {"running": False, "completed": False},
+        "m1": {"running": True, "completed_seeds": []},
+        "m7": {"running": False, "completed_seeds": []},
+        "ood_eval": {"completed": False},
+    }
+
+    assert decide_next_step(state) == {"action": "launch_m8_resume"}
+
+
+def test_decide_next_step_waits_on_running_m1_after_m8_completion():
+    from pta.scripts.cron_aris_orchestrator import decide_next_step
+
+    state = {
+        "m8": {"running": False, "completed": True},
         "m1": {"running": True, "completed_seeds": []},
         "m7": {"running": False, "completed_seeds": []},
         "ood_eval": {"completed": False},
@@ -150,6 +163,19 @@ def test_decide_next_step_launches_first_missing_m1_seed():
     assert decision == {"action": "launch_m1", "seed": 0}
 
 
+def test_decide_next_step_prioritizes_missing_m1_over_running_m7():
+    from pta.scripts.cron_aris_orchestrator import decide_next_step
+
+    state = {
+        "m8": {"running": False, "completed": True},
+        "m1": {"running": False, "completed_seeds": [42]},
+        "m7": {"running": True, "completed_seeds": []},
+        "ood_eval": {"completed": False},
+    }
+
+    assert decide_next_step(state) == {"action": "launch_m1", "seed": 0}
+
+
 def test_decide_next_step_launches_first_missing_m7_seed():
     from pta.scripts.cron_aris_orchestrator import decide_next_step
 
@@ -163,12 +189,12 @@ def test_decide_next_step_launches_first_missing_m7_seed():
     assert decide_next_step(state) == {"action": "launch_m7", "seed": 0}
 
 
-def test_decide_next_step_waits_on_running_m7_even_if_m1_incomplete():
+def test_decide_next_step_waits_on_running_m7_after_m1_completion():
     from pta.scripts.cron_aris_orchestrator import decide_next_step
 
     state = {
         "m8": {"running": False, "completed": True},
-        "m1": {"running": False, "completed_seeds": [42]},
+        "m1": {"running": False, "completed_seeds": [42, 0, 1]},
         "m7": {"running": True, "completed_seeds": []},
         "ood_eval": {"completed": False},
     }

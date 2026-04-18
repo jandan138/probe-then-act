@@ -66,18 +66,18 @@ def _first_missing_seed(done: list[int], expected: list[int]) -> int | None:
 def decide_next_step(state: dict) -> dict[str, object]:
     if state["m8"]["running"]:
         return {"action": "wait", "stage": "m8"}
-    if state["m1"]["running"]:
-        return {"action": "wait", "stage": "m1"}
-    if state["m7"]["running"]:
-        return {"action": "wait", "stage": "m7"}
 
     if not state["m8"]["completed"]:
         return {"action": "launch_m8_resume"}
 
+    if state["m1"]["running"]:
+        return {"action": "wait", "stage": "m1"}
     missing_m1 = _first_missing_seed(state["m1"]["completed_seeds"], M1_SEEDS)
     if missing_m1 is not None:
         return {"action": "launch_m1", "seed": missing_m1}
 
+    if state["m7"]["running"]:
+        return {"action": "wait", "stage": "m7"}
     missing_m7 = _first_missing_seed(state["m7"]["completed_seeds"], M7_SEEDS)
     if missing_m7 is not None:
         return {"action": "launch_m7", "seed": missing_m7}
