@@ -30,8 +30,8 @@ if str(_PROJECT_ROOT) not in sys.path:
 
 os.environ.setdefault("PYOPENGL_PLATFORM", "osmesa")
 if "/usr/lib/wsl/lib" not in os.environ.get("LD_LIBRARY_PATH", ""):
-    os.environ["LD_LIBRARY_PATH"] = (
-        "/usr/lib/wsl/lib:" + os.environ.get("LD_LIBRARY_PATH", "")
+    os.environ["LD_LIBRARY_PATH"] = "/usr/lib/wsl/lib:" + os.environ.get(
+        "LD_LIBRARY_PATH", ""
     )
 
 
@@ -103,16 +103,31 @@ def parse_args():
     parser = argparse.ArgumentParser(description="OOD Evaluation v2")
     parser.add_argument("--n-episodes", type=int, default=10)
     parser.add_argument("--horizon", type=int, default=500)
-    parser.add_argument("--residual-scale", type=float, default=0.2)
-    parser.add_argument("--methods", nargs="+", default=None,
-                        help="Subset of methods to eval (default: all)")
-    parser.add_argument("--splits", nargs="+", default=None,
-                        help="Subset of splits to eval (default: all)")
+    parser.add_argument("--residual-scale", type=float, default=0.05)
+    parser.add_argument(
+        "--methods",
+        nargs="+",
+        default=None,
+        help="Subset of methods to eval (default: all)",
+    )
+    parser.add_argument(
+        "--splits",
+        nargs="+",
+        default=None,
+        help="Subset of splits to eval (default: all)",
+    )
     return parser.parse_args()
 
 
-def make_eval_env(split_config, use_privileged, use_m7_env, ablation="none",
-                  horizon=500, residual_scale=0.2, seed=0):
+def make_eval_env(
+    split_config,
+    use_privileged,
+    use_m7_env,
+    ablation="none",
+    horizon=500,
+    residual_scale=0.05,
+    seed=0,
+):
     """Create evaluation environment for a given split."""
     from pta.envs.wrappers.gym_wrapper import GenesisGymWrapper
     from pta.envs.wrappers.joint_residual_wrapper import JointResidualWrapper
@@ -144,6 +159,7 @@ def make_eval_env(split_config, use_privileged, use_m7_env, ablation="none",
 
     if use_m7_env:
         from pta.envs.wrappers.probe_phase_wrapper import ProbePhaseWrapper
+
         env = ProbePhaseWrapper(
             env,
             latent_dim=16,
@@ -179,8 +195,8 @@ def evaluate_one(model, env, n_episodes, deterministic=True):
             last_info = info
 
         rewards.append(ep_reward)
-        transfers.append(last_info.get("transferred_mass_frac", 0.0))
-        spills.append(last_info.get("spill_frac", 0.0))
+        transfers.append(last_info.get("transfer_efficiency", 0.0))
+        spills.append(last_info.get("spill_ratio", 0.0))
         successes.append(1.0 if last_info.get("success_rate", 0.0) >= 0.5 else 0.0)
 
     return {
@@ -224,7 +240,9 @@ def main():
         for seed in method_cfg["seeds"]:
             ckpt_path = _PROJECT_ROOT / method_cfg["ckpt_pattern"].format(seed=seed)
             if not ckpt_path.exists() and not ckpt_path.with_suffix(".zip").exists():
-                print(f"  SKIP: {method_name} seed={seed} — checkpoint not found: {ckpt_path}")
+                print(
+                    f"  SKIP: {method_name} seed={seed} — checkpoint not found: {ckpt_path}"
+                )
                 continue
 
             ckpt_str = str(ckpt_path)
@@ -262,9 +280,11 @@ def main():
                 }
                 all_rows.append(row)
 
-                print(f"reward={metrics['mean_reward']:.2f} "
-                      f"transfer={metrics['mean_transfer']:.3f} "
-                      f"success={metrics['success_rate']:.2f}")
+                print(
+                    f"reward={metrics['mean_reward']:.2f} "
+                    f"transfer={metrics['mean_transfer']:.3f} "
+                    f"success={metrics['success_rate']:.2f}"
+                )
 
     # ---- Save per-seed results ----
     per_seed_path = results_dir / "ood_eval_per_seed.csv"
@@ -284,7 +304,11 @@ def main():
 
     agg_rows = []
     for (method, split), metrics in sorted(agg.items()):
-        agg_row = {"method": method, "split": split, "n_seeds": len(metrics["mean_reward"])}
+        agg_row = {
+            "method": method,
+            "split": split,
+            "n_seeds": len(metrics["mean_reward"]),
+        }
         for metric, values in metrics.items():
             agg_row[f"{metric}_mean"] = float(np.mean(values))
             agg_row[f"{metric}_std"] = float(np.std(values))
@@ -302,7 +326,9 @@ def main():
     print("\n" + "=" * 90)
     print("MAIN RESULTS TABLE (mean ± std over seeds)")
     print("=" * 90)
-    header = f"{'Method':<18} {'Split':<20} {'Transfer':>14} {'Spill':>12} {'Success':>10}"
+    header = (
+        f"{'Method':<18} {'Split':<20} {'Transfer':>14} {'Spill':>12} {'Success':>10}"
+    )
     print(header)
     print("-" * 90)
     for row in agg_rows:
@@ -311,10 +337,12 @@ def main():
         s_mean = row["mean_spill_mean"]
         s_std = row["mean_spill_std"]
         suc = row["success_rate_mean"]
-        print(f"{row['method']:<18} {row['split']:<20} "
-              f"{t_mean:.3f}±{t_std:.3f}   "
-              f"{s_mean:.3f}±{s_std:.3f}  "
-              f"{suc:.2f}")
+        print(
+            f"{row['method']:<18} {row['split']:<20} "
+            f"{t_mean:.3f}±{t_std:.3f}   "
+            f"{s_mean:.3f}±{s_std:.3f}  "
+            f"{suc:.2f}"
+        )
     print("=" * 90)
 
 

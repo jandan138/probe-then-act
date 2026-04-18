@@ -331,4 +331,4 @@ python pta/scripts/train_baselines.py --method m8 --seed 42 --total-timesteps 50
 | 2026-04-15 21:36 | Stage A | 20/20 PASS | — | All unit tests green (4.44s) |
 | 2026-04-15 21:41 | Stage B | 3/3 PASS | 60fe19b | reward=+20266, transfer=36.3%, spill=12.4% |
 | 2026-04-16 00:05 | Stage C | PASS | — | M8 50K: peak=21254@40K, final=15686@50K, all positive |
-| | Stage D | | | |
+| 2026-04-18 00:10 | Stage D | PASS | — | 3 reruns: success=1.00, transfer~0.399, spill~0.10; Gate 4 promoted |

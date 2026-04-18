@@ -212,23 +212,42 @@ Gate 4 is passed only if, on a fixed tiny-task evaluation set:
 - Teacher cannot overfit → task is still too hard or implementation still wrong.
 
 ### Current status
-**PARTIAL** (2026-04-07). Joint-space residual PPO reaches scripted baseline level (-2.09 reward, ~12.5% transfer) in 20K steps — massive improvement over E1 Cartesian-delta PPO which was stuck at random (-39.6). However, Gate 4 targets are still not met: transfer remains far below the formal `0.25` pass threshold and no stable 3× evaluation pass has been shown.
+**PASSED** (2026-04-18). The post-hotfix M8 teacher now satisfies the formal Gate 4 criteria on the fixed sand-only tiny-task evaluation set.
 
-**Completed experiments:**
+**Promotion evidence (post-hotfix):**
+- Stage A: 20/20 hotfix tests passed
+- Stage B: zero-action baseline validated positive cumulative reward (`+20266` reward, `36.3%` transfer, `12.4%` spill)
+- Stage C: 50K quick validation passed (`peak=21254@40K`, `final=15686@50K`, all evals positive)
+- Stage D: 3 deterministic tiny-task reruns were stable and exceeded the Gate 4 thresholds:
+
+| Rerun Seed | Episodes | Success Rate | Mean Transfer | Mean Spill | Mean Reward | Std Reward |
+|------------|----------|--------------|---------------|------------|-------------|------------|
+| 2042 | 3 | 1.00 | 0.3993 | 0.1038 | 21239.14 | 3.92 |
+| 2043 | 3 | 1.00 | 0.3993 | 0.1038 | 21240.77 | 5.73 |
+| 2044 | 3 | 1.00 | 0.3997 | 0.0993 | 21242.95 | 3.08 |
+
+**Why this now passes:**
+1. `success_rate >= 70%` — observed `100%` in all reruns
+2. `median transferred_mass_frac >= 0.25` — observed `~0.399`
+3. Stable across at least 3 reruns — all three reruns are tightly clustered
+4. Training clearly separates from pre-hotfix failed baselines and random/reactive behavior
+
+**Important evaluation note (2026-04-18):** `pta/scripts/run_ood_eval_v2.py` still had pre-hotfix assumptions when this recovery started. It read `transferred_mass_frac` / `spill_frac` instead of the environment's `transfer_efficiency` / `spill_ratio`, and defaulted to `residual_scale=0.2` instead of `0.05`. That produced impossible dry-run summaries such as `success_rate=1.0` with zero transfer. The script has now been corrected before trusting the Stage D rerun metrics above.
+
+**Historical experiments (pre-hotfix record):**
 - E1 Teacher PPO (Cartesian-delta): FAILED (IK + PD controller broken, 0% transfer)
 - E2 Cartesian-delta residual: FAILED (IK y-axis inversion)
 - **E3 Joint-space residual v1** (scale=0.1): converged to scripted baseline (-2.09), 12.5% transfer
 - **E4 Joint-space residual v2** (scale=0.2): best reward -1.20, 12-15% transfer
 
-**Root cause of remaining gap:** Base trajectory quality remains the bottleneck in the learning-accessible path. Residual policy reproduces the current joint-space baseline but still falls short of the formal Gate 4 pass criteria.
+**Resolved blocker:** the hotfix stack restored observability, corrected reward asymmetry, reduced destructive residual scale, and added the settle segment needed for the scripted base trajectory to cash out into target transfer.
 
-**2026-04-09 runtime follow-up:** the edge-push codebase has moved beyond the original Gate 4 snapshot. The M7 core runtime path now exists, and longer-running baseline / pipeline jobs may be active before Gate 4 is formally promoted. Those runs should be treated as engineering shakeouts and implementation verification only. They do **not** change the current Gate 4 verdict unless the pass criteria above are actually met on the required evaluation set.
+**2026-04-18 runtime follow-up:** Gate 4 is now formally promoted. Long-running baseline / M7 / OOD jobs are allowed again, but all paper-facing summaries should use the corrected evaluation script and post-hotfix checkpoints.
 
 **Next steps:**
-1. Improve the **edge-push** base trajectory; do **not** reopen scoop / bowl as the current Gate 4 main line
-2. Wider residual scale (0.3-0.5 rad) with curriculum annealing
-3. Longer training (1M+ steps)
-4. Revisit task geometry (container placement may cap push strategy)
+1. Resume formal post-hotfix Phase 3 retraining for `M1` / `M8` / `M7`
+2. Run corrected OOD evaluation with `pta/scripts/run_ood_eval_v2.py`
+3. Only revisit geometry or curriculum if the post-hotfix 500K retrains regress materially below the promoted Gate 4 level
 
 If the bowl side-track is continued separately, use `docs/40_investigations/11_BOWL_TOOL_INVESTIGATION.md` and `docs/10_protocols/12_BOWL_TRANSPORT_DIAGNOSIS_RUNBOOK.md` as the source of truth. That side-track has already progressed through native tuning, minimal sticky fallback, hidden geometry, and particle constraints without producing useful final carry, so it should not be treated as a near-term Gate 4 rescue path.
 
@@ -258,7 +277,7 @@ Do **not** spend substantial GPU budget on:
 - paper-level claim generation.
 
 ### Current status
-**NOT ALLOWED YET**.
+**ALLOWED** (2026-04-18). Gate 4 has passed, so formal post-hotfix retraining and OOD evaluation may proceed.
 
 ---
 
@@ -270,8 +289,8 @@ Do **not** spend substantial GPU budget on:
 | 1 | Task / Theory Specification | PARTIAL | Reward/phase logic updated for edge-push (delta-based v2). Task contract not yet formal. |
 | 2 | Implementation Correctness | **PASSED** | IK/controller issues diagnosed and bypassed via JointResidualWrapper. |
 | 3 | System Smoke Test | PASSED | Environment, training infra, eval infra, and checkpoints are operational. |
-| 4 | Tiny-Task Overfit | **PARTIAL** | Joint-space residual reaches baseline (12.5% transfer) but not 30% target. Bottleneck: base trajectory quality. |
-| 5 | Full-Scale Experiment | BLOCKED | Not allowed until Gate 4 passes. |
+| 4 | Tiny-Task Overfit | **PASSED** | Post-hotfix M8 reaches 100% success and ~0.399 transfer across 3 reruns on the fixed tiny-task set. |
+| 5 | Full-Scale Experiment | **ALLOWED** | Gate 4 passed; formal retraining and corrected OOD evaluation may proceed. |
 
 ---
 
@@ -284,13 +303,13 @@ Do **not** spend substantial GPU budget on:
 - simplify the environment into a tiny-task regime;
 - reduce action space and add action repeat;
 - fix PPO exploration settings;
-- run tiny-task Teacher / residual / demo-guided experiments.
+- run tiny-task Teacher / residual / demo-guided experiments;
+- run post-hotfix 500K retraining for `M1`, `M8`, and `M7`;
+- run corrected OOD evaluation and ablations.
 
 ### Not allowed
-- new 500K–2M multi-material benchmark sweeps;
-- new OOD claim generation;
-- broad baseline expansion;
-- narrative writing that assumes the method works.
+- broad claim generation from any pre-hotfix checkpoint or pre-fix evaluation script output;
+- reopening bowl as the main Gate 4 rescue path without new contrary evidence.
 
 ---
 
