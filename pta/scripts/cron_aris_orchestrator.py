@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from pathlib import Path
 import re
@@ -15,6 +16,14 @@ class CompletionStatus:
 
 M1_SEEDS = [42, 0, 1]
 M7_SEEDS = [42, 0, 1]
+DEFAULT_STATE = {
+    "stage": "bootstrap",
+    "m8": {"running": False, "completed": False},
+    "m1": {"running": False, "completed_seeds": []},
+    "m7": {"running": False, "completed_seeds": []},
+    "ood_eval": {"completed": False},
+    "aris": {"ready": False, "blocked": False},
+}
 
 
 def parse_ps_output(output: str) -> list[dict[str, object]]:
@@ -125,3 +134,30 @@ def launch_detached(command: str, log_path: Path, cwd: Path) -> int:
             start_new_session=True,
         )
     return process.pid
+
+
+def load_state(state_path: Path) -> dict:
+    if not state_path.exists():
+        return json.loads(json.dumps(DEFAULT_STATE))
+    return json.loads(state_path.read_text(encoding="utf-8"))
+
+
+def save_state(state_path: Path, state: dict) -> None:
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    state_path.write_text(json.dumps(state, indent=2, sort_keys=True), encoding="utf-8")
+
+
+def append_log(log_path: Path, message: str) -> None:
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    with log_path.open("a", encoding="utf-8") as handle:
+        handle.write(message + "\n")
+
+
+def main() -> int:
+    project_root = Path(__file__).resolve().parents[2]
+    state_path = project_root / "results" / "orchestration" / "aris_state.json"
+    log_path = project_root / "logs" / "orchestration" / "cron_aris_orchestrator.log"
+    state = load_state(state_path)
+    append_log(log_path, "coordinator tick")
+    save_state(state_path, state)
+    return 0

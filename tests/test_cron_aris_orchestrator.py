@@ -339,3 +339,24 @@ def test_launch_detached_returns_spawned_process_pid_not_wrapper_pid(
 
     assert pid == child_pid
     assert pid != wrapper_pid
+
+
+def test_save_and_load_state_roundtrip(tmp_path):
+    from pta.scripts.cron_aris_orchestrator import load_state, save_state
+
+    state_path = tmp_path / "aris_state.json"
+    state = {"stage": "m1", "m1": {"completed_seeds": [42]}}
+    save_state(state_path, state)
+
+    loaded = load_state(state_path)
+
+    assert loaded == state
+
+
+def test_load_state_defaults_when_missing(tmp_path):
+    from pta.scripts.cron_aris_orchestrator import load_state
+
+    loaded = load_state(tmp_path / "missing.json")
+
+    assert loaded["stage"] == "bootstrap"
+    assert loaded["m1"]["completed_seeds"] == []
