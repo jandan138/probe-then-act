@@ -155,7 +155,11 @@ def write_handoff_files(project_root: Path, state: dict) -> dict[str, Path]:
     out_dir.mkdir(parents=True, exist_ok=True)
     json_path = out_dir / "aris_handoff_ready.json"
     summary_path = out_dir / "aris_handoff_summary.md"
-    json_path.write_text(json.dumps(state, indent=2, sort_keys=True), encoding="utf-8")
+    handoff_state = json.loads(json.dumps(state))
+    handoff_state.setdefault("aris", {})["ready"] = True
+    json_path.write_text(
+        json.dumps(handoff_state, indent=2, sort_keys=True), encoding="utf-8"
+    )
     summary_path.write_text(
         "# ARIS Handoff Ready\n\n"
         f"- M8 complete: {state['m8']['completed']}\n"

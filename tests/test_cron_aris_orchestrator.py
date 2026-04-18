@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 
@@ -241,12 +242,25 @@ def test_write_handoff_files_creates_machine_and_human_records(tmp_path):
         "m1": {"completed_seeds": [42, 0, 1]},
         "m7": {"completed_seeds": [42, 0, 1]},
         "ood_eval": {"completed": True},
+        "aris": {"blocked": False},
     }
 
     records = write_handoff_files(tmp_path, state)
 
-    assert records["json"].exists()
-    assert records["summary"].exists()
+    assert json.loads(records["json"].read_text(encoding="utf-8")) == {
+        "aris": {"blocked": False, "ready": True},
+        "m1": {"completed_seeds": [42, 0, 1]},
+        "m7": {"completed_seeds": [42, 0, 1]},
+        "m8": {"completed": True},
+        "ood_eval": {"completed": True},
+    }
+    assert records["summary"].read_text(encoding="utf-8") == (
+        "# ARIS Handoff Ready\n\n"
+        "- M8 complete: True\n"
+        "- M1 seeds: [42, 0, 1]\n"
+        "- M7 seeds: [42, 0, 1]\n"
+        "- OOD eval complete: True\n"
+    )
 
 
 def test_decide_next_step_stays_blocked_when_handoff_failed():
