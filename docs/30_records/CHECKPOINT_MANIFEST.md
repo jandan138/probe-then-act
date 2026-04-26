@@ -4,6 +4,8 @@ Date: 2026-04-26
 
 Checkpoints are not stored in normal Git. The repo provides a manifest/bundle builder so a fresh DSW/DLC machine can retrieve the exact artifacts without bloating Git history.
 
+Current shortest path: do not upload checkpoints before training. The DSW side can start the five remaining ablation jobs without baseline checkpoints because those jobs train new `m7_noprobe` and `m7_nobelief` models.
+
 ## Build Manifest
 
 ```bash
@@ -21,7 +23,7 @@ By default the script searches:
 
 ## Required Minimal Bundle
 
-These are required for corrected OOD replay and the current `m7_noprobe seed=42` ablation resume path:
+These are required only for corrected OOD replay and the current `m7_noprobe seed=42` ablation resume path:
 
 - `checkpoints/m1_reactive_seed42/best/best_model.zip`
 - `checkpoints/m1_reactive_seed0/best/best_model.zip`
@@ -64,3 +66,14 @@ scripts/smoke_remote.sh .env.dsw
 ```
 
 If `CHECKPOINT_BUNDLE_URL` is empty, `download_artifacts.sh` still writes a manifest for whatever checkpoints are already present on disk.
+
+For the current DSW handoff, leave `CHECKPOINT_BUNDLE_URL` empty and submit the five remaining ablation jobs with:
+
+```bash
+python -m pta.scripts.dlc.submit_jobs \
+  --suite ablation \
+  --name pta_ablation \
+  --variants no_probe no_belief \
+  --seeds 42 0 1 \
+  --skip no_probe:42
+```

@@ -50,6 +50,9 @@ def test_remote_handoff_assets_exist_and_reference_expected_remotes():
     assert "git@github.com:jandan138/probe-then-act.git" in text
     assert "git@github.com:jandan138/Genesis.git" in text
     assert "checkpoints are not stored in normal Git" in text
+    assert "Current shortest path: do not upload checkpoints before training" in text
+    assert "--skip no_probe:42" in text
+    assert "five remaining ablation jobs" in text
 
 
 def test_handoff_shell_scripts_are_executable_and_parse():

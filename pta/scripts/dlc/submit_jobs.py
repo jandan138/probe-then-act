@@ -44,24 +44,30 @@ def build_job_specs(
     seeds: list[int],
     gpu_count: int,
     data_sources: str | None,
+    skips: list[str],
 ) -> list[JobSpec]:
     _validate_gpu_count(gpu_count)
     if suite == "ablation":
         chosen_variants = variants or DEFAULT_VARIANTS
         chosen_seeds = seeds or DEFAULT_SEEDS
+        skip_pairs = _parse_skip_pairs(skips)
         jobs: list[JobSpec] = []
+        candidate_count = 0
         for variant in chosen_variants:
             if variant not in SUPPORTED_VARIANTS:
                 raise ValueError(f"unsupported variant: {variant}")
             for seed in chosen_seeds:
                 if not isinstance(seed, int):
                     raise ValueError(f"seed must be int: {seed!r}")
+                candidate_count += 1
+                if (variant, seed) in skip_pairs:
+                    continue
                 jobs.append(
                     JobSpec(
                         suite=suite,
                         job_name=f"{name}_{variant}_s{seed}",
                         chunk_id=len(jobs),
-                        chunk_total=len(chosen_variants) * len(chosen_seeds),
+                        chunk_total=0,
                         command_args=f"train_ablation {variant} {seed}",
                         gpu_count=gpu_count,
                         data_sources=data_sources,
@@ -69,7 +75,23 @@ def build_job_specs(
                         seed=seed,
                     )
                 )
-        return jobs
+        if candidate_count and not jobs:
+            raise ValueError("all ablation jobs were skipped")
+        total = len(jobs)
+        return [
+            JobSpec(
+                suite=job.suite,
+                job_name=job.job_name,
+                chunk_id=job.chunk_id,
+                chunk_total=total,
+                command_args=job.command_args,
+                gpu_count=job.gpu_count,
+                data_sources=job.data_sources,
+                variant=job.variant,
+                seed=job.seed,
+            )
+            for job in jobs
+        ]
     if suite == "ood-ablation":
         return [
             JobSpec(
@@ -98,6 +120,23 @@ def build_job_specs(
             )
         ]
     raise ValueError(f"unsupported suite: {suite}")
+
+
+def _parse_skip_pairs(skips: list[str]) -> set[tuple[str, int]]:
+    pairs: set[tuple[str, int]] = set()
+    for skip in skips:
+        try:
+            variant, seed_text = skip.split(":", 1)
+        except ValueError as exc:
+            raise ValueError(f"skip must use variant:seed format: {skip}") from exc
+        if variant not in SUPPORTED_VARIANTS:
+            raise ValueError(f"unsupported skip variant: {variant}")
+        try:
+            seed = int(seed_text)
+        except ValueError as exc:
+            raise ValueError(f"skip seed must be int: {seed_text}") from exc
+        pairs.add((variant, seed))
+    return pairs
 
 
 def append_manifest(
@@ -158,6 +197,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--name", default=None)
     parser.add_argument("--variants", nargs="*", default=None)
     parser.add_argument("--seeds", nargs="*", type=int, default=None)
+    parser.add_argument(
+        "--skip",
+        action="append",
+        default=[],
+        help="Skip one ablation job by variant:seed, e.g. --skip no_probe:42.",
+    )
     parser.add_argument("--gpu-count", type=int, default=int(os.environ.get("DLC_GPU_COUNT", "1")))
     parser.add_argument("--data-sources", default=None)
     parser.add_argument("--dry-run", action="store_true")
@@ -179,6 +224,7 @@ def main(argv: list[str] | None = None) -> int:
         seeds=args.seeds or [],
         gpu_count=args.gpu_count,
         data_sources=args.data_sources,
+        skips=args.skip,
     )
     submit_specs(
         specs,
