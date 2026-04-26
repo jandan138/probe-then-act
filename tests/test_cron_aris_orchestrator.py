@@ -3,6 +3,62 @@ import os
 from pathlib import Path
 
 
+OOD_SPLITS = [
+    "id_sand",
+    "ood_snow",
+    "ood_elastoplastic",
+    "ood_sand_soft",
+    "ood_sand_hard",
+]
+
+
+def _write_ood_outputs(results_dir, keys):
+    results_dir.mkdir(parents=True, exist_ok=True)
+    main_results = results_dir / "main_results.csv"
+    per_seed = results_dir / "ood_eval_per_seed.csv"
+    lines = [
+        "method,seed,split,mean_reward,std_reward,mean_transfer,std_transfer,"
+        "mean_spill,std_spill,success_rate,n_failed_episodes"
+    ]
+    grouped = {}
+    for method, seed, split in keys:
+        grouped.setdefault((method, split), set()).add(seed)
+        lines.append(f"{method},{seed},{split},1.0,0.0,0.2,0.0,0.1,0.0,1.0,0")
+    per_seed.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    main_lines = [
+        "method,split,n_seeds,mean_reward_mean,mean_reward_std,"
+        "mean_transfer_mean,mean_transfer_std,mean_spill_mean,mean_spill_std,"
+        "success_rate_mean,success_rate_std,n_failed_episodes_mean,"
+        "n_failed_episodes_std,n_failed_episodes_sum"
+    ]
+    for (method, split), seeds in sorted(grouped.items()):
+        main_lines.append(
+            f"{method},{split},{len(seeds)},1.0,0.0,0.2,0.0,0.1,0.0,1.0,0.0,0.0,0.0,0"
+        )
+    main_results.write_text("\n".join(main_lines) + "\n", encoding="utf-8")
+    return main_results, per_seed
+
+
+def _m8_ood_keys():
+    return [("m8_teacher", 42, split) for split in OOD_SPLITS]
+
+
+def _full_ood_keys():
+    keys = []
+    for seed in [42, 0, 1]:
+        keys.extend(("m1_reactive", seed, split) for split in OOD_SPLITS)
+    keys.extend(_m8_ood_keys())
+    for seed in [42, 0, 1]:
+        keys.extend(("m7_pta", seed, split) for split in OOD_SPLITS)
+    return keys
+
+
+def _make_best_checkpoint(root, relative_dir):
+    best_dir = root / "checkpoints" / relative_dir / "best"
+    best_dir.mkdir(parents=True)
+    (best_dir / "best_model.zip").write_text("ok")
+
+
 def test_detect_run_completion_from_final_checkpoint(tmp_path):
     from pta.scripts.cron_aris_orchestrator import detect_run_completion
 
@@ -60,6 +116,21 @@ def test_parse_ps_output_returns_empty_list_for_empty_input():
     from pta.scripts.cron_aris_orchestrator import parse_ps_output
 
     assert parse_ps_output("") == []
+
+
+def test_optional_ood_checkpoints_cover_three_approved_ablation_seeds():
+    from pta.scripts import cron_aris_orchestrator
+
+    assert cron_aris_orchestrator.OPTIONAL_OOD_CHECKPOINTS["m7_noprobe"]["seeds"] == [
+        42,
+        0,
+        1,
+    ]
+    assert cron_aris_orchestrator.OPTIONAL_OOD_CHECKPOINTS["m7_nobelief"]["seeds"] == [
+        42,
+        0,
+        1,
+    ]
 
 
 def test_choose_latest_resume_checkpoint_prefers_final_checkpoint(tmp_path):
@@ -555,11 +626,7 @@ def test_reconcile_state_marks_ood_eval_complete_from_corrected_outputs(tmp_path
     checkpoint.write_text("ok")
 
     results_dir = tmp_path / "results"
-    results_dir.mkdir(parents=True)
-    main_results = results_dir / "main_results.csv"
-    per_seed = results_dir / "ood_eval_per_seed.csv"
-    main_results.write_text("method,split\n")
-    per_seed.write_text("method,seed,split\n")
+    main_results, per_seed = _write_ood_outputs(results_dir, _m8_ood_keys())
     os.utime(checkpoint, (100, 100))
     os.utime(main_results, (200, 200))
     os.utime(per_seed, (200, 200))
@@ -567,6 +634,213 @@ def test_reconcile_state_marks_ood_eval_complete_from_corrected_outputs(tmp_path
     state = reconcile_state(project_root=tmp_path, ps_output="")
 
     assert state["ood_eval"]["completed"] is True
+
+
+def test_reconcile_state_rejects_partial_resumable_ood_outputs(tmp_path):
+    from pta.scripts.cron_aris_orchestrator import reconcile_state
+
+    m8_dir = tmp_path / "checkpoints" / "m8_teacher_seed42"
+    m8_dir.mkdir(parents=True)
+    checkpoint = m8_dir / "scoop_transfer_teacher_final.zip"
+    checkpoint.write_text("ok")
+
+    results_dir = tmp_path / "results"
+    main_results, per_seed = _write_ood_outputs(
+        results_dir,
+        [("m8_teacher", 42, "id_sand")],
+    )
+    os.utime(checkpoint, (100, 100))
+    os.utime(main_results, (200, 200))
+    os.utime(per_seed, (200, 200))
+
+    state = reconcile_state(project_root=tmp_path, ps_output="")
+
+    assert state["ood_eval"]["completed"] is False
+
+
+def test_reconcile_state_rejects_main_results_older_than_per_seed(tmp_path):
+    from pta.scripts.cron_aris_orchestrator import reconcile_state
+
+    m8_dir = tmp_path / "checkpoints" / "m8_teacher_seed42"
+    m8_dir.mkdir(parents=True)
+    checkpoint = m8_dir / "scoop_transfer_teacher_final.zip"
+    checkpoint.write_text("ok")
+
+    results_dir = tmp_path / "results"
+    main_results, per_seed = _write_ood_outputs(results_dir, _m8_ood_keys())
+    os.utime(checkpoint, (100, 100))
+    os.utime(main_results, (200, 200))
+    os.utime(per_seed, (300, 300))
+
+    state = reconcile_state(project_root=tmp_path, ps_output="")
+
+    assert state["ood_eval"]["completed"] is False
+
+
+def test_reconcile_state_rejects_malformed_ood_rows(tmp_path):
+    from pta.scripts.cron_aris_orchestrator import reconcile_state
+
+    m8_dir = tmp_path / "checkpoints" / "m8_teacher_seed42"
+    m8_dir.mkdir(parents=True)
+    checkpoint = m8_dir / "scoop_transfer_teacher_final.zip"
+    checkpoint.write_text("ok")
+
+    results_dir = tmp_path / "results"
+    results_dir.mkdir(parents=True)
+    main_results = results_dir / "main_results.csv"
+    per_seed = results_dir / "ood_eval_per_seed.csv"
+    main_results.write_text("method,split\n", encoding="utf-8")
+    per_seed.write_text(
+        "method,seed,split\n"
+        + "\n".join(f"m8_teacher,42,{split}" for split in OOD_SPLITS)
+        + "\n",
+        encoding="utf-8",
+    )
+    os.utime(checkpoint, (100, 100))
+    os.utime(per_seed, (200, 200))
+    os.utime(main_results, (300, 300))
+
+    state = reconcile_state(project_root=tmp_path, ps_output="")
+
+    assert state["ood_eval"]["completed"] is False
+
+
+def test_reconcile_state_rejects_header_only_main_results(tmp_path):
+    from pta.scripts.cron_aris_orchestrator import reconcile_state
+
+    m8_dir = tmp_path / "checkpoints" / "m8_teacher_seed42"
+    m8_dir.mkdir(parents=True)
+    checkpoint = m8_dir / "scoop_transfer_teacher_final.zip"
+    checkpoint.write_text("ok")
+
+    results_dir = tmp_path / "results"
+    main_results, per_seed = _write_ood_outputs(results_dir, _m8_ood_keys())
+    main_results.write_text("method,split\n", encoding="utf-8")
+    os.utime(checkpoint, (100, 100))
+    os.utime(per_seed, (200, 200))
+    os.utime(main_results, (300, 300))
+
+    state = reconcile_state(project_root=tmp_path, ps_output="")
+
+    assert state["ood_eval"]["completed"] is False
+
+
+def test_reconcile_state_rejects_nonfinite_ood_metrics(tmp_path):
+    from pta.scripts.cron_aris_orchestrator import reconcile_state
+
+    m8_dir = tmp_path / "checkpoints" / "m8_teacher_seed42"
+    m8_dir.mkdir(parents=True)
+    checkpoint = m8_dir / "scoop_transfer_teacher_final.zip"
+    checkpoint.write_text("ok")
+
+    results_dir = tmp_path / "results"
+    main_results, per_seed = _write_ood_outputs(results_dir, _m8_ood_keys())
+    text = per_seed.read_text(encoding="utf-8")
+    per_seed.write_text(text.replace("1.0,0.0,0.2", "nan,0.0,0.2", 1), encoding="utf-8")
+    os.utime(checkpoint, (100, 100))
+    os.utime(per_seed, (200, 200))
+    os.utime(main_results, (300, 300))
+
+    state = reconcile_state(project_root=tmp_path, ps_output="")
+
+    assert state["ood_eval"]["completed"] is False
+
+
+def test_reconcile_state_rejects_invalid_failed_episode_counts(tmp_path):
+    from pta.scripts.cron_aris_orchestrator import reconcile_state
+
+    m8_dir = tmp_path / "checkpoints" / "m8_teacher_seed42"
+    m8_dir.mkdir(parents=True)
+    checkpoint = m8_dir / "scoop_transfer_teacher_final.zip"
+    checkpoint.write_text("ok")
+
+    results_dir = tmp_path / "results"
+    main_results, per_seed = _write_ood_outputs(results_dir, _m8_ood_keys())
+    text = per_seed.read_text(encoding="utf-8")
+    per_seed.write_text(text.replace(",0\n", ",1.5\n", 1), encoding="utf-8")
+    os.utime(checkpoint, (100, 100))
+    os.utime(per_seed, (200, 200))
+    os.utime(main_results, (300, 300))
+
+    state = reconcile_state(project_root=tmp_path, ps_output="")
+
+    assert state["ood_eval"]["completed"] is False
+
+
+def test_reconcile_state_rejects_extra_malformed_ood_rows(tmp_path):
+    from pta.scripts.cron_aris_orchestrator import reconcile_state
+
+    m8_dir = tmp_path / "checkpoints" / "m8_teacher_seed42"
+    m8_dir.mkdir(parents=True)
+    checkpoint = m8_dir / "scoop_transfer_teacher_final.zip"
+    checkpoint.write_text("ok")
+
+    results_dir = tmp_path / "results"
+    main_results, per_seed = _write_ood_outputs(results_dir, _m8_ood_keys())
+    with per_seed.open("a", encoding="utf-8") as handle:
+        handle.write("bad,row\n")
+    os.utime(checkpoint, (100, 100))
+    os.utime(per_seed, (200, 200))
+    os.utime(main_results, (300, 300))
+
+    state = reconcile_state(project_root=tmp_path, ps_output="")
+
+    assert state["ood_eval"]["completed"] is False
+
+
+def test_reconcile_state_rejects_extra_valid_ood_rows(tmp_path):
+    from pta.scripts.cron_aris_orchestrator import reconcile_state
+
+    m8_dir = tmp_path / "checkpoints" / "m8_teacher_seed42"
+    m8_dir.mkdir(parents=True)
+    checkpoint = m8_dir / "scoop_transfer_teacher_final.zip"
+    checkpoint.write_text("ok")
+
+    results_dir = tmp_path / "results"
+    main_results, per_seed = _write_ood_outputs(results_dir, _m8_ood_keys())
+    with per_seed.open("a", encoding="utf-8") as handle:
+        handle.write("m1_reactive,42,id_sand,1.0,0.0,0.2,0.0,0.1,0.0,1.0,0\n")
+    os.utime(checkpoint, (100, 100))
+    os.utime(per_seed, (200, 200))
+    os.utime(main_results, (300, 300))
+
+    state = reconcile_state(project_root=tmp_path, ps_output="")
+
+    assert state["ood_eval"]["completed"] is False
+
+
+def test_reconcile_state_requires_available_ablation_ood_rows(tmp_path):
+    from pta.scripts.cron_aris_orchestrator import reconcile_state
+
+    m8_dir = tmp_path / "checkpoints" / "m8_teacher_seed42"
+    m8_dir.mkdir(parents=True)
+    m8_checkpoint = m8_dir / "scoop_transfer_teacher_final.zip"
+    m8_checkpoint.write_text("ok")
+    os.utime(m8_checkpoint, (100, 100))
+
+    for seed in [42, 0, 1]:
+        m1_dir = tmp_path / "checkpoints" / f"m1_reactive_seed{seed}"
+        m1_dir.mkdir(parents=True)
+        m1_final = m1_dir / "scoop_transfer_teacher_final.zip"
+        m1_final.write_text("ok")
+        os.utime(m1_final, (100, 100))
+
+        m7_dir = tmp_path / "checkpoints" / f"m7_pta_seed{seed}"
+        m7_dir.mkdir(parents=True)
+        m7_final = m7_dir / "m7_pta_final.zip"
+        m7_final.write_text("ok")
+        os.utime(m7_final, (100, 100))
+
+    _make_best_checkpoint(tmp_path, "m7_pta_noprobe_seed42")
+
+    results_dir = tmp_path / "results"
+    main_results, per_seed = _write_ood_outputs(results_dir, _full_ood_keys())
+    os.utime(main_results, (200, 200))
+    os.utime(per_seed, (200, 200))
+
+    state = reconcile_state(project_root=tmp_path, ps_output="")
+
+    assert state["ood_eval"]["completed"] is False
 
 
 def test_reconcile_state_rejects_stale_ood_eval_outputs(tmp_path):
@@ -590,6 +864,51 @@ def test_reconcile_state_rejects_stale_ood_eval_outputs(tmp_path):
     state = reconcile_state(project_root=tmp_path, ps_output="")
 
     assert state["ood_eval"]["completed"] is False
+
+
+def test_run_coordinator_uses_no_resume_for_stale_ood_outputs(tmp_path, monkeypatch):
+    from pta.scripts import cron_aris_orchestrator as mod
+
+    launches = []
+
+    def fake_launch(command, log_path, cwd):
+        launches.append(command)
+        return 12345
+
+    monkeypatch.setattr(mod, "launch_detached", fake_launch)
+    monkeypatch.setattr(mod, "read_ps_output", lambda: "")
+
+    m8_dir = tmp_path / "checkpoints" / "m8_teacher_seed42"
+    m8_dir.mkdir(parents=True)
+    checkpoint = m8_dir / "scoop_transfer_teacher_final.zip"
+    checkpoint.write_text("ok")
+
+    completed_checkpoints = [checkpoint]
+    for seed in [42, 0, 1]:
+        m1_dir = tmp_path / "checkpoints" / f"m1_reactive_seed{seed}"
+        m1_dir.mkdir(parents=True)
+        m1_final = m1_dir / "scoop_transfer_teacher_final.zip"
+        m1_final.write_text("ok")
+        completed_checkpoints.append(m1_final)
+
+        m7_dir = tmp_path / "checkpoints" / f"m7_pta_seed{seed}"
+        m7_dir.mkdir(parents=True)
+        m7_final = m7_dir / "m7_pta_final.zip"
+        m7_final.write_text("ok")
+        completed_checkpoints.append(m7_final)
+
+    results_dir = tmp_path / "results"
+    main_results, per_seed = _write_ood_outputs(results_dir, _full_ood_keys())
+    os.utime(per_seed, (100, 100))
+    os.utime(main_results, (100, 100))
+    for checkpoint in completed_checkpoints:
+        os.utime(checkpoint, (200, 200))
+
+    assert mod.run_coordinator(project_root=tmp_path) == 0
+
+    assert launches == [
+        "python pta/scripts/run_ood_eval_v2.py --residual-scale 0.05 --no-resume"
+    ]
 
 
 def test_run_coordinator_launches_next_stage_once_when_m8_done(tmp_path, monkeypatch):
@@ -649,16 +968,22 @@ def test_run_coordinator_does_not_relaunch_ood_eval_when_it_is_active(
 
     m8_dir = tmp_path / "checkpoints" / "m8_teacher_seed42"
     m8_dir.mkdir(parents=True)
-    (m8_dir / "scoop_transfer_teacher_final.zip").write_text("ok")
+    m8_final = m8_dir / "scoop_transfer_teacher_final.zip"
+    m8_final.write_text("ok")
+    os.utime(m8_final, (100, 100))
 
     for seed in [42, 0, 1]:
         m1_dir = tmp_path / "checkpoints" / f"m1_reactive_seed{seed}"
         m1_dir.mkdir(parents=True)
-        (m1_dir / "scoop_transfer_teacher_final.zip").write_text("ok")
+        m1_final = m1_dir / "scoop_transfer_teacher_final.zip"
+        m1_final.write_text("ok")
+        os.utime(m1_final, (100, 100))
 
         m7_dir = tmp_path / "checkpoints" / f"m7_pta_seed{seed}"
         m7_dir.mkdir(parents=True)
-        (m7_dir / "m7_pta_final.zip").write_text("ok")
+        m7_final = m7_dir / "m7_pta_final.zip"
+        m7_final.write_text("ok")
+        os.utime(m7_final, (100, 100))
 
     assert mod.run_coordinator(project_root=tmp_path) == 0
     assert launched == []
@@ -696,11 +1021,7 @@ def test_run_coordinator_executes_configured_handoff_command(tmp_path, monkeypat
         os.utime(m7_final, (100, 100))
 
     results_dir = tmp_path / "results"
-    results_dir.mkdir(parents=True)
-    main_results = results_dir / "main_results.csv"
-    per_seed = results_dir / "ood_eval_per_seed.csv"
-    main_results.write_text("method,split\n")
-    per_seed.write_text("method,seed,split\n")
+    main_results, per_seed = _write_ood_outputs(results_dir, _full_ood_keys())
     os.utime(main_results, (200, 200))
     os.utime(per_seed, (200, 200))
     command_file = results_dir / "orchestration" / "aris_handoff_command.txt"
@@ -759,11 +1080,7 @@ def test_run_coordinator_blocks_after_failed_handoff_and_records_reason(
         os.utime(m7_final, (100, 100))
 
     results_dir = tmp_path / "results"
-    results_dir.mkdir(parents=True)
-    main_results = results_dir / "main_results.csv"
-    per_seed = results_dir / "ood_eval_per_seed.csv"
-    main_results.write_text("method,split\n")
-    per_seed.write_text("method,seed,split\n")
+    main_results, per_seed = _write_ood_outputs(results_dir, _full_ood_keys())
     os.utime(main_results, (200, 200))
     os.utime(per_seed, (200, 200))
 
@@ -799,21 +1116,27 @@ def test_run_coordinator_skips_handoff_when_already_ready(tmp_path, monkeypatch)
 
     m8_dir = tmp_path / "checkpoints" / "m8_teacher_seed42"
     m8_dir.mkdir(parents=True)
-    (m8_dir / "scoop_transfer_teacher_final.zip").write_text("ok")
+    m8_final = m8_dir / "scoop_transfer_teacher_final.zip"
+    m8_final.write_text("ok")
+    os.utime(m8_final, (100, 100))
 
     for seed in [42, 0, 1]:
         m1_dir = tmp_path / "checkpoints" / f"m1_reactive_seed{seed}"
         m1_dir.mkdir(parents=True)
-        (m1_dir / "scoop_transfer_teacher_final.zip").write_text("ok")
+        m1_final = m1_dir / "scoop_transfer_teacher_final.zip"
+        m1_final.write_text("ok")
+        os.utime(m1_final, (100, 100))
 
         m7_dir = tmp_path / "checkpoints" / f"m7_pta_seed{seed}"
         m7_dir.mkdir(parents=True)
-        (m7_dir / "m7_pta_final.zip").write_text("ok")
+        m7_final = m7_dir / "m7_pta_final.zip"
+        m7_final.write_text("ok")
+        os.utime(m7_final, (100, 100))
 
     results_dir = tmp_path / "results"
-    results_dir.mkdir(parents=True)
-    (results_dir / "main_results.csv").write_text("method,split\n")
-    (results_dir / "ood_eval_per_seed.csv").write_text("method,seed,split\n")
+    main_results, per_seed = _write_ood_outputs(results_dir, _full_ood_keys())
+    os.utime(per_seed, (200, 200))
+    os.utime(main_results, (300, 300))
 
     orchestration_dir = results_dir / "orchestration"
     orchestration_dir.mkdir(parents=True)
@@ -840,6 +1163,49 @@ def test_run_coordinator_skips_handoff_when_already_ready(tmp_path, monkeypatch)
     )
     assert state["aris"]["ready"] is True
     assert state["stage"] != "handoff_aris"
+
+
+def test_run_coordinator_does_not_keep_ready_when_ood_outputs_invalid(
+    tmp_path, monkeypatch
+):
+    from pta.scripts import cron_aris_orchestrator as mod
+
+    launches = []
+
+    def fake_launch(command, log_path, cwd):
+        launches.append(command)
+        return 12345
+
+    monkeypatch.setattr(mod, "launch_detached", fake_launch)
+    monkeypatch.setattr(mod, "read_ps_output", lambda: "")
+
+    m8_dir = tmp_path / "checkpoints" / "m8_teacher_seed42"
+    m8_dir.mkdir(parents=True)
+    (m8_dir / "scoop_transfer_teacher_final.zip").write_text("ok")
+
+    for seed in [42, 0, 1]:
+        m1_dir = tmp_path / "checkpoints" / f"m1_reactive_seed{seed}"
+        m1_dir.mkdir(parents=True)
+        (m1_dir / "scoop_transfer_teacher_final.zip").write_text("ok")
+
+        m7_dir = tmp_path / "checkpoints" / f"m7_pta_seed{seed}"
+        m7_dir.mkdir(parents=True)
+        (m7_dir / "m7_pta_final.zip").write_text("ok")
+
+    orchestration_dir = tmp_path / "results" / "orchestration"
+    orchestration_dir.mkdir(parents=True)
+    (orchestration_dir / "aris_state.json").write_text(
+        json.dumps({"aris": {"ready": True, "blocked": False}}),
+        encoding="utf-8",
+    )
+
+    assert mod.run_coordinator(project_root=tmp_path) == 0
+
+    state = json.loads(
+        (orchestration_dir / "aris_state.json").read_text(encoding="utf-8")
+    )
+    assert state["aris"]["ready"] is False
+    assert launches == ["python pta/scripts/run_ood_eval_v2.py --residual-scale 0.05"]
 
 
 def test_decide_next_step_waits_for_running_m1_instead_of_relaunching_m8():
@@ -909,11 +1275,7 @@ def test_main_executes_handoff_branch_when_pipeline_is_ready(tmp_path, monkeypat
         os.utime(m7_final, (100, 100))
 
     results_dir = tmp_path / "results"
-    results_dir.mkdir(parents=True)
-    main_results = results_dir / "main_results.csv"
-    per_seed = results_dir / "ood_eval_per_seed.csv"
-    main_results.write_text("method,split\n")
-    per_seed.write_text("method,seed,split\n")
+    main_results, per_seed = _write_ood_outputs(results_dir, _full_ood_keys())
     os.utime(main_results, (200, 200))
     os.utime(per_seed, (200, 200))
 

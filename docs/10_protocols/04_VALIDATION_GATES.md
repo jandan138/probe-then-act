@@ -274,10 +274,17 @@ Gate 4 is passed only if, on a fixed tiny-task evaluation set:
 
 **2026-04-18 runtime follow-up:** Gate 4 is now formally promoted. Long-running baseline / M7 / OOD jobs are allowed again, but all paper-facing summaries should use the corrected evaluation script and post-hotfix checkpoints.
 
+**2026-04-25 OOD runtime policy:** `pta/scripts/run_ood_eval_v2.py` now treats Genesis simulator NaNs as episode-level failures instead of aborting the whole sweep. A NaN episode contributes zero reward, zero transfer, `spill_ratio=1.0`, `success=0`, and increments `n_failed_episodes`; non-NaN exceptions still halt evaluation. Any paper-facing OOD claim must report or explicitly check aggregate failed-episode counts from the corrected result files.
+
+**2026-04-26 OOD recovery:** corrected OOD evaluation was blocked by process-level OOM kills, not by training or Gate 4. Evidence from `dmesg -T` shows cron-launched Python eval processes killed at roughly 12 GB RSS on Apr 25/26. `run_ood_eval_v2.py` is now resumable with per-row persistence, and the full fresh sweep completed with `35/35` per-seed rows plus `15` aggregate rows. The OOD infrastructure blocker is resolved, but the scientific verdict is negative; see the result-to-claim note below.
+
+**2026-04-26 result-to-claim verdict:** the corrected OOD sweep completed, but the original broad PTA claims are **not supported**. M7 is worse than M1 on ID, snow, soft-sand, and hard-sand transfer/spill, and only improves on elastoplastic. Missing M2/M6 and ablations block belief/uncertainty claims. Use `findings.md` and `refine-logs/EXPERIMENT_PLAN.md` for the next diagnostic cycle.
+
 **Next steps:**
-1. Resume formal post-hotfix Phase 3 retraining for `M1` / `M8` / `M7`
-2. Run corrected OOD evaluation with `pta/scripts/run_ood_eval_v2.py`
-3. Only revisit geometry or curriculum if the post-hotfix 500K retrains regress materially below the promoted Gate 4 level
+1. Do not write broad PTA robustness claims from the current OOD table
+2. Train M7 ablations (`no_probe`, `no_belief`) to diagnose the degradation
+3. Only run M2/M6 and paper writing if ablations reveal a salvageable mechanism
+4. Only revisit geometry or curriculum if the post-hotfix 500K retrains regress materially below the promoted Gate 4 level
 
 **Hotfixes that resolved the failure mode:**
 1. Added particle statistics (mean_particle_y, transfer_frac, spill_frac) to observation space

@@ -17,7 +17,9 @@ from __future__ import annotations
 
 import argparse
 import csv
+import math
 import os
+import re
 import sys
 from collections import defaultdict
 from pathlib import Path
@@ -58,14 +60,14 @@ METHODS = {
         "ablation": "none",
     },
     "m7_noprobe": {
-        "seeds": [42, 0],
+        "seeds": [42, 0, 1],
         "ckpt_pattern": "checkpoints/m7_pta_noprobe_seed{seed}/best/best_model",
         "use_privileged": False,
         "use_m7_env": True,
         "ablation": "no_probe",
     },
     "m7_nobelief": {
-        "seeds": [42, 0],
+        "seeds": [42, 0, 1],
         "ckpt_pattern": "checkpoints/m7_pta_nobelief_seed{seed}/best/best_model",
         "use_privileged": False,
         "use_m7_env": True,
@@ -104,6 +106,13 @@ def parse_args():
     parser.add_argument("--n-episodes", type=int, default=10)
     parser.add_argument("--horizon", type=int, default=500)
     parser.add_argument("--residual-scale", type=float, default=0.05)
+    parser.add_argument(
+        "--no-resume",
+        dest="resume",
+        action="store_false",
+        help="Ignore existing OOD CSV progress and start from scratch.",
+    )
+    parser.set_defaults(resume=True)
     parser.add_argument(
         "--methods",
         nargs="+",
@@ -174,30 +183,161 @@ def make_eval_env(
     return env
 
 
+AGGREGATE_METRICS = [
+    "mean_reward",
+    "mean_transfer",
+    "mean_spill",
+    "success_rate",
+    "n_failed_episodes",
+]
+
+RESULT_FIELDNAMES = [
+    "method",
+    "seed",
+    "split",
+    "mean_reward",
+    "std_reward",
+    "mean_transfer",
+    "std_transfer",
+    "mean_spill",
+    "std_spill",
+    "success_rate",
+    "n_failed_episodes",
+]
+RESULT_FLOAT_FIELDS = [
+    "mean_reward",
+    "std_reward",
+    "mean_transfer",
+    "std_transfer",
+    "mean_spill",
+    "std_spill",
+    "success_rate",
+]
+
+
+def result_key(row):
+    return (row["method"], int(row["seed"]), row["split"])
+
+
+def append_result_row(path: Path, row: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    write_header = not path.exists() or path.stat().st_size == 0
+    with path.open("a", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=RESULT_FIELDNAMES)
+        if write_header:
+            writer.writeheader()
+        writer.writerow({field: row[field] for field in RESULT_FIELDNAMES})
+
+
+def coerce_nonnegative_int(value, field: str) -> int:
+    number = float(value)
+    if not math.isfinite(number) or not number.is_integer() or number < 0:
+        raise ValueError(f"invalid {field}")
+    return int(number)
+
+
+def coerce_result_row(raw: dict) -> dict:
+    if any(raw.get(field) in (None, "") for field in RESULT_FIELDNAMES):
+        raise ValueError("missing result fields")
+    floats = {}
+    for field in RESULT_FLOAT_FIELDS:
+        value = float(raw[field])
+        if not math.isfinite(value):
+            raise ValueError(f"non-finite {field}")
+        floats[field] = value
+    failed_episodes = coerce_nonnegative_int(
+        raw["n_failed_episodes"], "n_failed_episodes"
+    )
+    return {
+        "method": raw["method"],
+        "seed": int(raw["seed"]),
+        "split": raw["split"],
+        **floats,
+        "n_failed_episodes": failed_episodes,
+    }
+
+
+def write_result_rows(path: Path, rows: list[dict]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = path.with_suffix(path.suffix + ".tmp")
+    with tmp_path.open("w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=RESULT_FIELDNAMES)
+        writer.writeheader()
+        for row in rows:
+            writer.writerow({field: row[field] for field in RESULT_FIELDNAMES})
+    tmp_path.replace(path)
+
+
+def load_completed_rows(path: Path, resume: bool = True):
+    if not resume or not path.exists():
+        return [], set()
+
+    rows = []
+    with path.open("r", newline="", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        for raw in reader:
+            try:
+                rows.append(coerce_result_row(raw))
+            except (KeyError, OverflowError, TypeError, ValueError):
+                continue
+    return rows, {result_key(row) for row in rows}
+
+
+def prepare_result_files(per_seed_path: Path, main_results_path: Path, resume: bool) -> None:
+    if resume:
+        return
+    for path in [per_seed_path, main_results_path]:
+        if path.exists():
+            path.unlink()
+
+
+def _is_nan_simulator_failure(exc: Exception) -> bool:
+    msg = str(exc).lower()
+    exc_name = type(exc).__name__.lower()
+    if re.search(r"(?<![a-z])nan(?![a-z])", msg) is None:
+        return False
+    return (
+        "genesis" in exc_name
+        or "invalid constraint forces" in msg
+        or "simulator produced" in msg
+    )
+
+
 def evaluate_one(model, env, n_episodes, deterministic=True):
     """Run n_episodes and collect metrics."""
     rewards = []
     transfers = []
     spills = []
     successes = []
+    failed_episodes = 0
 
     for ep in range(n_episodes):
-        obs, info = env.reset()
-        ep_reward = 0.0
-        done = False
-        last_info = {}
+        try:
+            obs, info = env.reset()
+            ep_reward = 0.0
+            done = False
+            last_info = {}
 
-        while not done:
-            action, _ = model.predict(obs, deterministic=deterministic)
-            obs, reward, terminated, truncated, info = env.step(action)
-            ep_reward += reward
-            done = terminated or truncated
-            last_info = info
+            while not done:
+                action, _ = model.predict(obs, deterministic=deterministic)
+                obs, reward, terminated, truncated, info = env.step(action)
+                ep_reward += reward
+                done = terminated or truncated
+                last_info = info
 
-        rewards.append(ep_reward)
-        transfers.append(last_info.get("transfer_efficiency", 0.0))
-        spills.append(last_info.get("spill_ratio", 0.0))
-        successes.append(1.0 if last_info.get("success_rate", 0.0) >= 0.5 else 0.0)
+            rewards.append(ep_reward)
+            transfers.append(last_info.get("transfer_efficiency", 0.0))
+            spills.append(last_info.get("spill_ratio", 0.0))
+            successes.append(1.0 if last_info.get("success_rate", 0.0) >= 0.5 else 0.0)
+        except Exception as exc:
+            if not _is_nan_simulator_failure(exc):
+                raise
+            failed_episodes += 1
+            rewards.append(0.0)
+            transfers.append(0.0)
+            spills.append(1.0)
+            successes.append(0.0)
+            print(f"episode {ep} failed: {exc}", flush=True)
 
     return {
         "mean_reward": float(np.mean(rewards)),
@@ -207,7 +347,45 @@ def evaluate_one(model, env, n_episodes, deterministic=True):
         "mean_spill": float(np.mean(spills)),
         "std_spill": float(np.std(spills)),
         "success_rate": float(np.mean(successes)),
+        "n_failed_episodes": failed_episodes,
     }
+
+
+def aggregate_results(all_rows):
+    agg = defaultdict(lambda: defaultdict(list))
+    for row in all_rows:
+        key = (row["method"], row["split"])
+        for metric in AGGREGATE_METRICS:
+            agg[key][metric].append(row[metric])
+
+    agg_rows = []
+    for (method, split), metrics in sorted(agg.items()):
+        agg_row = {
+            "method": method,
+            "split": split,
+            "n_seeds": len(metrics["mean_reward"]),
+        }
+        for metric, values in metrics.items():
+            agg_row[f"{metric}_mean"] = float(np.mean(values))
+            agg_row[f"{metric}_std"] = float(np.std(values))
+            if metric == "n_failed_episodes":
+                agg_row[f"{metric}_sum"] = int(np.sum(values))
+        agg_rows.append(agg_row)
+    return agg_rows
+
+
+def write_aggregate_results(path: Path, all_rows: list[dict]):
+    agg_rows = aggregate_results(all_rows)
+    if not agg_rows:
+        return []
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = path.with_suffix(path.suffix + ".tmp")
+    with tmp_path.open("w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=list(agg_rows[0].keys()))
+        writer.writeheader()
+        writer.writerows(agg_rows)
+    tmp_path.replace(path)
+    return agg_rows
 
 
 def main():
@@ -221,7 +399,12 @@ def main():
     results_dir = _PROJECT_ROOT / "results"
     results_dir.mkdir(parents=True, exist_ok=True)
 
-    all_rows = []
+    per_seed_path = results_dir / "ood_eval_per_seed.csv"
+    main_results_path = results_dir / "main_results.csv"
+    prepare_result_files(per_seed_path, main_results_path, resume=args.resume)
+    all_rows, completed_keys = load_completed_rows(per_seed_path, resume=args.resume)
+    if args.resume and per_seed_path.exists():
+        write_result_rows(per_seed_path, all_rows)
 
     print("=" * 70)
     print("OOD EVALUATION v2")
@@ -257,6 +440,11 @@ def main():
                 if split_cfg is None:
                     continue
 
+                key = (method_name, seed, split_name)
+                if key in completed_keys:
+                    print(f"    {split_name}... SKIP existing", flush=True)
+                    continue
+
                 print(f"    {split_name}...", end=" ", flush=True)
 
                 env = make_eval_env(
@@ -279,71 +467,50 @@ def main():
                     **metrics,
                 }
                 all_rows.append(row)
+                append_result_row(per_seed_path, row)
+                completed_keys.add(key)
+                write_aggregate_results(main_results_path, all_rows)
 
                 print(
                     f"reward={metrics['mean_reward']:.2f} "
                     f"transfer={metrics['mean_transfer']:.3f} "
-                    f"success={metrics['success_rate']:.2f}"
+                    f"success={metrics['success_rate']:.2f} "
+                    f"failed_ep={metrics['n_failed_episodes']}"
                 )
 
-    # ---- Save per-seed results ----
-    per_seed_path = results_dir / "ood_eval_per_seed.csv"
-    if all_rows:
-        with open(per_seed_path, "w", newline="") as f:
-            writer = csv.DictWriter(f, fieldnames=list(all_rows[0].keys()))
-            writer.writeheader()
-            writer.writerows(all_rows)
-        print(f"\nPer-seed results: {per_seed_path}")
-
     # ---- Aggregate: mean ± std over seeds ----
-    agg = defaultdict(lambda: defaultdict(list))
-    for row in all_rows:
-        key = (row["method"], row["split"])
-        for metric in ["mean_reward", "mean_transfer", "mean_spill", "success_rate"]:
-            agg[key][metric].append(row[metric])
-
-    agg_rows = []
-    for (method, split), metrics in sorted(agg.items()):
-        agg_row = {
-            "method": method,
-            "split": split,
-            "n_seeds": len(metrics["mean_reward"]),
-        }
-        for metric, values in metrics.items():
-            agg_row[f"{metric}_mean"] = float(np.mean(values))
-            agg_row[f"{metric}_std"] = float(np.std(values))
-        agg_rows.append(agg_row)
-
-    main_results_path = results_dir / "main_results.csv"
+    if all_rows:
+        write_result_rows(per_seed_path, all_rows)
+    agg_rows = write_aggregate_results(main_results_path, all_rows)
+    if all_rows:
+        print(f"\nPer-seed results: {per_seed_path}")
     if agg_rows:
-        with open(main_results_path, "w", newline="") as f:
-            writer = csv.DictWriter(f, fieldnames=list(agg_rows[0].keys()))
-            writer.writeheader()
-            writer.writerows(agg_rows)
         print(f"Main results (mean±std): {main_results_path}")
 
     # ---- Print summary table ----
-    print("\n" + "=" * 90)
+    print("\n" + "=" * 102)
     print("MAIN RESULTS TABLE (mean ± std over seeds)")
-    print("=" * 90)
+    print("=" * 102)
     header = (
-        f"{'Method':<18} {'Split':<20} {'Transfer':>14} {'Spill':>12} {'Success':>10}"
+        f"{'Method':<18} {'Split':<20} {'Transfer':>14} {'Spill':>12} "
+        f"{'Success':>10} {'FailEp':>8}"
     )
     print(header)
-    print("-" * 90)
+    print("-" * 102)
     for row in agg_rows:
         t_mean = row["mean_transfer_mean"]
         t_std = row["mean_transfer_std"]
         s_mean = row["mean_spill_mean"]
         s_std = row["mean_spill_std"]
         suc = row["success_rate_mean"]
+        failed = row["n_failed_episodes_sum"]
         print(
             f"{row['method']:<18} {row['split']:<20} "
             f"{t_mean:.3f}±{t_std:.3f}   "
             f"{s_mean:.3f}±{s_std:.3f}  "
-            f"{suc:.2f}"
+            f"{suc:.2f} {failed:8d}"
         )
-    print("=" * 90)
+    print("=" * 102)
 
 
 if __name__ == "__main__":

@@ -245,6 +245,8 @@ Frequency of:
 - collapse-like failure
 - large-impact failure
 
+Genesis OOD evaluation may occasionally hit simulator-level NaNs on hard material splits. These are not discarded. An episode-level exception whose message contains `nan` is scored as a failed rollout with zero reward, zero transfer, `spill_ratio=1.0`, `success=0`, and an incremented `n_failed_episodes`. Non-NaN exceptions should halt the evaluation because they may indicate code or configuration bugs. Paper-facing tables must inspect `n_failed_episodes_sum` before making robustness claims.
+
 ### 9.5 Task Time / Step Count
 Measures efficiency.
 
@@ -401,6 +403,8 @@ Required evidence:
 - improvement on at least two OOD splits, not only ID
 
 If these are not met, remove or soften the corresponding claim.
+
+**2026-04-26 application of these rules:** corrected OOD v2 completed with `35/35` expected rows, but the original claims fail this decision gate. M7 is worse than M1 on ID, OOD snow, OOD sand-soft, and OOD sand-hard transfer/spill; it only improves on OOD elastoplastic, and that gain is seed-unstable. M2 and M6 are absent, so passive-memory and uncertainty claims are untested. Current paper-facing action: remove broad robustness claims and run the ablation-first diagnostic plan in `refine-logs/EXPERIMENT_PLAN.md`.
 
 ---
 
