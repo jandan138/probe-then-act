@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import csv
 import json
+import math
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -17,12 +19,83 @@ class CompletionStatus:
 
 M1_SEEDS = [42, 0, 1]
 M7_SEEDS = [42, 0, 1]
+OOD_SPLITS = [
+    "id_sand",
+    "ood_snow",
+    "ood_elastoplastic",
+    "ood_sand_soft",
+    "ood_sand_hard",
+]
+OPTIONAL_OOD_CHECKPOINTS = {
+    "m8_teacher": {
+        "seeds": [0, 1],
+        "ckpt_pattern": "checkpoints/m8_teacher_seed{seed}/best/best_model",
+    },
+    "m7_noprobe": {
+        "seeds": [42, 0, 1],
+        "ckpt_pattern": "checkpoints/m7_pta_noprobe_seed{seed}/best/best_model",
+    },
+    "m7_nobelief": {
+        "seeds": [42, 0, 1],
+        "ckpt_pattern": "checkpoints/m7_pta_nobelief_seed{seed}/best/best_model",
+    },
+}
+OOD_RESULT_FIELDNAMES = [
+    "method",
+    "seed",
+    "split",
+    "mean_reward",
+    "std_reward",
+    "mean_transfer",
+    "std_transfer",
+    "mean_spill",
+    "std_spill",
+    "success_rate",
+    "n_failed_episodes",
+]
+OOD_RESULT_FLOAT_FIELDS = [
+    "mean_reward",
+    "std_reward",
+    "mean_transfer",
+    "std_transfer",
+    "mean_spill",
+    "std_spill",
+    "success_rate",
+]
+OOD_AGGREGATE_FIELDNAMES = [
+    "method",
+    "split",
+    "n_seeds",
+    "mean_reward_mean",
+    "mean_reward_std",
+    "mean_transfer_mean",
+    "mean_transfer_std",
+    "mean_spill_mean",
+    "mean_spill_std",
+    "success_rate_mean",
+    "success_rate_std",
+    "n_failed_episodes_mean",
+    "n_failed_episodes_std",
+    "n_failed_episodes_sum",
+]
+OOD_AGGREGATE_FLOAT_FIELDS = [
+    "mean_reward_mean",
+    "mean_reward_std",
+    "mean_transfer_mean",
+    "mean_transfer_std",
+    "mean_spill_mean",
+    "mean_spill_std",
+    "success_rate_mean",
+    "success_rate_std",
+    "n_failed_episodes_mean",
+    "n_failed_episodes_std",
+]
 DEFAULT_STATE = {
     "stage": "bootstrap",
     "m8": {"running": False, "completed": False},
     "m1": {"running": False, "completed_seeds": []},
     "m7": {"running": False, "completed_seeds": []},
-    "ood_eval": {"running": False, "completed": False},
+    "ood_eval": {"running": False, "completed": False, "resume_allowed": True},
     "aris": {"ready": False, "blocked": False, "failure_reason": None},
 }
 
@@ -87,6 +160,156 @@ def outputs_newer_than_dependencies(
     return oldest_output > newest_dependency
 
 
+def read_ood_result_keys(per_seed_path: Path) -> set[tuple[str, int, str]]:
+    if not per_seed_path.exists():
+        return set()
+
+    keys = set()
+    with per_seed_path.open("r", newline="", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            try:
+                if any(row.get(field) in (None, "") for field in OOD_RESULT_FIELDNAMES):
+                    return set()
+                for field in OOD_RESULT_FLOAT_FIELDS:
+                    if not math.isfinite(float(row[field])):
+                        raise ValueError(f"non-finite {field}")
+                _coerce_nonnegative_int(row["n_failed_episodes"], "n_failed_episodes")
+                key = (
+                    row["method"],
+                    _coerce_nonnegative_int(row["seed"], "seed"),
+                    row["split"],
+                )
+                if key in keys:
+                    return set()
+                keys.add(key)
+            except (KeyError, OverflowError, TypeError, ValueError):
+                return set()
+    return keys
+
+
+def _coerce_nonnegative_int(value, field: str) -> int:
+    number = float(value)
+    if not math.isfinite(number) or not number.is_integer() or number < 0:
+        raise ValueError(f"invalid {field}")
+    return int(number)
+
+
+def read_ood_aggregate_counts(main_results_path: Path) -> dict[tuple[str, str], int]:
+    if not main_results_path.exists():
+        return {}
+
+    counts = {}
+    with main_results_path.open("r", newline="", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            try:
+                if any(row.get(field) in (None, "") for field in OOD_AGGREGATE_FIELDNAMES):
+                    return {}
+                for field in OOD_AGGREGATE_FLOAT_FIELDS:
+                    if not math.isfinite(float(row[field])):
+                        raise ValueError(f"non-finite {field}")
+                n_seeds = _coerce_nonnegative_int(row["n_seeds"], "n_seeds")
+                _coerce_nonnegative_int(
+                    row["n_failed_episodes_sum"], "n_failed_episodes_sum"
+                )
+                key = (row["method"], row["split"])
+                if key in counts:
+                    return {}
+                counts[key] = n_seeds
+            except (KeyError, OverflowError, TypeError, ValueError):
+                return {}
+    return counts
+
+
+def expected_ood_aggregate_counts(
+    expected_keys: set[tuple[str, int, str]],
+) -> dict[tuple[str, str], int]:
+    seeds_by_group: dict[tuple[str, str], set[int]] = {}
+    for method, seed, split in expected_keys:
+        seeds_by_group.setdefault((method, split), set()).add(seed)
+    return {key: len(seeds) for key, seeds in seeds_by_group.items()}
+
+
+def _checkpoint_if_exists(project_root: Path, pattern: str, seed: int) -> Path | None:
+    ckpt_path = project_root / pattern.format(seed=seed)
+    if ckpt_path.exists():
+        return ckpt_path
+    zip_path = ckpt_path.with_suffix(".zip")
+    if zip_path.exists():
+        return zip_path
+    return None
+
+
+def optional_ood_checkpoint_paths(project_root: Path) -> list[Path]:
+    paths = []
+    for method_cfg in OPTIONAL_OOD_CHECKPOINTS.values():
+        for seed in method_cfg["seeds"]:
+            path = _checkpoint_if_exists(project_root, method_cfg["ckpt_pattern"], seed)
+            if path is not None:
+                paths.append(path)
+    return paths
+
+
+def expected_ood_result_keys(
+    project_root: Path,
+    state: dict,
+) -> set[tuple[str, int, str]]:
+    keys = set()
+    for seed in state["m1"]["completed_seeds"]:
+        keys.update(("m1_reactive", seed, split) for split in OOD_SPLITS)
+    if state["m8"]["completed"]:
+        keys.update(("m8_teacher", 42, split) for split in OOD_SPLITS)
+    for seed in state["m7"]["completed_seeds"]:
+        keys.update(("m7_pta", seed, split) for split in OOD_SPLITS)
+    for method, method_cfg in OPTIONAL_OOD_CHECKPOINTS.items():
+        for seed in method_cfg["seeds"]:
+            if _checkpoint_if_exists(project_root, method_cfg["ckpt_pattern"], seed):
+                keys.update((method, seed, split) for split in OOD_SPLITS)
+    return keys
+
+
+def ood_outputs_complete(
+    project_root: Path,
+    results_dir: Path,
+    dependency_paths: list[Path],
+    state: dict,
+) -> bool:
+    ood_outputs = [
+        results_dir / "main_results.csv",
+        results_dir / "ood_eval_per_seed.csv",
+    ]
+    dependencies = [*dependency_paths, *optional_ood_checkpoint_paths(project_root)]
+    if not outputs_newer_than_dependencies(ood_outputs, dependencies):
+        return False
+    main_results_path = results_dir / "main_results.csv"
+    per_seed_path = results_dir / "ood_eval_per_seed.csv"
+    if main_results_path.stat().st_mtime_ns < per_seed_path.stat().st_mtime_ns:
+        return False
+
+    expected_keys = expected_ood_result_keys(project_root, state)
+    if not expected_keys:
+        return False
+    actual_keys = read_ood_result_keys(per_seed_path)
+    if actual_keys != expected_keys:
+        return False
+    aggregate_counts = read_ood_aggregate_counts(main_results_path)
+    expected_counts = expected_ood_aggregate_counts(expected_keys)
+    return aggregate_counts == expected_counts
+
+
+def ood_resume_allowed(results_dir: Path, dependency_paths: list[Path]) -> bool:
+    output_paths = [
+        results_dir / "main_results.csv",
+        results_dir / "ood_eval_per_seed.csv",
+    ]
+    existing_outputs = [path for path in output_paths if path.exists()]
+    if not existing_outputs or not dependency_paths:
+        return True
+    newest_dependency = max(path.stat().st_mtime_ns for path in dependency_paths)
+    return all(path.stat().st_mtime_ns > newest_dependency for path in existing_outputs)
+
+
 def decide_next_step(state: dict) -> dict[str, object]:
     if state.get("aris", {}).get("blocked"):
         return {"action": "blocked", "stage": "aris"}
@@ -122,6 +345,8 @@ def decide_next_step(state: dict) -> dict[str, object]:
         return {"action": "launch_m7", "seed": missing_m7}
 
     if not state["ood_eval"]["completed"]:
+        if not state["ood_eval"].get("resume_allowed", True):
+            return {"action": "run_ood_eval_no_resume"}
         return {"action": "run_ood_eval"}
 
     return {"action": "handoff_aris"}
@@ -156,6 +381,8 @@ def build_command(decision: dict[str, object], project_root: Path | None = None)
         )
     if action == "run_ood_eval":
         return "python pta/scripts/run_ood_eval_v2.py --residual-scale 0.05"
+    if action == "run_ood_eval_no_resume":
+        return "python pta/scripts/run_ood_eval_v2.py --residual-scale 0.05 --no-resume"
     raise ValueError(f"Unsupported action: {action}")
 
 
@@ -297,13 +524,19 @@ def reconcile_state(project_root: Path, ps_output: str) -> dict:
                 completed_checkpoints.append(m7_status.final_checkpoint)
 
     results_dir = project_root / "results"
-    ood_outputs = [
-        results_dir / "main_results.csv",
-        results_dir / "ood_eval_per_seed.csv",
+    ood_dependencies = [
+        *completed_checkpoints,
+        *optional_ood_checkpoint_paths(project_root),
     ]
-    state["ood_eval"]["completed"] = outputs_newer_than_dependencies(
-        ood_outputs,
+    state["ood_eval"]["resume_allowed"] = ood_resume_allowed(
+        results_dir,
+        ood_dependencies,
+    )
+    state["ood_eval"]["completed"] = ood_outputs_complete(
+        project_root,
+        results_dir,
         completed_checkpoints,
+        state,
     )
     return state
 
@@ -353,6 +586,8 @@ def run_coordinator(project_root: Path) -> int:
         "blocked": persisted_state.get("aris", {}).get("blocked", False),
         "failure_reason": persisted_state.get("aris", {}).get("failure_reason"),
     }
+    if state["aris"]["ready"] and not state["ood_eval"]["completed"]:
+        state["aris"]["ready"] = False
     decision = decide_next_step(state)
     state["stage"] = decision["action"]
     state["last_check_time"] = check_time
@@ -363,6 +598,7 @@ def run_coordinator(project_root: Path) -> int:
         "launch_m1",
         "launch_m7",
         "run_ood_eval",
+        "run_ood_eval_no_resume",
     }:
         command = build_command(decision, project_root=project_root)
         pid = launch_detached(

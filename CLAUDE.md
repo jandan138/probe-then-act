@@ -53,6 +53,8 @@ python pta/scripts/run_eval_main.py --config pta/configs/eval/paper_main.yaml
 - `refine-logs/EXPERIMENT_PLAN.md` — Input for `/experiment-bridge`
 - `NARRATIVE_REPORT.md` — Input for `/paper-writing`
 - `docs/30_records/CRON_ARIS_ORCHESTRATOR_RUNBOOK.md` — Cron install, state, log, and recovery steps
+- `docs/30_records/DLC_EXECUTION_RUNBOOK.md` — DSW/PAI-DLC submitter and worker usage for bounded train/eval jobs
+- `docs/superpowers/specs/2026-04-26-dlc-execution-layer-design.md` — DLC/ARIS/Auto repo boundary decision
 - See `Auto-claude-code-research-in-sleep/projects/probe-then-act/AUTOMATION_PLAN.md` for full schedule
 
 ## Key Design Documents
@@ -63,10 +65,11 @@ python pta/scripts/run_eval_main.py --config pta/configs/eval/paper_main.yaml
 5. `docs/10_protocols/04_VALIDATION_GATES.md` — Gate 0–5 workflow (Gate 0 **PASSED**)
 6. `docs/10_protocols/05_TINY_TASK_OVERFIT_PROTOCOL.md` — Tiny-task overfit before scale-up
 
-## Current Status (2026-04-06)
-- **Phase 4 (M1 Pivot)** in progress
-- **Gate 0 PASSED**: Edge-push task, 42.2% transfer, 9.0% spill
-- **Task redesign**: Scoop-lift-dump → Edge-push (MPM particles have no adhesion to rigid bodies)
-- **Key config**: `mpm_grid_density=128`, `coup_friction=3.0`, `task_layout="edge_push"`
-- **Scoop MJCF**: `panda_scoop.xml` (7-DOF, no fingers, U-shaped rigid scoop)
-- **Next**: Gate 4 — E1 Teacher overfit on tiny task
+## Current Status (2026-04-26)
+- **Corrected OOD v2 COMPLETE**: `results/ood_eval_per_seed.csv` has 35/35 expected rows and `results/main_results.csv` has 15 aggregate rows.
+- **Result-to-claim verdict**: original broad Probe-Then-Act claims are **not supported** by the corrected OOD table.
+- **Main finding**: M7 improves only on `ood_elastoplastic`; it is worse than M1 on ID, snow, and sand parameter shifts, and worse on all-OOD transfer/spill average.
+- **Direction decision**: choose Option 1, **Ablation-First Diagnostic**, before any paper writing or broader experiment expansion.
+- **DLC acceleration path**: use the probe repo DLC layer for bounded `smoke_env`, `train_ablation`, and `eval_ood` jobs when the repos are uploaded to a DSW machine; do not run cron/ARIS/agent tooling inside DLC workers.
+- **Do not write paper claims yet**: M2/RNN, M6/uncertainty, and M7 ablations are missing.
+- **Next**: run approved `m7_noprobe` and `m7_nobelief` seeds `42/0/1`, rerun corrected resumable OOD, then run result-to-claim again before claiming any PTA mechanism.

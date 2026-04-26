@@ -332,3 +332,17 @@ python pta/scripts/train_baselines.py --method m8 --seed 42 --total-timesteps 50
 | 2026-04-15 21:41 | Stage B | 3/3 PASS | 60fe19b | reward=+20266, transfer=36.3%, spill=12.4% |
 | 2026-04-16 00:05 | Stage C | PASS | — | M8 50K: peak=21254@40K, final=15686@50K, all positive |
 | 2026-04-18 00:10 | Stage D | PASS | — | 3 reruns: success=1.00, transfer~0.399, spill~0.10; Gate 4 promoted |
+
+---
+
+## Post-Gate-4 OOD Evaluation Blocker (2026-04-26)
+
+Formal M1/M7 training completed, and corrected OOD evaluation now has complete fresh CSVs after the resumable evaluator fix. Episode-level Genesis NaNs are counted as failed episodes and continue; process-level OOM kills were addressed by resumable per-row CSV persistence. `dmesg -T` confirms repeated pre-fix OOM kills of cron-launched Python eval processes at roughly 12 GB RSS, most recently including the resumable recovery run around `2026-04-26 17:17 HKT`.
+
+Observed latest full attempt before OOM:
+- `m1_reactive`: 3 seeds x 5 splits completed
+- `m8_teacher`: seed 42 x 5 splits completed; seeds 0/1 skipped because best checkpoints are absent
+- `m7_pta`: seed 42 x 5 splits completed; seed 0 reached `ood_snow` before process death
+- no pre-fix `results/ood_eval_per_seed.csv` or `results/main_results.csv` was produced because the script only wrote at the end
+
+Final OOD status: resumable OOD evaluation completed with `35/35` per-seed rows and `15` aggregate rows. Result-to-claim verdict is negative for the original broad PTA claims; the next action is ablation-first diagnosis (`m7_noprobe`, `m7_nobelief`) rather than paper writing. Plan: `refine-logs/EXPERIMENT_PLAN.md`.

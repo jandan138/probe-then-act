@@ -1,120 +1,132 @@
 # Experiment Plan
 
-> Input for ARIS `/experiment-bridge`. Save as `refine-logs/EXPERIMENT_PLAN.md`.
+**Problem**: Corrected OOD evaluation shows the current Probe-Then-Act (M7) does not improve broad OOD robustness over reactive PPO (M1). M7 only improves on elastoplastic and is worse on ID, snow, and sand parameter shifts.
 
-**Problem**: Robot manipulation policies fail under hidden material variation because they cannot infer material properties from single observations, leading to spillage, unstable contact, and poor OOD generalization.
+**Method Thesis**: The next research cycle should diagnose whether the active probe / belief mechanism contains a recoverable material-specific benefit, or whether the paper should pivot away from broad Probe-Then-Act robustness claims.
 
-**Method Thesis**: Active probing (1-3 short diagnostic actions) + latent physical belief inference (z, sigma) + uncertainty-aware policy conditioning enables robust cross-material robot tool use.
+**Date**: 2026-04-26
+
+## Direction Decision
+
+- **Selected strategy**: Option 1, Ablation-First Diagnostic.
+- **Decision source**: post-result-to-claim strategy discussion on 2026-04-26.
+- **Rationale**: Broad PTA claims are contradicted by corrected OOD results; ablations are the smallest decisive step that can distinguish salvageable mechanism from failed wrapper/training complexity.
+- **Immediate scope**: run only `m7_noprobe` and `m7_nobelief` for seeds `42`, `0`, and `1`, then rerun corrected resumable OOD v2.
+- **Execution backend**: local cron/screen may continue single-GPU work, but PAI-DLC is approved for bounded ablation train/eval jobs after the repos are uploaded to DSW. DLC workers must not run ARIS, cron, opencode, Claude, Codex, or Auto-repo orchestration.
+- **Go / no-go gate**: proceed to M2, elastoplastic confirmation, or paper-facing claims only if ablations explain or repair the M7 degradation. Otherwise pivot away from broad PTA robustness.
 
 ## Claim Map
 
 | Claim | Why It Matters | Minimum Convincing Evidence | Linked Blocks |
-|-------|----------------|----------------------------|---------------|
-| C1: Active probing helps under hidden physics | Core novelty — probing before action | M7 > M1, M2 on OOD-Material (success + spill) | B1, B2 |
-| C2: Explicit belief beats passive memory | Distinguishes from RNN-based approaches | M7 > M2 on OOD-Material or OOD-Tool, not just one seed | B1, B3 |
-| C3: Uncertainty improves failure avoidance | Justifies the sigma + risk head | M7 > M6 in spill/contact failure | B1, B4 |
-| C4: Method generalizes beyond training setup | Paper-level claim for T-RL | Improvement on >= 2 OOD splits, not only ID | B1, B5 |
+|---|---|---|---|
+| C1: Current broad robustness claim is not supported | Prevents overclaiming | Result-to-claim verdict recorded from complete corrected OOD table | B0 |
+| C2: M7 degradation can be localized to probe, belief, or training instability | Needed before salvage | `no_probe` / `no_belief` ablations identify which component changes ID/OOD regressions | B1 |
+| C3: Explicit belief is better than passive memory | Only keep if M2 is run | M7 or a repaired variant beats M2 on OOD material with success and spill evidence | B2 |
+| C4: A narrower material-specific PTA claim may exist | Salvage path if broad claim fails | Elastoplastic gain repeats across more seeds and is explained by ablations | B3 |
+
+## Paper Storyline
+
+- Main paper must not claim broad PTA robustness from the current run.
+- Appendix can report the negative corrected OOD result as a diagnostic if the project pivots.
+- Experiments intentionally cut for now: OOD-tool, OOD-sensor, uncertainty calibration, second-task validation, and M2 full baseline until ablation evidence justifies retaining a PTA paper story.
 
 ## Experiment Blocks
 
-### Block 0: Environment Validation
-- **Claim tested**: None (infrastructure)
-- **Task**: Scoop-and-Transfer, ID split
-- **Systems**: Scripted baseline (oracle scoop motion)
-- **Metrics**: success_rate, transfer_efficiency, spill_ratio
-- **Success criterion**: Scripted policy achieves > 0% transfer; metrics are plausible
-- **Status**: DONE — sanity check passed, 400 particles stable
+### Block 0: Result-to-Claim Postmortem
+
+- **Claim tested**: C1
+- **Why this block exists**: Establish an honest stopping point before paper writing.
+- **Dataset / split / task**: Corrected OOD v2, edge-push, `id_sand`, `ood_snow`, `ood_elastoplastic`, `ood_sand_soft`, `ood_sand_hard`.
+- **Compared systems**: M1, M7, M8 one-seed reference.
+- **Metrics**: transfer, spill, success, failed episodes.
+- **Setup details**: Existing completed run, 35/35 expected rows.
+- **Success criterion**: Verdict recorded and claims narrowed.
+- **Failure interpretation**: If not recorded, downstream paper writing will overclaim.
+- **Table / figure target**: Internal finding, not paper main table unless pivoting to a negative study.
 - **Priority**: DONE
 
-### Block 1: Main Result Table
-- **Claim tested**: C1, C2, C3, C4
-- **Task**: Scoop-and-Transfer
-- **Split**: ID + OOD-Material + OOD-Tool + OOD-Sensor
-- **Compared systems**: M1 (Reactive PPO), M2 (RNN-PPO), M3 (DomainRand PPO), M4 (Fixed-Probe+PPO), M5 (Material Router), M6 (Ours no-uncertainty), M7 (Probe-Then-Act), M8 (Privileged Teacher)
-- **Metrics**: Primary: success_rate, transfer_efficiency, spill_ratio, contact_failure_rate. Secondary: episode_length
-- **Setup details**:
-  - All methods: PPO, lr=3e-4, gamma=0.99, n_steps=128, batch=64, 10M steps
-  - Teacher: privileged obs (ground-truth material params)
-  - Student methods: student obs only (proprio + tactile + camera)
-  - Seeds: 3 exploratory, 5 for paper
-- **Success criterion**: M7 beats M1, M2, M3 on at least 2 OOD splits by > 5% success or > 10% spill reduction
-- **Failure interpretation**: If M7 = M2, probing adds no value → rethink probe design or increase hidden physics gap
+### Block 1: M7 Component-Damage Ablations
+
+- **Claim tested**: C2
+- **Why this block exists**: M7 is worse than M1 on most splits; isolate whether probe execution, latent belief conditioning, or PPO wrapper complexity is the source.
+- **Dataset / split / task**: Same edge-push training on sand, same corrected OOD v2 splits.
+- **Compared systems**: M1, M7 full, `m7_noprobe`, `m7_nobelief`.
+- **Metrics**: transfer, spill, success; primary diagnostic is M7 ablation delta against full M7 and M1.
+- **Setup details**: Train `train_m7.py --ablation no_probe` and `--ablation no_belief` for seeds `42,0,1`, `500000` timesteps, residual scale `0.05`; rerun resumable OOD v2.
+- **Success criterion**: One ablation clearly explains the degradation or preserves the elastoplastic gain while improving snow/parameter splits.
+- **Failure interpretation**: If all M7 variants underperform M1, the current PTA wrapper/mechanism is not a viable paper contribution.
+- **Table / figure target**: Ablation / diagnostic table.
 - **Priority**: MUST-RUN
 
-### Block 2: Baseline Reproduction
-- **Claim tested**: C1 (lower bound established)
-- **Task**: Scoop-and-Transfer, ID split
-- **Compared systems**: M1, M2, M3, M4, M8
-- **Setup**: Same hyperparams, 3 seeds each
-- **Success criterion**: All baselines learn above random; teacher clearly beats reactive
-- **Decision gate**: If M1 cannot learn above random → simplify task/reward
-- **Priority**: MUST-RUN (prerequisite for Block 1)
+### Block 2: Passive-Memory Baseline Check
 
-### Block 3: Teacher-Student Distillation
-- **Claim tested**: Teacher-student pipeline works
-- **Task**: Scoop-and-Transfer, ID split
-- **Systems**: M8 (teacher) → behavior cloning → RL fine-tune → M7 (student)
-- **Setup**: 100K teacher demos, BC 100 epochs, fine-tune 2M steps
-- **Success criterion**: Student performance within 80% of teacher on ID
-- **Priority**: MUST-RUN (prerequisite for main method)
+- **Claim tested**: C3
+- **Why this block exists**: The original explicit-belief claim is impossible without M2.
+- **Dataset / split / task**: Same edge-push training and corrected OOD v2 splits.
+- **Compared systems**: M1, M2 RNN-PPO, M7 full or repaired M7.
+- **Metrics**: transfer, spill, success.
+- **Setup details**: First run a seed-42 smoke test with `train_student.py --method rnn_ppo`; confirm checkpoint naming and evaluator support before full 3-seed training. Add M2 to OOD evaluator only after smoke checkpoint loads.
+- **Success criterion**: M7/repaired M7 beats M2 on OOD-material in both success and spill, not just one seed.
+- **Failure interpretation**: If M2 matches or beats M7, remove explicit-belief superiority from the paper.
+- **Table / figure target**: Main comparison only if M7 is repaired; otherwise diagnostic appendix.
+- **Priority**: MUST-RUN if continuing PTA paper; otherwise cut.
 
-### Block 4: Ablation Study
-- **Claim tested**: C1, C2, C3 (component isolation)
-- **Task**: Scoop-and-Transfer, OOD-Material split
-- **Compared systems**: Full M7, No-probe, Random-probe, No-tactile, No-uncertainty, No-teacher-student
-- **Metrics**: success_rate, spill_ratio, calibration_error
-- **Success criterion**: Each component contributes measurably (> 3% on primary metric)
-- **Priority**: MUST-RUN
+### Block 3: Elastoplastic Confirmation
 
-### Block 5: OOD Generalization
 - **Claim tested**: C4
-- **Task**: Scoop-and-Transfer
-- **Splits**: OOD-Material (snow held out), OOD-Tool (spatula), OOD-Sensor (noise/blur)
-- **Systems**: M1, M2, M3, M7
-- **Success criterion**: Generalization gap (ID-OOD) is smaller for M7 than baselines
-- **Priority**: MUST-RUN
+- **Why this block exists**: Elastoplastic is the only positive split, but current evidence is seed-unstable.
+- **Dataset / split / task**: `ood_elastoplastic` only, plus ID sanity.
+- **Compared systems**: M1, M7 full, best ablation from Block 1.
+- **Metrics**: transfer, spill, success; paired seed deltas.
+- **Setup details**: Add at least two more seeds if compute allows; otherwise rerun seed 42/0/1 with fixed deterministic settings to check reproducibility.
+- **Success criterion**: Positive transfer/spill/success deltas on most seeds, not only the aggregate mean.
+- **Failure interpretation**: If unstable, treat the elastoplastic win as noise and pivot.
+- **Table / figure target**: Narrow material-specific claim figure only if confirmed.
+- **Priority**: NICE-TO-HAVE after Block 1.
 
-### Block 6: Second Task (Level-and-Fill)
-- **Claim tested**: Method is not single-task overfitting
-- **Task**: Level-and-Fill, ID + OOD-Material
-- **Systems**: M1, M2, M6, M7, M8
-- **Success criterion**: M7 advantage holds on second task
-- **Priority**: NICE-TO-HAVE (only if Scoop-Transfer results are strong)
+### Block 4: Failure-Mode Inspection
 
-## Run Order
+- **Claim tested**: C2/C4
+- **Why this block exists**: M7's largest regressions are snow and sand parameter shifts; understanding behavior may suggest a repair.
+- **Dataset / split / task**: `ood_snow`, `ood_sand_soft`, `ood_sand_hard` rollouts from M1/M7.
+- **Compared systems**: M1, M7 full, best ablation.
+- **Metrics**: trajectory videos, transfer/spill over episode, probe-phase displacement, final particle distribution.
+- **Setup details**: Save 3 representative videos per split/method after Block 1 OOD eval.
+- **Success criterion**: Identify a concrete failure mechanism, e.g. probe perturbation degrades initial particle geometry or belief conditioning biases residuals.
+- **Failure interpretation**: If no clear mechanism, avoid mechanism claims and pivot.
+- **Table / figure target**: Qualitative diagnostic panel.
+- **Priority**: MUST-RUN for diagnosis, not necessarily for paper.
 
-| Milestone | Goal | Blocks | Decision Gate | GPU-hours |
-|-----------|------|--------|---------------|-----------|
-| M0: Sanity | Env works | B0 | Scripted policy transfers particles? | 0.5h (DONE) |
-| M1: Baselines | Lower bounds | B2 | All learn above random? Teacher > reactive? | ~24h |
-| M2: Distillation | Pipeline | B3 | Student within 80% of teacher? | ~8h |
-| M3: Main method | Full PTA | B1 (partial) | M7 beats M2 on OOD? | ~16h |
-| M4: Ablations | Components | B4 | Each component matters? | ~12h |
-| M5: Full eval | All splits | B1, B5 | Table fills, >= 2 OOD wins? | ~20h |
-| M6: Second task | Generality | B6 | Advantage holds? | ~12h |
+## Run Order and Milestones
 
-## Compute Budget
-- **Total estimated GPU-hours**: ~92h
-- **Hardware**: 1x RTX 4090 (24GB), Vast.ai available for parallel seeds
-- **Biggest bottleneck**: M1 baseline training (5 methods x 3 seeds x ~1.5h = 22.5h)
-- **Parallelization strategy**: Train M1-M4 sequentially on local GPU, use Vast.ai for seed sweeps
+| Milestone | Goal | Runs | Decision Gate | Cost | Risk |
+|---|---|---|---|---|---|
+| M0 | Freeze result-to-claim verdict | Record completed OOD table and verdict | `claim_supported=no` recorded | Done | None |
+| M1 | Determine whether M7 components hurt | Train `m7_noprobe` / `m7_nobelief`, seeds 42/0/1 | Any variant beats M1 or explains M7 damage? | High, comparable to M7 training | Another OOM / slow Genesis; selected as the next approved direction |
+| M2 | Rerun OOD with ablations | Resume OOD v2 after ablation checkpoints exist | Exact rows complete, compare to M1/M7 | Medium-long | More optional rows increase eval time |
+| M3 | Decide whether M2 is worth running | M2 seed-42 smoke training and eval support | Checkpoint loads and quick eval works | Medium | sb3-contrib / recurrent eval mismatch |
+| M4 | Run M2 if continuing PTA claim | M2 seeds 42/0/1 + OOD support | M7/repaired M7 beats M2? | High | If negative, original paper direction ends |
+| M5 | Confirm elastoplastic if still promising | Add seeds or deterministic rerun | Stable positive deltas? | Medium | Gain may vanish |
 
-## Risks
-- **Risk**: Genesis MPM too slow for 10M steps → **Mitigation**: Reduce to 2M steps, increase n_envs
-- **Risk**: PPO cannot learn scooping → **Mitigation**: Simplify reward, add reward shaping, try SAC
-- **Risk**: Teacher not strong enough → **Mitigation**: Give teacher more privileged info, train longer
-- **Risk**: OOD gap too small to show method value → **Mitigation**: Increase material diversity, widen parameter ranges
-- **Risk**: Single GPU bottleneck → **Mitigation**: Use `/vast-gpu` for parallel training
+## Compute and Data Budget
 
-## Method Configuration Reference
+- Total must-run cost before decision: ablation training for 6 runs plus one expanded OOD eval.
+- Additional cost if continuing original paper: M2 smoke + 3-seed training + evaluator support.
+- Biggest bottleneck: Genesis eval/training runtime and process-level memory growth.
+- Mitigation: keep resumable OOD enabled; rely on cron restarts locally; use PAI-DLC for parallel ablation workers when available; avoid adding optional splits until ablations justify them.
 
-| Method | ID | Probe | Belief | Uncertainty | Obs Type | Notes |
-|--------|-----|-------|--------|-------------|----------|-------|
-| Reactive PPO | M1 | No | No | No | Student | Simplest baseline |
-| RNN-PPO | M2 | No | No | No | Student + history | Tests passive memory |
-| DomainRand PPO | M3 | No | No | No | Student | Tests randomization alone |
-| Fixed-Probe + PPO | M4 | Scripted | No | No | Student + probe traces | Tests probing value |
-| Material Router | M5 | Scripted | Discrete | No | Student | Tests discrete vs continuous |
-| Ours no-unc | M6 | Learned | Yes | No | Student | Ablation |
-| **Probe-Then-Act** | **M7** | **Learned** | **Yes** | **Yes** | **Student** | **Full method** |
-| Privileged Teacher | M8 | Optional | Oracle | Optional | Teacher (privileged) | Upper bound |
+## Risks and Mitigations
+
+- **Risk**: M7 ablations are also worse than M1. **Mitigation**: pivot away from PTA robustness; write a negative finding or switch method.
+- **Risk**: M2 implementation/eval is incompatible with current OOD runner. **Mitigation**: run seed-42 smoke and add evaluator support before full training.
+- **Risk**: Elastoplastic gain is not stable. **Mitigation**: do not use it as a paper claim unless it repeats across seeds.
+- **Risk**: Timeline too short for full salvage. **Mitigation**: prioritize Block 1 and use result-to-claim again before any paper writing.
+
+## Final Checklist
+
+- [x] Main OOD result is complete and verdict recorded
+- [x] Direction selected: Option 1, ablation-first diagnosis
+- [ ] Novelty is isolated by ablations
+- [ ] Passive-memory baseline is available if belief claim is retained
+- [ ] Uncertainty contribution is either tested or removed from claims
+- [ ] Nice-to-have runs are separated from must-run runs

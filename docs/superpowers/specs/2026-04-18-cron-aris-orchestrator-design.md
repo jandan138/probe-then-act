@@ -147,6 +147,10 @@ The coordinator must only use the fixed evaluation codepath with:
 
 The coordinator should never treat pre-fix evaluation outputs as valid evidence for handoff.
 
+The evaluator should count Genesis episode-level NaNs as failed rollouts and continue the sweep, while surfacing `n_failed_episodes` in both per-seed and aggregate outputs. Non-NaN exceptions remain infrastructure or code failures and should stop the run.
+
+2026-04-26 update: this is necessary but not sufficient. The OOD evaluator must also be resumable because the local machine repeatedly OOM-kills long Genesis evaluation processes before final CSVs are written. The scheduler should continue to relaunch OOD eval after crashes, but the evaluator itself must persist per-row progress and skip completed `(method, seed, split)` combinations on restart. This has now been implemented and validated by a complete corrected OOD sweep.
+
 ## ARIS Handoff
 
 Once experiment outputs are complete, the coordinator should move into a handoff stage rather than embed all review/writing logic directly.

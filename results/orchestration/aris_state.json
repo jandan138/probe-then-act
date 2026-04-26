@@ -1,0 +1,34 @@
+{
+  "aris": {
+    "blocked": false,
+    "failure_reason": null,
+    "ready": false
+  },
+  "last_check_time": "2026-04-26T13:00:02.099911+00:00",
+  "m1": {
+    "completed_seeds": [
+      42,
+      0,
+      1
+    ],
+    "running": false
+  },
+  "m7": {
+    "completed_seeds": [
+      42,
+      0,
+      1
+    ],
+    "running": true
+  },
+  "m8": {
+    "completed": true,
+    "running": false
+  },
+  "ood_eval": {
+    "completed": false,
+    "resume_allowed": false,
+    "running": false
+  },
+  "stage": "wait"
+}
