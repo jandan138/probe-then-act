@@ -5,6 +5,7 @@ __pycache__/
 checkpoints/
 logs/
 results/videos/
+results/dlc/
 results/analysis/
 results/scoop_debug/
 results_scoop_viewer_launch.log
