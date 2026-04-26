@@ -30,6 +30,12 @@ scripts/smoke_remote.sh .env.dsw
 
 `bootstrap_remote.sh` clones `git@github.com:jandan138/Genesis.git` if `${GENESIS_ROOT}` is absent and installs the editable Genesis runtime plus probe requirements unless `BOOTSTRAP_SKIP_INSTALL=1`.
 
+## Dependency Boundary
+
+Do not set `BOOTSTRAP_SKIP_INSTALL=1` on a fresh machine unless `GENESIS_VENV` already points to a Python environment with the required Genesis/probe dependencies. A clean Ubuntu WSL without install fails the smoke import at `quadrants`, and a real training/eval environment also needs `torch`, `numpy`, and the packages from `requirements.txt`.
+
+Use `BOOTSTRAP_SKIP_INSTALL=0` for a fresh DSW workspace, or keep `BOOTSTRAP_SKIP_INSTALL=1` only when the DLC image already contains the full runtime and `PYTHON_BIN`/`GENESIS_VENV` point at it.
+
 ## Current Shortest Path For DSW
 
 Current shortest path: do not upload checkpoints before training.

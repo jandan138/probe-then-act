@@ -53,6 +53,8 @@ def test_remote_handoff_assets_exist_and_reference_expected_remotes():
     assert "Current shortest path: do not upload checkpoints before training" in text
     assert "--skip no_probe:42" in text
     assert "five remaining ablation jobs" in text
+    assert "Do not set `BOOTSTRAP_SKIP_INSTALL=1` on a fresh machine" in text
+    assert "quadrants" in text
 
 
 def test_handoff_shell_scripts_are_executable_and_parse():
