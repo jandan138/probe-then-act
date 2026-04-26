@@ -13,6 +13,12 @@ Both runs showed clear learning signal and separated from random baseline, but p
 
 **2026-04-09/10 follow-up:** the original suggestion to try scoop / bowl as the next Gate 4 base trajectory is now superseded by the expanded flat-scene bowl diagnosis. Bowl remains a side-track negative result; native tuning, minimal sticky fallback, hidden geometry, and particle constraints have all been exercised without useful final carry. The line is now better interpreted as a simulator-gap / probe-signal branch, not as the Gate 4 main line.
 
+**2026-04-18 post-hotfix follow-up:** the formal `M8 seed=42` retrain from the hotfix-validated 50K checkpoint confirms that the stack is now learnable, but not yet stably converged. The run repeatedly entered high-reward regimes above 23K and then drifted late in training. On corrected tiny-task evaluation:
+- `best_model.zip`: reward `23922.41 +/- 3.76`, transfer `0.6426`, spill `0.2780`, success `1.00`
+- `scoop_transfer_teacher_final.zip`: reward `18696.34 +/- 2246.06`, transfer `0.3505`, spill `0.5822`, success `1.00`
+
+Interpretation: the hotfix succeeded in restoring learnability and producing a strong Teacher checkpoint, but PPO late-stage drift remains real. Paper-facing evaluation should prefer the best checkpoint rather than assuming the final checkpoint is representative.
+
 ## v1 Results (scale=0.1)
 
 | Steps | Mean Reward | Std |
@@ -95,6 +101,8 @@ Both runs showed clear learning signal and separated from random baseline, but p
 3. **Curriculum**: Start with scale=0.0 (pure replay) for warmup, then anneal to scale=0.2 over 100K steps.
 
 4. **Hybrid approach**: Use `control_dofs_position` (PD control) instead of `set_qpos` (teleport) in the wrapper for more physically realistic execution, but do not conflate that controller question with the separate bowl-side-track contact problem.
+
+5. **Post-hotfix execution policy**: continue with `M1` / `M7` / corrected OOD evaluation, but treat `best checkpoint` as the primary M8 artifact for downstream evaluation. The `final` checkpoint should be reported as evidence of residual instability, not as the sole representative result.
 
 ## Files
 

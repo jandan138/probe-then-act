@@ -38,7 +38,7 @@ from pta.envs.tasks.scoop_transfer import (
     _should_apply_bowl_constraint_fallback,
     _should_apply_bowl_sticky_fallback,
 )
-from run_scripted_baseline import (
+from pta.scripts.run_scripted_baseline import (
     BOWL_APPROACH_S,
     BOWL_CAPTURE_S,
     BOWL_INSERT_S,

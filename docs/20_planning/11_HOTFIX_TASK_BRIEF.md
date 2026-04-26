@@ -332,3 +332,4 @@ python pta/scripts/train_baselines.py --method m8 --seed 42 --total-timesteps 50
 | 2026-04-15 21:41 | Stage B | 3/3 PASS | 60fe19b | reward=+20266, transfer=36.3%, spill=12.4% |
 | 2026-04-16 00:05 | Stage C | PASS | — | M8 50K: peak=21254@40K, final=15686@50K, all positive |
 | 2026-04-18 00:10 | Stage D | PASS | — | 3 reruns: success=1.00, transfer~0.399, spill~0.10; Gate 4 promoted |
+| 2026-04-18 23:20 | Stage E | PASS* | — | Formal M8 complete: best=23922/0.643/0.278, final=18696/0.350/0.582, success=1.00 for both; continue with best ckpt as primary artifact |

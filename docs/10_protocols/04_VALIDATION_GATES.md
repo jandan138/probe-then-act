@@ -234,11 +234,41 @@ Gate 4 is passed only if, on a fixed tiny-task evaluation set:
 
 **Important evaluation note (2026-04-18):** `pta/scripts/run_ood_eval_v2.py` still had pre-hotfix assumptions when this recovery started. It read `transferred_mass_frac` / `spill_frac` instead of the environment's `transfer_efficiency` / `spill_ratio`, and defaulted to `residual_scale=0.2` instead of `0.05`. That produced impossible dry-run summaries such as `success_rate=1.0` with zero transfer. The script has now been corrected before trusting the Stage D rerun metrics above.
 
-**Historical experiments (pre-hotfix record):**
+**Historical failure snapshot (pre-hotfix, retained for record):** Two rounds of cross-validated investigation (10 independent agent audits) confirmed systemic failure before the hotfix stack landed. The 500K training runs below were the evidence that triggered the diagnosis:
+
+| Method | Seed | Steps | Final Eval Reward | Status |
+|--------|------|-------|-------------------|--------|
+| M1 Reactive | 42 | 500K | -433.15 | Complete — FAILED |
+| M1 Reactive | 0 | 500K | -2.80 | Complete — marginal |
+| M1 Reactive | 1 | 500K | -64.27 | Complete — FAILED |
+| M8 Teacher | 42 | 800K | -134.33 | Learned then collapsed |
+| M8 Teacher | 0 | 500K | -298.45 | Never learned |
+| M8 Teacher | 1 | 500K | Running @300K, -154.84 | Not promising |
+
+**Root causes diagnosed (ordered by severity):**
+
+1. **FATAL — Observation space missing particle information.** Policy obs (30-37D) contains joint state, EE pose, step fraction, base trajectory waypoint, and privileged material params (M8). Contains **zero particle information** — no mean_particle_y, no transfer_frac, no spill_frac. Policy cannot observe the quantities it is optimizing.
+
+2. **FATAL — Reward positive/negative asymmetry.** Positive rewards (r_transfer, r_push) are delta-based (each particle contributes once). Negative rewards (r_spill, r_time, r_approach) are cumulative per-step. Result: 1% spill penalty = −10.0 over 500 steps, vs 1% transfer reward = +0.2. Even perfect scripted execution gets reward ≈ −83.
+
+3. **SEVERE — residual_scale=0.2 too large.** Base trajectory step size is 0.005–0.064 rad/step. residual_scale=0.2 gives ±0.2 rad/step (3x–40x base). Trained policies learn to actively destroy the scripted trajectory.
+
+4. **SEVERE — Base trajectory missing settle segment.** `build_edge_push_trajectory()` = 410 steps push-only. Horizon = 500. Last 90 steps: robot frozen, accumulating penalties with no positive reward.
+
+5. **MODERATE — Delta reward introduced with known failure.** Commit 5d620eb recorded "reward -38±3, 0% transfer — PPO can't learn via Cartesian delta." 19 hours later, delta reward was incorporated into 500K pipeline without independent validation.
+
+6. **MODERATE — No VecNormalize, entropy_coef=0.0.** Value network faces raw returns [−741, +4]. No entropy regularization (though use_sde=True provides some exploration).
+
+**Previous status history:**
+- PARTIAL (2026-04-07). Joint-space residual PPO reached scripted baseline level (-2.09 reward, ~12.5% transfer) in 20K steps. Gate 4 targets not met: transfer below 0.25 threshold, no stable 3× evaluation pass.
+- 2026-04-09 runtime follow-up: 500K pipeline runs launched as engineering shakeouts before Gate 4 formally promoted. Those runs confirmed as non-functional.
+
+**Completed experiments (all):**
 - E1 Teacher PPO (Cartesian-delta): FAILED (IK + PD controller broken, 0% transfer)
 - E2 Cartesian-delta residual: FAILED (IK y-axis inversion)
-- **E3 Joint-space residual v1** (scale=0.1): converged to scripted baseline (-2.09), 12.5% transfer
-- **E4 Joint-space residual v2** (scale=0.2): best reward -1.20, 12-15% transfer
+- E3 Joint-space residual v1 (scale=0.1): converged to scripted baseline (-2.09), 12.5% transfer
+- E4 Joint-space residual v2 (scale=0.2): best reward -1.20, 12-15% transfer
+- **E5 M1/M8 500K sweep: FAILED (all seeds, all methods)**
 
 **Resolved blocker:** the hotfix stack restored observability, corrected reward asymmetry, reduced destructive residual scale, and added the settle segment needed for the scripted base trajectory to cash out into target transfer.
 
@@ -248,6 +278,14 @@ Gate 4 is passed only if, on a fixed tiny-task evaluation set:
 1. Resume formal post-hotfix Phase 3 retraining for `M1` / `M8` / `M7`
 2. Run corrected OOD evaluation with `pta/scripts/run_ood_eval_v2.py`
 3. Only revisit geometry or curriculum if the post-hotfix 500K retrains regress materially below the promoted Gate 4 level
+
+**Hotfixes that resolved the failure mode:**
+1. Added particle statistics (mean_particle_y, transfer_frac, spill_frac) to observation space
+2. Restored cumulative reward structure from ce5b9e8 while preserving bowl/bbox safeguards
+3. Fixed reward asymmetry
+4. Added 80-step settle segment to the base trajectory
+5. Reduced residual_scale from 0.2 to 0.05
+6. Validated zero-action baseline before relaunching RL
 
 If the bowl side-track is continued separately, use `docs/40_investigations/11_BOWL_TOOL_INVESTIGATION.md` and `docs/10_protocols/12_BOWL_TRANSPORT_DIAGNOSIS_RUNBOOK.md` as the source of truth. That side-track has already progressed through native tuning, minimal sticky fallback, hidden geometry, and particle constraints without producing useful final carry, so it should not be treated as a near-term Gate 4 rescue path.
 
@@ -337,11 +375,12 @@ Save all of the following:
 ## 6. Immediate next actions
 
 ### Priority 1
-Pass **Gate 4** — improve base trajectory or widen residual exploration.
-- Do **not** reopen scoop / bowl as the current Gate 4 base trajectory; keep bowl work isolated as a side-track under `docs/40_investigations/11_BOWL_TOOL_INVESTIGATION.md` and `docs/10_protocols/12_BOWL_TRANSPORT_DIAGNOSIS_RUNBOOK.md`.
-- Widen residual_scale from 0.1→0.3 with curriculum annealing (0→0.3 over 100K steps).
-- Longer training: 1M+ steps.
-- Revisit container geometry if transfer ceiling persists.
+Advance **post-Gate-4 formal experiments**:
+1. Continue formal post-hotfix retraining for `M8`, then run `M1` and `M7`
+2. Run corrected OOD evaluation with `pta/scripts/run_ood_eval_v2.py`
+3. Treat only post-hotfix checkpoints and corrected eval outputs as claim-bearing evidence
+- Do **not** increase residual_scale (previous suggestion of 0.3-0.5 was wrong — problem was scale too large, not too small)
+- Do **not** reopen scoop / bowl as Gate 4 main line
 
 ### Priority 2
 Formalize **Gate 1** task contract.

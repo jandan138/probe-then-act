@@ -6,17 +6,15 @@ from pta.envs.builders.scene_builder import (
     _resolve_mpm_options_kwargs,
     _resolve_scene_substeps,
 )
-from pta.scripts.render_bowl_carry_onset_videos import build_env, set_transport_phase
-from pta.scripts.run_scripted_baseline import (
-    HOME_S,
-    EXTEND_FWD_S,
-    BOWL_APPROACH_S,
-    BOWL_INSERT_S,
-    BOWL_CAPTURE_S,
-    BOWL_LIFT_S,
-    BOWL_TRAVERSE_MID_S,
-    BOWL_TRAVERSE_FAST_S,
+from pta.scripts.render_bowl_carry_onset_videos import (
+    VIEWER_INITIAL_SETTLE_STEPS,
+    build_bowl_carry_plan,
+    build_bowl_viewer_motion_plan,
+    build_bowl_viewer_waypoints,
+    build_env,
+    set_transport_phase,
 )
+from pta.scripts.run_scripted_baseline import EXTEND_FWD_S, HOME_S
 
 
 orig_create_scene = SceneBuilder._create_scene
@@ -72,6 +70,20 @@ def interp(env, start_qpos, end_qpos, n_steps, settle_per_step):
     return True
 
 
+def interp_pd(env, start_qpos, end_qpos, n_steps, settle_per_step):
+    start = torch.tensor(start_qpos, dtype=torch.float32, device="cuda")
+    end = torch.tensor(end_qpos, dtype=torch.float32, device="cuda")
+    for i in range(n_steps):
+        if not env.scene.viewer.is_alive():
+            return False
+        alpha = (i + 1) / n_steps
+        qpos = start * (1 - alpha) + end * alpha
+        env.robot.control_dofs_position(qpos)
+        if not scene_step(env, settle_per_step):
+            return False
+    return True
+
+
 def settle(env, n_steps):
     return scene_step(env, n_steps)
 
@@ -79,43 +91,42 @@ def settle(env, n_steps):
 def play_once(env):
     env.reset()
     set_transport_phase(env, "off")
-    if not settle(env, 20):
+    if not settle(env, VIEWER_INITIAL_SETTLE_STEPS):
         return False
-    if not interp(env, HOME_S, EXTEND_FWD_S, 15, 1):
-        return False
-    if not interp(env, EXTEND_FWD_S, BOWL_APPROACH_S, 30, 2):
-        return False
-    if not interp(env, BOWL_APPROACH_S, BOWL_INSERT_S, 45, 3):
-        return False
-    if not interp(env, BOWL_INSERT_S, BOWL_CAPTURE_S, 35, 3):
-        return False
+    for segment in build_bowl_viewer_motion_plan(
+        first_half_steps=15, second_half_steps=15
+    )[:4]:
+        runner = interp_pd if segment["mode"] == "pd" else interp
+        if not runner(
+            env,
+            segment["start"],
+            segment["end"],
+            segment["steps"],
+            segment["settle_per_step"],
+        ):
+            return False
     if not settle(env, 10):
         return False
-    if not interp(env, BOWL_CAPTURE_S, BOWL_LIFT_S, 40, 3):
+    motion_plan = build_bowl_viewer_motion_plan(
+        first_half_steps=15, second_half_steps=15
+    )
+    lift_segment = motion_plan[4]
+    if not interp_pd(
+        env,
+        lift_segment["start"],
+        lift_segment["end"],
+        lift_segment["steps"],
+        lift_segment["settle_per_step"],
+    ):
         return False
     if not settle(env, 10):
         return False
     set_transport_phase(env, "carry")
-    early = [x * 0.5 + y * 0.5 for x, y in zip(BOWL_LIFT_S, BOWL_TRAVERSE_MID_S)]
-    if not interp(env, BOWL_LIFT_S, early, 15, 2):
-        return False
-    if not settle(env, 10):
-        return False
-    if not interp(env, early, BOWL_TRAVERSE_MID_S, 15, 2):
-        return False
-    if not settle(env, 10):
-        return False
-    late = [
-        x * 0.5 + y * 0.5 for x, y in zip(BOWL_TRAVERSE_MID_S, BOWL_TRAVERSE_FAST_S)
-    ]
-    if not interp(env, BOWL_TRAVERSE_MID_S, late, 15, 2):
-        return False
-    if not settle(env, 10):
-        return False
-    if not interp(env, late, BOWL_TRAVERSE_FAST_S, 15, 2):
-        return False
-    if not settle(env, 20):
-        return False
+    for segment in build_bowl_carry_plan(first_half_steps=15, second_half_steps=15):
+        if not interp(env, segment["start"], segment["end"], segment["steps"], 2):
+            return False
+        if not settle(env, segment["settle_after"]):
+            return False
     set_transport_phase(env, "off")
     return True
 
