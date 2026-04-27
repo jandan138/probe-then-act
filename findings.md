@@ -56,6 +56,14 @@ Focus the next cycle on diagnosis and salvage. The selected strategy is **Option
 - **Stop / pivot gate**: if neither ablation explains or repairs M7's regressions, pivot away from broad PTA robustness rather than adding more baselines or paper-writing claims.
 - **Deferred alternatives**: elastoplastic-only claim and negative/failure-analysis framing remain fallback options after ablation evidence.
 
+### 2026-04-27 R001 Local Ablation Result
+
+- `m7_noprobe seed=42` completed locally for `500000` timesteps.
+- Training/eval curve is positive on the ID training setting: best eval `25735.26 +/- 1.74 @440k`, final eval `23634.73 +/- 2.03 @500k`.
+- Compared with prior seed-42 training curves, `m7_noprobe` is stronger and more stable than full M7 (`24629.75 +/- 37.24` best, `17328.08 +/- 2747.15` final) and competitive with M1 (`24840.94 +/- 53.29` best, `22951.69 +/- 383.32` final).
+- Interpretation: this is an encouraging ID/training sanity result and suggests the probe phase may contribute to full M7's degradation. It is not OOD evidence yet; do not claim mechanism support until corrected ablation OOD finishes.
+- Local ARIS cron entries are paused, so no local automatic OOD or next-run launch should occur after R001.
+
 1. Train M7 ablations (`no_probe`, `no_belief`) to identify whether probing/belief causes the observed regressions.
 2. Run or implement M2 RNN-PPO only if the paper will retain an explicit-belief-vs-memory claim.
 3. Re-test elastoplastic with additional seeds only if ablations suggest the M7 gain is mechanistic rather than random.

@@ -79,12 +79,11 @@ DLC_DRY_RUN=1 DLC_SKIP_PREFLIGHT=1 PTA_CODE_ROOT=$PWD \
 
 ## Submission Order
 
-R001 is already running locally as `m7_noprobe seed=42` in screen
-`aris_m7_noprobe_s42`. Do not submit a duplicate DLC job for that exact run
-unless the local run is intentionally abandoned or isolated in a separate result
-root.
+R001 completed locally as `m7_noprobe seed=42`. Do not submit a duplicate DLC
+job for that exact run unless intentionally isolating results in a separate
+result root.
 
-Recommended DLC route while R001 continues locally:
+Recommended DLC route after local R001 completion:
 
 ```bash
 cd "$PTA_CODE_ROOT"
@@ -92,14 +91,14 @@ cd "$PTA_CODE_ROOT"
 # Smoke first; inspect results/dlc/runs/*.json after the worker exits.
 python3 pta/scripts/dlc/submit_jobs.py --suite smoke
 
-# Submit the remaining no-probe seeds.
+# Submit the remaining no-probe seeds only.
 python3 pta/scripts/dlc/submit_jobs.py --suite ablation --variants no_probe --seeds 0 1
 
 # Submit all no-belief seeds.
 python3 pta/scripts/dlc/submit_jobs.py --suite ablation --variants no_belief --seeds 42 0 1
 ```
 
-If the local R001 run is no longer needed, the full ablation sweep is:
+If the local R001 result is intentionally discarded or isolated, the full ablation sweep is:
 
 ```bash
 bash pta/scripts/dlc/submit_ablation_sweep.sh

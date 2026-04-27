@@ -8,6 +8,11 @@ Five M7 ablation DLC jobs were submitted on 2026-04-26 with the verified GPU ima
 
 The jobs used `PYOPENGL_PLATFORM=egl` and `EGL_DEVICE_ID=0` after the earlier OSMesa failure was diagnosed.
 
+`m7_noprobe seed=42` was not part of this DLC failure set: it completed locally
+as R001 with best eval `25735.26 +/- 1.74 @440k`, final eval
+`23634.73 +/- 2.03 @500k`, and final checkpoint
+`checkpoints/m7_pta_noprobe_seed42/m7_pta_final.zip`.
+
 ## Failed Jobs
 
 | Variant | Seed | DLC JobId | Last logged timestep | Durable checkpoint |

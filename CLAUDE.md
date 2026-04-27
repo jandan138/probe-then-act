@@ -65,11 +65,13 @@ python pta/scripts/run_eval_main.py --config pta/configs/eval/paper_main.yaml
 5. `docs/10_protocols/04_VALIDATION_GATES.md` — Gate 0–5 workflow (Gate 0 **PASSED**)
 6. `docs/10_protocols/05_TINY_TASK_OVERFIT_PROTOCOL.md` — Tiny-task overfit before scale-up
 
-## Current Status (2026-04-26)
+## Current Status (2026-04-27)
 - **Corrected OOD v2 COMPLETE**: `results/ood_eval_per_seed.csv` has 35/35 expected rows and `results/main_results.csv` has 15 aggregate rows.
 - **Result-to-claim verdict**: original broad Probe-Then-Act claims are **not supported** by the corrected OOD table.
 - **Main finding**: M7 improves only on `ood_elastoplastic`; it is worse than M1 on ID, snow, and sand parameter shifts, and worse on all-OOD transfer/spill average.
 - **Direction decision**: choose Option 1, **Ablation-First Diagnostic**, before any paper writing or broader experiment expansion.
 - **DLC acceleration path**: use the probe repo DLC layer for bounded `smoke_env`, `train_ablation`, and `eval_ood` jobs when the repos are uploaded to a DSW machine; do not run cron/ARIS/agent tooling inside DLC workers.
-- **Do not write paper claims yet**: M2/RNN, M6/uncertainty, and M7 ablations are missing.
-- **Next**: run approved `m7_noprobe` and `m7_nobelief` seeds `42/0/1`, rerun corrected resumable OOD, then run result-to-claim again before claiming any PTA mechanism.
+- **Local R001 complete**: `m7_noprobe seed=42` finished with best eval `25735.26 +/- 1.74 @440k` and final eval `23634.73 +/- 2.03 @500k`; this is encouraging ID/training evidence only, not OOD claim evidence.
+- **Automation status**: local ARIS cron entries are intentionally paused; do not rely on local cron for automatic advancement.
+- **Do not write paper claims yet**: M2/RNN, M6/uncertainty, and full ablation OOD evidence are missing.
+- **Next**: finish remaining `m7_noprobe` seeds `0/1` and `m7_nobelief` seeds `42/0/1`, rerun corrected resumable OOD, then run result-to-claim again before claiming any PTA mechanism.

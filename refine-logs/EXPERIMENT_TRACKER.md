@@ -2,12 +2,12 @@
 
 **Current decision (2026-04-26):** Option 1 selected. Advance `m7_noprobe` and `m7_nobelief` ablations first; do not launch M2, elastoplastic expansion, or paper writing until ablation OOD evidence is available.
 
-**Execution backend note:** R001 is running locally in screen. Future R002-R006 may run through PAI-DLC after the repos are uploaded to DSW. DLC truth lives in `results/dlc/jobs.jsonl` and `results/dlc/runs/*.json`; avoid submitting a duplicate `m7_noprobe seed=42` job unless local R001 is intentionally abandoned or isolated.
+**Execution backend note:** R001 finished locally. R002-R006 are the remaining ablation training jobs and may run through PAI-DLC. DLC truth lives in `results/dlc/jobs.jsonl` and `results/dlc/runs/*.json`; do not submit a duplicate `m7_noprobe seed=42` job unless intentionally isolating results in a separate root.
 
 | Run ID | Milestone | Purpose | System / Variant | Split | Metrics | Priority | Status | Notes |
 |---|---|---|---|---|---|---|---|---|
 | R000 | M0 | Record result-to-claim verdict | M1 vs M7 vs M8 | All corrected OOD v2 | transfer, spill, success | MUST | DONE | Verdict: original claims not supported |
-| R001 | M1 | Train no-probe ablation | `m7_noprobe` seed 42 | train sand | eval reward, checkpoint | MUST | RUNNING | Screen `aris_m7_noprobe_s42`, PID `1518354`, log `logs/orchestration/train_m7_noprobe_seed42.log`; command `python pta/scripts/train_m7.py --ablation no_probe --seed 42 --total-timesteps 500000 --residual-scale 0.05` |
+| R001 | M1 | Train no-probe ablation | `m7_noprobe` seed 42 | train sand | eval reward, checkpoint | MUST | DONE | Local run complete. Best eval `25735.26 +/- 1.74 @440k`; final eval `23634.73 +/- 2.03 @500k`; final checkpoint `checkpoints/m7_pta_noprobe_seed42/m7_pta_final.zip`; best checkpoint exists under `checkpoints/m7_pta_noprobe_seed42/best/`. |
 | R002 | M1 | Train no-probe ablation | `m7_noprobe` seed 0 | train sand | eval reward, checkpoint | MUST | TODO | Same command with `--seed 0` |
 | R003 | M1 | Train no-probe ablation | `m7_noprobe` seed 1 | train sand | eval reward, checkpoint | MUST | TODO | Same command with `--seed 1` |
 | R004 | M1 | Train no-belief ablation | `m7_nobelief` seed 42 | train sand | eval reward, checkpoint | MUST | TODO | `python pta/scripts/train_m7.py --ablation no_belief --seed 42 --total-timesteps 500000 --residual-scale 0.05` |
