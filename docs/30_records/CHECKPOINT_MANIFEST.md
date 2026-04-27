@@ -43,6 +43,28 @@ Local manifest probe on 2026-04-26 found all 9 required artifacts present: 4 und
 - `checkpoints/m7_pta_nobelief_seed0/best/best_model.zip`
 - `checkpoints/m7_pta_nobelief_seed1/best/best_model.zip`
 
+## 2026-04-27 DLC M7 Ablation Resume Points
+
+The five DLC ablation jobs failed on shared-storage writes before final model save. The latest durable resume checkpoint for each run is:
+
+- `checkpoints/m7_pta_noprobe_seed0/m7_pta_400000_steps.zip`
+- `checkpoints/m7_pta_noprobe_seed1/m7_pta_400000_steps.zip`
+- `checkpoints/m7_pta_nobelief_seed42/m7_pta_400000_steps.zip`
+- `checkpoints/m7_pta_nobelief_seed0/m7_pta_400000_steps.zip`
+- `checkpoints/m7_pta_nobelief_seed1/m7_pta_400000_steps.zip`
+
+All five were verified with `PPO.load(...).num_timesteps == 400000`. See `docs/30_records/DLC_M7_ABLATION_RESUME_2026-04-27.md`.
+
+The 400k checkpoints were resubmitted on 2026-04-27 as 400k-to-500k DLC resume jobs:
+
+- `no_probe seed=0`: `dlc14uard6mq7vsw`
+- `no_probe seed=1`: `dlc15e9y4qc12v0j`
+- `no_belief seed=42`: `dlc15o9jiielquzg`
+- `no_belief seed=0`: `dlc15y94wa65t7c8`
+- `no_belief seed=1`: `dlc16i8bnuxurvgb`
+
+Do not use the original `train_ablation` path to continue these runs; it starts PPO from scratch. Use `pta/scripts/resume_m7.py` with `--resume-from <400k zip>` and `--target-timesteps 500000`.
+
 ## Remote Retrieval
 
 Preferred storage choices:
@@ -67,7 +89,7 @@ scripts/smoke_remote.sh .env.dsw
 
 If `CHECKPOINT_BUNDLE_URL` is empty, `download_artifacts.sh` still writes a manifest for whatever checkpoints are already present on disk.
 
-For the current DSW handoff, leave `CHECKPOINT_BUNDLE_URL` empty and submit the five remaining ablation jobs with:
+For a fresh-from-scratch DSW handoff, leave `CHECKPOINT_BUNDLE_URL` empty and submit the five missing ablation jobs with:
 
 ```bash
 python -m pta.scripts.dlc.submit_jobs \
@@ -77,3 +99,5 @@ python -m pta.scripts.dlc.submit_jobs \
   --seeds 42 0 1 \
   --skip no_probe:42
 ```
+
+For the current 2026-04-27 state, those five jobs already reached durable 400k checkpoints and have been resubmitted through the resume path above.
