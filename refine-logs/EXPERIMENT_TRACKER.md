@@ -8,11 +8,11 @@
 |---|---|---|---|---|---|---|---|---|
 | R000 | M0 | Record result-to-claim verdict | M1 vs M7 vs M8 | All corrected OOD v2 | transfer, spill, success | MUST | DONE | Verdict: original claims not supported |
 | R001 | M1 | Train no-probe ablation | `m7_noprobe` seed 42 | train sand | eval reward, checkpoint | MUST | DONE | Local run complete. Best eval `25735.26 +/- 1.74 @440k`; final eval `23634.73 +/- 2.03 @500k`; final checkpoint `checkpoints/m7_pta_noprobe_seed42/m7_pta_final.zip`; best checkpoint exists under `checkpoints/m7_pta_noprobe_seed42/best/`. |
-| R002 | M1 | Train no-probe ablation | `m7_noprobe` seed 0 | train sand | eval reward, checkpoint | MUST | TODO | Same command with `--seed 0` |
-| R003 | M1 | Train no-probe ablation | `m7_noprobe` seed 1 | train sand | eval reward, checkpoint | MUST | TODO | Same command with `--seed 1` |
-| R004 | M1 | Train no-belief ablation | `m7_nobelief` seed 42 | train sand | eval reward, checkpoint | MUST | TODO | `python pta/scripts/train_m7.py --ablation no_belief --seed 42 --total-timesteps 500000 --residual-scale 0.05` |
-| R005 | M1 | Train no-belief ablation | `m7_nobelief` seed 0 | train sand | eval reward, checkpoint | MUST | TODO | Same command with `--seed 0` |
-| R006 | M1 | Train no-belief ablation | `m7_nobelief` seed 1 | train sand | eval reward, checkpoint | MUST | TODO | Same command with `--seed 1` |
+| R002 | M1 | Train no-probe ablation | `m7_noprobe` seed 0 | train sand | eval reward, checkpoint | MUST | DONE | DLC resume job `dlc14uard6mq7vsw`; final checkpoint `checkpoints/m7_pta_noprobe_seed0/m7_pta_final.zip`; `num_timesteps=500352`. |
+| R003 | M1 | Train no-probe ablation | `m7_noprobe` seed 1 | train sand | eval reward, checkpoint | MUST | DONE | DLC resume job `dlc15e9y4qc12v0j`; final checkpoint `checkpoints/m7_pta_noprobe_seed1/m7_pta_final.zip`; `num_timesteps=500352`. |
+| R004 | M1 | Train no-belief ablation | `m7_nobelief` seed 42 | train sand | eval reward, checkpoint | MUST | DONE | DLC resume job `dlc15o9jiielquzg`; final checkpoint `checkpoints/m7_pta_nobelief_seed42/m7_pta_final.zip`; `num_timesteps=500352`. |
+| R005 | M1 | Train no-belief ablation | `m7_nobelief` seed 0 | train sand | eval reward, checkpoint | MUST | DONE | DLC resume job `dlc15y94wa65t7c8`; final checkpoint `checkpoints/m7_pta_nobelief_seed0/m7_pta_final.zip`; `num_timesteps=500352`. |
+| R006 | M1 | Train no-belief ablation | `m7_nobelief` seed 1 | train sand | eval reward, checkpoint | MUST | DONE | DLC resume job `dlc16i8bnuxurvgb`; final checkpoint `checkpoints/m7_pta_nobelief_seed1/m7_pta_final.zip`; `num_timesteps=500352`. |
 | R007 | M2 | Evaluate with ablations | OOD v2 resumable | all current splits | transfer, spill, success | MUST | TODO | Optional ablation checkpoints will add rows automatically |
 | R008 | M3 | Smoke passive-memory baseline | `rnn_ppo` seed 42 | train sand + quick eval | checkpoint loads, quick metrics | CONDITIONAL | TODO | Verify sb3-contrib and OOD runner support before full M2 |
 | R009 | M4 | Full passive-memory baseline | `rnn_ppo` seeds 42/0/1 | all corrected OOD v2 | transfer, spill, success | CONDITIONAL | TODO | Only if continuing explicit-belief claim |

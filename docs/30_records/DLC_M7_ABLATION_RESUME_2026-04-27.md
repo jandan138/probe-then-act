@@ -131,3 +131,36 @@ Use this DLC CLI form for status checks:
   --endpoint=pai-dlc.cn-beijing.aliyuncs.com \
   --region=cn-beijing
 ```
+
+## Completion Check - 2026-04-28
+
+All five 400k-to-500k resume DLC jobs succeeded:
+
+| Variant | Seed | DLC JobId | Running time | Finish time | Worker record |
+|---|---:|---|---|---|---|
+| `no_probe` | `0` | `dlc14uard6mq7vsw` | `2026-04-27T20:50:22Z` | `2026-04-27T22:50:16Z` | `results/dlc/runs/pta_resume_noprobe_s0_400k_500k_20260427T125651Z.json` |
+| `no_probe` | `1` | `dlc15e9y4qc12v0j` | `2026-04-27T20:47:16Z` | `2026-04-27T22:38:06Z` | `results/dlc/runs/pta_resume_noprobe_s1_400k_500k_20260427T125651Z.json` |
+| `no_belief` | `42` | `dlc15o9jiielquzg` | `2026-04-27T20:47:16Z` | `2026-04-27T22:51:00Z` | `results/dlc/runs/pta_resume_nobelief_s42_400k_500k_20260427T125651Z.json` |
+| `no_belief` | `0` | `dlc15y94wa65t7c8` | `2026-04-27T21:00:30Z` | `2026-04-27T22:54:30Z` | `results/dlc/runs/pta_resume_nobelief_s0_400k_500k_20260427T125651Z.json` |
+| `no_belief` | `1` | `dlc16i8bnuxurvgb` | `2026-04-27T20:54:18Z` | `2026-04-27T22:54:52Z` | `results/dlc/runs/pta_resume_nobelief_s1_400k_500k_20260427T125651Z.json` |
+
+Each worker record had `exit_code=0`.
+
+The following final checkpoints exist and were verified with `PPO.load(..., device="cpu")`:
+
+```text
+checkpoints/m7_pta_noprobe_seed0/m7_pta_final.zip     num_timesteps=500352
+checkpoints/m7_pta_noprobe_seed1/m7_pta_final.zip     num_timesteps=500352
+checkpoints/m7_pta_nobelief_seed42/m7_pta_final.zip   num_timesteps=500352
+checkpoints/m7_pta_nobelief_seed0/m7_pta_final.zip    num_timesteps=500352
+checkpoints/m7_pta_nobelief_seed1/m7_pta_final.zip    num_timesteps=500352
+```
+
+The `500352` final timestep is expected because SB3 finishes on rollout
+boundaries.
+
+OOD readiness notes:
+
+- This DSW checkout currently has the five DLC ablation runs above.
+- `checkpoints/m7_pta_noprobe_seed42/` is not present on this DSW checkout; that run completed locally and must be copied in before a full 3-seed OOD ablation table.
+- `pta/scripts/run_ood_eval_v2.py` currently resolves `m7_noprobe` and `m7_nobelief` through `best/best_model`, not `m7_pta_final`. The five resumed DLC jobs have both existing `best/best_model.zip` and new `m7_pta_final.zip`; choose and record the checkpoint policy before launching OOD.
