@@ -24,3 +24,10 @@ paper/main.log
 paper/main.out
 paper/figures_symlink
 *.synctex.gz
+
+# Working scratch (image2 outputs, screenshots dropped in conversation)
+paper/figures/tmp/
+
+# Local mid-loop PDF snapshots (the canonical round artefacts are
+# main_round{0..6}.pdf which ARE tracked).
+paper/main_pre_*.pdf
