@@ -1,18 +1,18 @@
-% IEEE T-RL Preamble
-% Venue-specific package configuration
+% NeurIPS Preamble
+% Venue-specific package configuration + macro shims
 
 % Input path: shared first, then local (for \input{figures/...})
 \makeatletter
 \def\input@path{{../../shared/}{./}}
 \makeatother
 
+% Note: neurips_2025 template already loads hyperref
 % Math
 \usepackage{amsmath,amssymb,amsfonts,amsthm,mathtools}
 \usepackage[utf8]{inputenc}
 \usepackage[T1]{fontenc}
 
-% Typography
-\usepackage{hyperref}
+% Typography (hyperref already loaded by template)
 \usepackage{url}
 \usepackage{booktabs}
 \usepackage{nicefrac}
@@ -23,12 +23,13 @@
 \usepackage{multirow}
 \usepackage{algorithm}
 \usepackage{algorithmic}
-\usepackage{cite}
+
+% cleveref must be last (after hyperref and newtheorem)
 \usepackage[capitalize,noabbrev]{cleveref}
 
-% Theorems (continuous numbering)
+% Theorems (per-section numbering for NeurIPS article class)
 \theoremstyle{plain}
-\newtheorem{theorem}{Theorem}
+\newtheorem{theorem}{Theorem}[section]
 \newtheorem{proposition}[theorem]{Proposition}
 \theoremstyle{definition}
 \newtheorem{definition}[theorem]{Definition}
@@ -36,7 +37,13 @@
 \crefname{assumption}{Assumption}{Assumptions}
 \Crefname{assumption}{Assumption}{Assumptions}
 
-% Figure paths: shared first, then local overrides
+% Macro shim: IEEE-specific commands → no-ops
+\newcommand{\IEEEPARstart}[2]{#1#2}
+
+% Venue marker for conditional macros
+\newcommand{\isneurips}{1}
+
+% Figure paths
 \graphicspath{{../../shared/}{./}}
 
 \input{../../shared/venue_macros}

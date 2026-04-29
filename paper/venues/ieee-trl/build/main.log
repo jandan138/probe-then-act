@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.29 (TeX Live 2026) (preloaded format=pdflatex 2026.3.31)  30 APR 2026 00:48
+This is pdfTeX, Version 3.141592653-2.6-1.40.29 (TeX Live 2026) (preloaded format=pdflatex 2026.3.31)  30 APR 2026 00:49
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
@@ -490,7 +490,7 @@ Package cleveref Info: no abbreviation of names on input line 7852.
 )
 ==> First Aid for cleveref.sty applied!
 \c@theorem=\count335
-) (./math_commands.tex) (/home/zhuzihou/.TinyTeX/texmf-dist/tex/latex/l3backend/l3backend-pdftex.def
+(../../shared/venue_macros.tex)) (./math_commands.tex) (/home/zhuzihou/.TinyTeX/texmf-dist/tex/latex/l3backend/l3backend-pdftex.def
 File: l3backend-pdftex.def 2025-10-09 L3 backend support: PDF output (pdfTeX)
 \l__color_backend_stack_int=\count336
 ) (build/main.aux)
@@ -628,10 +628,10 @@ Package rerunfilecheck Info: File `main.out' has not changed.
 (rerunfilecheck)             Checksum: 615A1CAC9A9E531FD27DECE22F661B5E;4442.
  ) 
 Here is how much of TeX's memory you used:
- 18251 strings out of 469515
- 307855 string characters out of 5469773
+ 18262 strings out of 469515
+ 308149 string characters out of 5469773
  785332 words of memory out of 5000000
- 46003 multiletter control sequences out of 15000+600000
+ 46010 multiletter control sequences out of 15000+600000
  779353 words of font info for 511 fonts, out of 8000000 for 9000
  14 hyphenation exceptions out of 8191
  80i,10n,85p,2166b,584s stack positions out of 10000i,1000n,20000p,200000b,200000s

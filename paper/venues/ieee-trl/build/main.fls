@@ -189,6 +189,11 @@ INPUT /home/zhuzihou/.TinyTeX/texmf-dist/tex/latex/cite/cite.sty
 INPUT /home/zhuzihou/.TinyTeX/texmf-dist/tex/latex/cite/cite.sty
 INPUT /home/zhuzihou/.TinyTeX/texmf-dist/tex/latex/cleveref/cleveref.sty
 INPUT /home/zhuzihou/.TinyTeX/texmf-dist/tex/latex/cleveref/cleveref.sty
+INPUT ../../shared/venue_macros.tex
+INPUT ../../shared/venue_macros.tex
+INPUT ../../shared/venue_macros.tex
+INPUT ../../shared/venue_macros.tex
+INPUT ../../shared/venue_macros.tex
 INPUT ./math_commands.tex
 INPUT ./math_commands.tex
 INPUT ./math_commands.tex

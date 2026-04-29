@@ -1,0 +1,16 @@
+% Venue-conditional macros
+% \input by each venue's preamble.tex after setting venue markers
+
+% Abstract length hint (IEEE: 200 words, NeurIPS: 250 words)
+\ifdefined\isneurips
+  \newcommand{\abstractmaxwords}{250}
+\else
+  \newcommand{\abstractmaxwords}{200}
+\fi
+
+% Section opener shim
+\ifdefined\isneurips
+  \newcommand{\secstart}[1]{#1}
+\else
+  \newcommand{\secstart}[1]{\IEEEPARstart{#1}{}}
+\fi
