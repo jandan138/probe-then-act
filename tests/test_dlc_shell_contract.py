@@ -55,7 +55,7 @@ def test_run_task_train_ablation_dry_run_builds_expected_command(tmp_path):
     assert record["mode"] == "train_ablation"
     assert record["exit_code"] == 0
     assert record["checkpoint_hint"] == (
-        "checkpoints/m7_pta_noprobe_seed42/best/best_model.zip"
+        "checkpoints/m7_pta_noprobe_seed42/m7_pta_final.zip"
     )
 
 
@@ -167,6 +167,47 @@ exec {real_python} "$@"
     record = _record(tmp_path)
     assert record["mode"] == "train_ablation"
     assert record["exit_code"] == 17
+
+
+def test_run_task_train_ablation_accepts_final_checkpoint(tmp_path):
+    code_root = tmp_path / "code"
+    code_root.mkdir()
+    fake_python = tmp_path / "fake-python"
+    real_python = shutil.which("python3")
+    assert real_python is not None
+    _write_fake_python(
+        fake_python,
+        f"""\
+if [ "$1" = "-" ]; then
+    exec {real_python} -
+fi
+case "$*" in
+    *"pta/scripts/train_m7.py"*)
+        mkdir -p checkpoints/m7_pta_noprobe_seed42
+        touch checkpoints/m7_pta_noprobe_seed42/m7_pta_final.zip
+        exit 0
+        ;;
+esac
+exec {real_python} "$@"
+""",
+    )
+    env = _base_env(tmp_path)
+    env["PTA_CODE_ROOT"] = str(code_root)
+    env["PYTHON_BIN"] = str(fake_python)
+    env["DLC_DRY_RUN"] = "0"
+
+    result = subprocess.run(
+        ["/bin/bash", str(RUN_TASK), "train_ablation", "no_probe", "42"],
+        cwd=REPO_ROOT,
+        env=env,
+        text=True,
+        capture_output=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    record = _record(tmp_path)
+    assert record["mode"] == "train_ablation"
+    assert record["exit_code"] == 0
 
 
 def test_run_task_smoke_propagates_cuda_probe_failure(tmp_path):

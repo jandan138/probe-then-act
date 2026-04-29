@@ -1,34 +1,44 @@
 # Experiment Plan
 
-**Problem**: Corrected OOD evaluation shows the current Probe-Then-Act (M7) does not improve broad OOD robustness over reactive PPO (M1). M7 only improves on elastoplastic and is worse on ID, snow, and sand parameter shifts.
+**Problem**: Corrected OOD evaluation plus M7 component ablations show the current Probe-Then-Act family does not improve broad OOD robustness over reactive PPO (M1). M7 only improves on elastoplastic, and that signal is seed-unstable.
 
-**Method Thesis**: The next research cycle should diagnose whether the active probe / belief mechanism contains a recoverable material-specific benefit, or whether the paper should pivot away from broad Probe-Then-Act robustness claims.
+**Method Thesis**: The current method should not be paper-written as a broad robustness contribution. Further work needs an explicit pivot: either a lightweight failure analysis or a new repaired method with a concrete hypothesis.
 
-**Date**: 2026-04-26
+**Date**: 2026-04-29
 
 ## Direction Decision
 
-- **Selected strategy**: Option 1, Ablation-First Diagnostic.
-- **Decision source**: post-result-to-claim strategy discussion on 2026-04-26.
-- **Rationale**: Broad PTA claims are contradicted by corrected OOD results; ablations are the smallest decisive step that can distinguish salvageable mechanism from failed wrapper/training complexity.
-- **Immediate scope**: run only `m7_noprobe` and `m7_nobelief` for seeds `42`, `0`, and `1`, then rerun corrected resumable OOD v2.
-- **Execution backend**: local cron/screen may continue single-GPU work, but PAI-DLC is approved for bounded ablation train/eval jobs after the repos are uploaded to DSW. DLC workers must not run ARIS, cron, opencode, Claude, Codex, or Auto-repo orchestration.
-- **Go / no-go gate**: proceed to M2, elastoplastic confirmation, or paper-facing claims only if ablations explain or repair the M7 degradation. Otherwise pivot away from broad PTA robustness.
+- **Completed strategy**: Option 1, Ablation-First Diagnostic.
+- **Decision source**: post-ablation result-to-claim review on 2026-04-29.
+- **Rationale**: Broad PTA claims are contradicted by corrected OOD results, and ablations do not repair or localize the degradation enough to support a paper-facing robustness claim.
+- **Completed scope**: `m7_noprobe` and `m7_nobelief` were trained for seeds `42`, `0`, and `1`; corrected resumable OOD v2 was rerun for the ablations.
+- **Execution backend**: R001 finished locally; R002-R006 finished through the DLC handoff; R007 ablation OOD finished locally. DLC workers remain bounded compute workers only.
+- **Go / no-go gate**: **NO-GO** for broad PTA robustness. Do not proceed to M2, elastoplastic confirmation, or paper-writing unless the user explicitly chooses a narrowed salvage path.
+
+## Post-Ablation Verdict
+
+| System | All-OOD Transfer Delta vs M1 | All-OOD Spill Delta vs M1 | All-OOD Success Delta vs M1 | Interpretation |
+|---|---:|---:|---:|---|
+| M7 full | -0.0858 | +0.0894 | 0.0000 | Worse overall, one unstable elastoplastic win |
+| M7 no-probe | -0.2733 | +0.1365 | -0.3333 | Probe removal damages the M7 family |
+| M7 no-belief | -0.1279 | +0.0693 | -0.2167 | Belief removal does not repair broad OOD |
+
+The ablations support only a metric-scoped internal mechanism statement: probing helps relative to `m7_noprobe`, while belief helps transfer/success relative to `m7_nobelief` but not all-OOD spill. They do not support broad robustness over M1.
 
 ## Claim Map
 
 | Claim | Why It Matters | Minimum Convincing Evidence | Linked Blocks |
 |---|---|---|---|
 | C1: Current broad robustness claim is not supported | Prevents overclaiming | Result-to-claim verdict recorded from complete corrected OOD table | B0 |
-| C2: M7 degradation can be localized to probe, belief, or training instability | Needed before salvage | `no_probe` / `no_belief` ablations identify which component changes ID/OOD regressions | B1 |
+| C2: M7 degradation can be localized to probe, belief, or training instability | Needed before salvage | Ablations show metric-scoped component effects but do not identify a single removable module that repairs M1 regressions | B1 |
 | C3: Explicit belief is better than passive memory | Only keep if M2 is run | M7 or a repaired variant beats M2 on OOD material with success and spill evidence | B2 |
 | C4: A narrower material-specific PTA claim may exist | Salvage path if broad claim fails | Elastoplastic gain repeats across more seeds and is explained by ablations | B3 |
 
 ## Paper Storyline
 
 - Main paper must not claim broad PTA robustness from the current run.
-- Appendix can report the negative corrected OOD result as a diagnostic if the project pivots.
-- Experiments intentionally cut for now: OOD-tool, OOD-sensor, uncertainty calibration, second-task validation, and M2 full baseline until ablation evidence justifies retaining a PTA paper story.
+- Appendix can report the negative corrected OOD and ablation result as a diagnostic if the project pivots to a failure-analysis story.
+- Experiments cut by default: M2/RNN, M6/uncertainty, OOD-tool, OOD-sensor, second-task validation, and paper-writing. Revive only after an explicit new hypothesis is chosen.
 
 ## Experiment Blocks
 
@@ -54,9 +64,10 @@
 - **Metrics**: transfer, spill, success; primary diagnostic is M7 ablation delta against full M7 and M1.
 - **Setup details**: Train `train_m7.py --ablation no_probe` and `--ablation no_belief` for seeds `42,0,1`, `500000` timesteps, residual scale `0.05`; rerun resumable OOD v2.
 - **Success criterion**: One ablation clearly explains the degradation or preserves the elastoplastic gain while improving snow/parameter splits.
-- **Failure interpretation**: If all M7 variants underperform M1, the current PTA wrapper/mechanism is not a viable paper contribution.
+- **Result**: Not met. All M7 variants underperform M1 on all-OOD average transfer/spill; no-probe is much worse, and no-belief remains below M1.
+- **Failure interpretation**: The current PTA wrapper/mechanism is not a viable broad-robustness paper contribution.
 - **Table / figure target**: Ablation / diagnostic table.
-- **Priority**: MUST-RUN
+- **Priority**: DONE, no-go
 
 ### Block 2: Passive-Memory Baseline Check
 
@@ -69,7 +80,7 @@
 - **Success criterion**: M7/repaired M7 beats M2 on OOD-material in both success and spill, not just one seed.
 - **Failure interpretation**: If M2 matches or beats M7, remove explicit-belief superiority from the paper.
 - **Table / figure target**: Main comparison only if M7 is repaired; otherwise diagnostic appendix.
-- **Priority**: MUST-RUN if continuing PTA paper; otherwise cut.
+- **Priority**: CUT unless a new explicit-belief claim is approved.
 
 ### Block 3: Elastoplastic Confirmation
 
@@ -82,7 +93,7 @@
 - **Success criterion**: Positive transfer/spill/success deltas on most seeds, not only the aggregate mean.
 - **Failure interpretation**: If unstable, treat the elastoplastic win as noise and pivot.
 - **Table / figure target**: Narrow material-specific claim figure only if confirmed.
-- **Priority**: NICE-TO-HAVE after Block 1.
+- **Priority**: DEFERRED; only if explicitly pivoting to a narrow dynamics-adaptation story.
 
 ### Block 4: Failure-Mode Inspection
 
@@ -95,38 +106,39 @@
 - **Success criterion**: Identify a concrete failure mechanism, e.g. probe perturbation degrades initial particle geometry or belief conditioning biases residuals.
 - **Failure interpretation**: If no clear mechanism, avoid mechanism claims and pivot.
 - **Table / figure target**: Qualitative diagnostic panel.
-- **Priority**: MUST-RUN for diagnosis, not necessarily for paper.
+- **Priority**: DEFERRED; run only after an explicit failure-analysis pivot is approved.
 
 ## Run Order and Milestones
 
 | Milestone | Goal | Runs | Decision Gate | Cost | Risk |
 |---|---|---|---|---|---|
 | M0 | Freeze result-to-claim verdict | Record completed OOD table and verdict | `claim_supported=no` recorded | Done | None |
-| M1 | Determine whether M7 components hurt | Train `m7_noprobe` / `m7_nobelief`, seeds 42/0/1 | Any variant beats M1 or explains M7 damage? | High, comparable to M7 training | Another OOM / slow Genesis; selected as the next approved direction |
-| M2 | Rerun OOD with ablations | Resume OOD v2 after ablation checkpoints exist | Exact rows complete, compare to M1/M7 | Medium-long | More optional rows increase eval time |
-| M3 | Decide whether M2 is worth running | M2 seed-42 smoke training and eval support | Checkpoint loads and quick eval works | Medium | sb3-contrib / recurrent eval mismatch |
-| M4 | Run M2 if continuing PTA claim | M2 seeds 42/0/1 + OOD support | M7/repaired M7 beats M2? | High | If negative, original paper direction ends |
-| M5 | Confirm elastoplastic if still promising | Add seeds or deterministic rerun | Stable positive deltas? | Medium | Gain may vanish |
+| M1 | Determine whether M7 components hurt | Train `m7_noprobe` / `m7_nobelief`, seeds 42/0/1 | Any variant beats M1 or explains M7 damage? | Done | Gate failed |
+| M2 | Rerun OOD with ablations | Resume OOD v2 after ablation checkpoints exist | Exact rows complete, compare to M1/M7 | Done | `65` rows complete, no failed episodes |
+| M3 | Decide whether M2 is worth running | M2 seed-42 smoke training and eval support | Checkpoint loads and quick eval works | Cut | No broad PTA claim remains to compare |
+| M4 | Run M2 if continuing PTA claim | M2 seeds 42/0/1 + OOD support | M7/repaired M7 beats M2? | Cut | Revive only with new explicit-belief hypothesis |
+| M5 | Confirm elastoplastic if still promising | Add seeds or deterministic rerun | Stable positive deltas? | Deferred | Only for a narrow dynamics-adaptation pivot |
 
 ## Compute and Data Budget
 
-- Total must-run cost before decision: ablation training for 6 runs plus one expanded OOD eval.
-- Additional cost if continuing original paper: M2 smoke + 3-seed training + evaluator support.
-- Biggest bottleneck: Genesis eval/training runtime and process-level memory growth.
-- Mitigation: keep resumable OOD enabled; rely on cron restarts locally; use PAI-DLC for parallel ablation workers when available; avoid adding optional splits until ablations justify them.
+- The ablation decision cost is complete: 6 ablation training runs plus one expanded OOD eval.
+- No additional compute is approved by default after the no-go verdict.
+- If a new hypothesis is approved, the biggest bottleneck remains Genesis eval/training runtime and process-level memory growth.
+- Mitigation for any future runs: keep resumable OOD enabled, keep local cron paused unless explicitly re-enabled, and use PAI-DLC only for bounded worker jobs.
 
 ## Risks and Mitigations
 
-- **Risk**: M7 ablations are also worse than M1. **Mitigation**: pivot away from PTA robustness; write a negative finding or switch method.
+- **Risk**: M7 ablations are also worse than M1. **Status**: realized; pivot away from PTA robustness.
 - **Risk**: M2 implementation/eval is incompatible with current OOD runner. **Mitigation**: run seed-42 smoke and add evaluator support before full training.
 - **Risk**: Elastoplastic gain is not stable. **Mitigation**: do not use it as a paper claim unless it repeats across seeds.
-- **Risk**: Timeline too short for full salvage. **Mitigation**: prioritize Block 1 and use result-to-claim again before any paper writing.
+- **Risk**: Timeline too short for full salvage. **Mitigation**: do not start paper-writing without a new supported claim.
 
 ## Final Checklist
 
 - [x] Main OOD result is complete and verdict recorded
 - [x] Direction selected: Option 1, ablation-first diagnosis
-- [ ] Novelty is isolated by ablations
-- [ ] Passive-memory baseline is available if belief claim is retained
-- [ ] Uncertainty contribution is either tested or removed from claims
-- [ ] Nice-to-have runs are separated from must-run runs
+- [x] Ablation OOD result is complete
+- [x] Post-ablation no-go verdict is recorded
+- [ ] New pivot direction is explicitly chosen before more compute
+- [ ] Passive-memory baseline is either cut or re-approved under a new claim
+- [ ] Uncertainty contribution is removed from claims unless tested later

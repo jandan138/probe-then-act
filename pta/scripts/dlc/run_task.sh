@@ -155,7 +155,7 @@ PY
                 exit 2
                 ;;
         esac
-        CHECKPOINT_HINT="checkpoints/${CKPT_DIR}/best/best_model.zip"
+        CHECKPOINT_HINT="checkpoints/${CKPT_DIR}/m7_pta_final.zip"
         export CHECKPOINT_HINT
         run_or_print "$PYTHON_BIN" -u pta/scripts/train_m7.py \
             --ablation "$VARIANT" \

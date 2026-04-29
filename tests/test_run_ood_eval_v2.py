@@ -189,6 +189,23 @@ def test_result_key_uses_method_seed_split():
     assert result_key(row) == ("m1_reactive", 42, "ood_snow")
 
 
+def test_resolve_checkpoint_path_prefers_explicit_final_pattern(tmp_path):
+    from pta.scripts.run_ood_eval_v2 import resolve_checkpoint_path
+
+    run_dir = tmp_path / "checkpoints" / "m7_pta_noprobe_seed0"
+    (run_dir / "best").mkdir(parents=True)
+    (run_dir / "best" / "best_model.zip").write_text("best", encoding="utf-8")
+    (run_dir / "m7_pta_final.zip").write_text("final", encoding="utf-8")
+
+    resolved = resolve_checkpoint_path(
+        tmp_path,
+        "checkpoints/m7_pta_noprobe_seed{seed}/m7_pta_final",
+        seed=0,
+    )
+
+    assert resolved == run_dir / "m7_pta_final.zip"
+
+
 def test_append_result_row_writes_header_once(tmp_path):
     from pta.scripts.run_ood_eval_v2 import RESULT_FIELDNAMES, append_result_row
 
@@ -288,6 +305,26 @@ def test_write_aggregate_results_creates_main_results_csv(tmp_path):
     assert path.exists()
     assert agg_rows[0]["method"] == "m1_reactive"
     assert agg_rows[0]["n_failed_episodes_sum"] == 0
+
+
+def test_csv_writers_use_lf_line_endings(tmp_path):
+    from pta.scripts.run_ood_eval_v2 import (
+        append_result_row,
+        write_aggregate_results,
+        write_result_rows,
+    )
+
+    appended_path = tmp_path / "appended.csv"
+    replaced_path = tmp_path / "replaced.csv"
+    aggregate_path = tmp_path / "aggregate.csv"
+    row = _result_row()
+
+    append_result_row(appended_path, row)
+    write_result_rows(replaced_path, [row])
+    write_aggregate_results(aggregate_path, [row])
+
+    for path in [appended_path, replaced_path, aggregate_path]:
+        assert b"\r\n" not in path.read_bytes()
 
 
 def test_prepare_result_files_removes_existing_outputs_when_resume_disabled(tmp_path):
