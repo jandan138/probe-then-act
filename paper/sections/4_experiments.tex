@@ -31,7 +31,7 @@ We compare five systems, all trained with identical 500\,k-step PPO budgets and 
 \begin{itemize}
     \item \textbf{M1: Reactive PPO}---standard reactive baseline conditioned on $s_t$ only. No probe, no belief.
     \item \textbf{M7: \PTA{} (ours)}---the full two-stage architecture of \cref{sec:method}.
-    \item \textbf{M8: Privileged Teacher}---an oracle that receives ground-truth material parameters (7-D privileged observation) concatenated to $s_t$. Provides an informational upper bound.
+    \item \textbf{M8: Privileged-Parameter Baseline}---a sand-only-trained residual policy that additionally receives ground-truth material parameters (7-D privileged observation) concatenated to $s_t$, but is otherwise matched to M1/M7. Not a broadly trained oracle; we do not treat it as a universal informational upper bound.
     \item \textbf{M7-NoProbe}---ablation that skips the probing phase; encoder sees a zero trace.
     \item \textbf{M7-NoBelief}---ablation that runs the probe but drops the encoder output.
 \end{itemize}

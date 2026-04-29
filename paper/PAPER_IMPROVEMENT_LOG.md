@@ -156,3 +156,59 @@ Round 2 PDF: `main_round2.pdf` (9 pages, 0 overfull, 0 undefined refs, 5,632 wor
 - [ ] **Manual** (not in this loop): IEEE author block / contact info / copyright form
 - [ ] **Manual** (not in this loop): supplementary release of code + checkpoints
 - [ ] **Optional**: TikZ replacement of matplotlib hero-figure left panel
+
+## Rounds 5-6 (figure overhaul + presentation polish, 2026-04-29)
+
+Second pass of `auto-paper-improvement-loop` (GPT-5.5 xhigh, fresh Codex MCP threadId `019dd9ce-ed90-7aa3-ad98-96f50ee689ec`) focused on user-flagged figure quality issues plus any remaining content drift.
+
+### Score progression continued
+
+| Round | Content | Presentation | Overall | Verdict | Pages | Overfull |
+|-------|---------|--------------|---------|---------|-------|----------|
+| Round 4 (post-image-swap baseline) | 6.5 | 6.2 | 6.4 | Almost | 9 | 0 |
+| Round 5 (after fig overhaul) | 6.6 | 5.9 | 6.4 | Almost (no critical) | 9 | 0 |
+| Round 6 (after polish) | 6.7 | **7.2** | **6.8** | **Almost / ready after minor polish** | 9 | 0 |
+
+### Round 5 review (focus: figure variety, fig2 polish, redundancy)
+
+GPT-5.5 verdict: no CRITICAL issues; 4 MAJORs all on presentation:
+- MAJOR 1: bar-chart redundancy across fig1-right / fig2 / fig3 / fig4
+- MAJOR 2: uncertainty visually under-emphasized
+- MAJOR 3: hypothesis still under-identified; no diagnostic added this round
+- MAJOR 4: M8 needs sharper visual treatment in main results
+
+### Round 5 fixes implemented
+
+- **Fig 1-right**: replaced grouped bar chart with effect/dumbbell plot (M7-M1 deltas across splits, vertical zero line, M8-M1 hollow triangles overlay).
+- **Fig 2**: replaced standalone grouped bar chart with 3x5 transfer-efficiency heatmap (rows = M1/M7/M8, cols = 5 splits, cell labels, OOD-elastoplastic outlined).
+- **Fig 3**: replaced 3-panel bar chart with Cleveland dot-plot matrix (rows = methods, cols = transfer/retained/success; per-seed dots + min-max whiskers + mean dot). Spill reframed as "Retained material" so all metrics are higher-is-better.
+- **Fig 4**: replaced bar+scatter with paired-seed slope chart (one panel per split, green = M7>M1 on that seed, red = reverse, heavy black = seed mean; OOD-elastoplastic panel framed in magenta).
+- **All captions**: added 3-seed/10-episode protocol, descriptive (not significance-tested) language, and self-contained legend explanations.
+- **Naming**: "M8 Privileged Teacher" -> "M8 Privileged-Param" / "Privileged-Parameter Baseline" globally (abstract, intro, table 1, results, discussion subsection, conclusion).
+- **Table 1 caption**: removed false "p<0.05 paired t-test" claim; replaced with descriptive disclosure + M8 single-seed disclosure.
+
+### Round 6 review
+
+GPT-5.5: MAJOR 1 (redundancy) **resolved**; MAJOR 2 (uncertainty) **mostly resolved**. No CRITICAL. Remaining items are MINOR polish (legend, color semantics, annotation tone, mean-line weight, row order).
+
+### Round 6 fixes implemented
+
+- **Fig 2**: column order unified with TABLE_1 / fig 4 (id_sand, EP, snow, hard, soft); annotation softened ("Conditional win" -> "Only positive PTA split"); single-seed M8 row marked with dagger.
+- **Fig 3**: row order changed to (M7-Full, M1, M7-NoBelief, M7-NoProbe) so the rhetorical claim "ablations fall to or below the reactive baseline" reads top-to-bottom.
+- **Fig 4**: mean line weight reduced (1.8 -> 1.4) so per-seed slopes remain visually dominant.
+- **Fig 1-right**: legend made more compact and frameless; sign also encoded by marker shape (circle = M7, triangle = M8) so colour is redundant for grayscale/colorblind print.
+- **Fig 1 caption**: cross-references both `fig:main` (absolute landscape) and `fig:seeds` (matched-seed dispersion).
+- **§V-A**: added explicit "M8 was scored from a single trained seed" disclosure adjacent to the fig:main reference.
+- **NaN accounting**: added "Across all (method, split, seed) ... total NaN-rollout count was zero" to fig:main caption.
+
+### Items NOT addressed in this loop
+
+- Post-probe recovery diagnostic (COM displacement / height-map L2 across sand/snow/elastoplastic) — out of scope this round; rollout logs exist but extraction is non-trivial. Hypothesis remains explicitly interpretive.
+- Per-method/split NaN counts in a footnote table — disclosed at the global level only.
+- 30% threshold rationale beyond what is already in §IV ("scripted exceeds on snow/elastoplastic but not on sand").
+
+### PDFs
+
+- `main_round5.pdf` — after Round 5 figure replacements (9 pages)
+- `main_round6.pdf` — after Round 6 polish (9 pages, 0 overfull, final)
+- `main.pdf` = `main_round6.pdf`

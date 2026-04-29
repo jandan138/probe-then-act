@@ -14,7 +14,7 @@ If the hypothesis holds more broadly, the implied prescription is to allocate pr
 
 This is a scope claim, not a universal recipe. A robotic stack handling mixed materials should include a coarse material-class router that selects between \PTA{} and a reactive policy.
 
-\subsection{Why the Privileged Teacher Fails on the Elastoplastic Split}
+\subsection{Why the Privileged-Parameter Baseline Fails on the Elastoplastic Split}
 
 A residual PPO policy maps observation to joint residual, trained over rollouts. M8's training distribution is dominated by sand rollouts where rebound is negligible, so its residual head was never shaped to anticipate elastic rebound. At test time on elastoplastic, reading $(E, \nu)$ does not unlock a response curve that was never trained; the sand-shaped residual over-corrects and the rollout fails. \PTA{} sidesteps this by using the probe to \emph{elicit} a rebound response at test time that the encoder summarizes for the policy. We frame the lesson narrowly: in our matched, sand-only-trained setting, raw parameter access did not produce a useful elastoplastic policy whereas the probe trace did. A more carefully designed teacher---trained on a domain-randomized material mix, or given learned features of $(E,\nu,\rho)$ rather than raw values---could in principle close this gap.
 

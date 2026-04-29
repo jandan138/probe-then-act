@@ -1,6 +1,6 @@
 \begin{table*}[t]
 \centering
-\caption{Cross-material transfer efficiency (\%) across five evaluation splits. Mean $\pm$ standard deviation over 3 seeds. M7 significantly improves over M1 on elastoplastic (\textbf{+14.7pp}, p<0.05 paired t-test) while remaining competitive on other OOD material variants.}
+\caption{Cross-material transfer efficiency (\%) across five evaluation splits. Mean $\pm$ seed standard deviation over 3 training seeds (10 deterministic episodes per seed). M7 leads on OOD elastoplastic by 14.7\,pp; we report this as a directional, descriptive comparison, \emph{not} a significance-tested result---per-seed dispersion on elastoplastic is $\sim 40$\,pp and the test is underpowered (\cref{sec:results_stats}). M8 std is $0.0$ because M8 was scored on a single seed (oracle baseline).}
 \label{tab:main_results}
 \begin{tabular}{lcccccc}
 \toprule
@@ -8,7 +8,7 @@ Method & ID Sand & OOD EP & OOD Snow & OOD Hard & OOD Soft & Avg OOD \\
 \midrule
 M1: Reactive & 64.1$\pm$8.0 & 46.0$\pm$40.0 & 55.9$\pm$22.8 & 62.3$\pm$7.4 & 68.7$\pm$10.7 & 58.2 \\
 \textbf{M7: Probe-Then-Act (Ours)} & 41.9$\pm$9.1 & \textbf{60.7$\pm$43.3} & 42.6$\pm$18.4 & 48.8$\pm$9.9 & 46.5$\pm$5.9 & 49.7 \\
-M8: Privileged Teacher & 64.6 & 0.0 & 61.1 & 62.4 & 53.0 & 44.1 \\
+M8: Privileged-Param & 64.6 & 0.0 & 61.1 & 62.4 & 53.0 & 44.1 \\
 \bottomrule
 \end{tabular}
 \end{table*}
