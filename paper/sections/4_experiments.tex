@@ -5,7 +5,14 @@
 
 We build the cross-material benchmark in the Genesis multi-physics simulator~\cite{genesis2024} around a single \emph{edge-push} task. A Franka Panda arm (7 DoF) equipped with a flat scoop end-effector must push a pile of particles from an elevated source platform across a raised edge into a target bin, with spill onto the floor penalized. This task is deliberately simple kinematically---it is essentially a horizontal push followed by a settle---so that differences across methods can be attributed to material-adaptive behavior rather than to task-specific engineering.
 
-\cref{tab:benchmark} summarizes the five material splits. We use Genesis MPM at grid density 128 with 25 substeps per control step (control $\Delta t = 2 \times 10^{-3}$~s). Particles are initialized with $y = 0.02$~m (``Config D''); the source platform ensures that gravity alone does not trivially move particles across the edge.
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=0.98\columnwidth]{figures/fig5_scene_schematic.pdf}
+    \caption{\textbf{Edge-push benchmark scene.} Top: top-down view of the same scene instantiated with each material family (sand / snow / elastoplastic); the particle pile sits on a small elevated source platform and the policy must push it across the red edge into the target bin without spilling. Bottom: side view (X--Z) showing the source pedestal, particle pile, scoop end-effector, and edge marker. The scene geometry (platform, bin, pile size and position) is identical across material families; only the MPM material parameters differ.}
+    \label{fig:scene_schematic}
+\end{figure}
+
+\cref{tab:benchmark} summarizes the five material splits. \cref{fig:scene_schematic} shows the corresponding scene geometry; the same Franka, scoop, source platform, target bin, and pile placement (Config D, 5.5\,cm from the open edge) are used for every split, so cross-split differences come from material parameters alone. We use Genesis MPM at grid density 128 with 25 substeps per control step (control $\Delta t = 2 \times 10^{-3}$~s).
 
 \paragraph{Material choices.}
 The three material families span physically distinct behaviors. \emph{Sand} (granular, $E=5 \times 10^4$, $\nu=0.3$, $\rho=2000$) is the training material and the hardest---a scripted baseline achieves only 32\% transfer because particles deform under the scoop and flow backward. \emph{Snow} (cohesive, $E=1 \times 10^5$, $\nu=0.2$, $\rho=400$) is the easiest (87\% scripted transfer) because cohesion allows the pile to translate as a block. \emph{Elastoplastic} ($E=5 \times 10^4$, $\nu=0.4$, $\rho=1000$) is intermediate (70\% scripted transfer) and exhibits recoverable elastic rebound: the pile partially relaxes back after each push, so a fixed residual over-corrects. We use ``elastoplastic'' throughout to refer to this Genesis material model and reserve ``viscoelastic'' as a description of the rebound behavior it exhibits, rather than as an independent material class. The 55pp spread between hardest and easiest is \emph{discriminative} by design, forcing methods to actually adapt rather than memorize a single push profile.

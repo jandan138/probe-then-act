@@ -24,3 +24,6 @@ paper/main.log
 paper/main.out
 paper/figures_symlink
 *.synctex.gz
+
+# Failed/experimental Genesis render outputs (kept locally for diagnosis)
+figures/genesis_renders/
