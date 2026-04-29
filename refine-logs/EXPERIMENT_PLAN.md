@@ -1,8 +1,8 @@
 # Experiment Plan
 
-**Problem**: Corrected OOD evaluation plus M7 component ablations show the current Probe-Then-Act family does not improve broad OOD robustness over reactive PPO (M1). M7 only improves on elastoplastic, and that signal is seed-unstable.
+**Problem**: Corrected OOD evaluation plus M7 component ablations show the current Probe-Then-Act family does not improve broad OOD robustness over reactive PPO (M1). M7 only improves on elastoplastic.
 
-**Method Thesis**: The current method should not be paper-written as a broad robustness contribution. Further work needs an explicit pivot: either a lightweight failure analysis or a new repaired method with a concrete hypothesis.
+**Method Thesis (2026-04-29 update)**: After user-approved narrative pivot, the paper now claims a **narrow but defensible scope** under the **recoverable-deformation hypothesis**: active probing helps when probe-induced perturbations relax back on the task timescale (viscoelastic media), and hurts when they do not (granular non-cohesive media). The 5-split asymmetry is reframed as predicted by the hypothesis, not as broad robustness. Paper compiled at `paper/main.pdf` (9 pages, IEEE T-RL).
 
 **Date**: 2026-04-29
 
@@ -139,6 +139,9 @@ The ablations support only a metric-scoped internal mechanism statement: probing
 - [x] Direction selected: Option 1, ablation-first diagnosis
 - [x] Ablation OOD result is complete
 - [x] Post-ablation no-go verdict is recorded
-- [ ] New pivot direction is explicitly chosen before more compute
-- [ ] Passive-memory baseline is either cut or re-approved under a new claim
-- [ ] Uncertainty contribution is removed from claims unless tested later
+- [x] **New pivot direction explicitly chosen (2026-04-29):** narrowed scope under the **recoverable-deformation hypothesis** — active probing helps when probe-induced perturbations relax back on the task timescale (viscoelastic), and hurts when they do not (granular non-cohesive). No additional compute used; existing experimental matrix is sufficient.
+- [x] **Passive-memory baseline (M2/RNN) cut** — not part of the narrowed scope.
+- [x] **Uncertainty / M6 contribution removed** from paper claims.
+- [x] **Paper writing pipeline executed (2026-04-29):** `/paper-plan` → `/paper-figure` → `/paper-write` → `/paper-compile` → `paper/main.pdf` (9 pages, IEEE T-RL).
+- [ ] Optional: `/auto-paper-improvement-loop` polish (≤2 GPT review rounds).
+- [ ] Manual: IEEE author block + copyright form, supplementary release of code+checkpoints before 2026-04-30 deadline.

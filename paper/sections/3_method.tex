@@ -1,0 +1,44 @@
+\section{Method}
+\label{sec:method}
+
+We formalize \PTA{} as a two-stage decision process that augments a standard finite-horizon MDP with an explicit probing phase and a latent task-conditioning step.
+
+\subsection{Problem Formulation}
+
+An episode consists of a robot interacting with a material instance $m \in \calM$ drawn from a distribution over hidden physical properties (Young's modulus $E$, Poisson ratio $\nu$, density $\rho$, cohesion, and plasticity parameters). The robot receives observation $s_t \in \R^{d_s}$ at step $t$ and applies action $a_t \in \R^{d_a}$. The observation contains proprioceptive state (joint positions, end-effector pose, time fraction) and aggregate particle statistics computed from simulator state---mean $y$-coordinate, transfer fraction into the target region, and spill fraction off the platform---but \emph{not} the ground-truth material parameters $m$. The task reward combines transfer, spill, and success terms; we use the edge-push reward shaping of~\cite{genesis2024}.
+
+Our goal is to learn a policy $\pi_\theta(a_t \mid s_t, z, \sigma)$ that maximizes expected episode return over the material distribution, where $(z, \sigma)$ is a latent task-conditioning vector produced by an encoder $q_\phi$ from a short probing rollout. We refer to $(z, \sigma)$ as a ``belief'' for brevity but do not interpret it as a calibrated posterior: $\sigma$ is a learned scale used at training time, not a posterior standard deviation. $m$ is never observed; $z$ must be inferred entirely from the probing interaction.
+
+\subsection{Two-Stage Structure}
+
+An episode of horizon $H$ is split into a probing phase of length $H_p = 3$ and a task phase of length $H - H_p$.
+
+\paragraph{Probe phase.}
+During the first $H_p$ steps the task residual is held at zero and the robot executes a fixed, open-loop probing trajectory $a^{\mathrm{probe}}_t$ over a scripted approach. This yields a probing trace
+\begin{equation}
+    \tau_{\mathrm{probe}} = \{(s_0, a^{\mathrm{probe}}_0), \dots, (s_{H_p-1}, a^{\mathrm{probe}}_{H_p-1})\},
+\end{equation}
+which is a $H_p \times d_{\mathrm{probe}}$ tensor whose rows capture how the material responded to each applied action. We deliberately use a fixed probe schedule rather than a learned probe policy: it isolates the contribution of the \emph{encoder} and keeps the probe-vs-task credit assignment clean.
+
+\paragraph{Encoder.}
+A two-layer MLP with hidden size 256 maps each probe step independently to a feature vector, mean-pools across steps, and emits $(\mu_z, \log \sigma_z^2) \in \R^{16} \times \R^{16}$ via a linear head. We sample $z \sim \N(\mu_z, \diag(\sigma_z^2))$ at training and use $z = \mu_z$ at evaluation. The encoder is trained jointly with the policy via the PPO loss only---no classification objective, KL regularizer, or calibration loss on $\sigma_z$.
+
+\paragraph{Task policy.}
+The task policy $\pi_\theta$ is a feedforward Gaussian policy over joint-space residuals, with state $[s_t, \mu_z, \sigma_z]$. It emits a 7-DoF residual $\Delta q_t$ that is added to a scripted edge-push base trajectory $q^{\mathrm{base}}_t$:
+\begin{equation}
+    q_t = q^{\mathrm{base}}_t + \eta \cdot \Delta q_t,
+\end{equation}
+where $\eta = 0.05$ is a residual scale that empirically balances exploration with base-trajectory preservation. Applied joint targets are commanded through \texttt{set\_qpos}, bypassing inverse kinematics coupling artifacts we observed in Genesis at the home configuration.
+
+\subsection{Training Objective}
+
+Both the encoder $q_\phi$ and the policy $\pi_\theta$ are trained end-to-end with PPO~\cite{schulman2017proximal}. The probe phase runs first; the encoder produces $(\mu_z, \sigma_z)$ from $\tau_{\mathrm{probe}}$; the task phase is rolled out with $\pi_\theta(\cdot \mid s_t, \mu_z, \sigma_z)$. Advantages and returns are computed over the task phase only, so $z$ is shaped indirectly by its downstream effect on returns. Because the probe trajectory is fixed open-loop, gradients do not flow into the probing actions; the encoder learns to extract task-relevant signal from a pre-specified probing response rather than to optimize the probe.
+
+\subsection{Ablation Variants}
+
+We study two ablations that remove one component at a time while keeping everything else fixed:
+\begin{itemize}
+    \item \textbf{No-Probe.} The probing phase is skipped; the encoder receives a zero trace and produces a degenerate $z$. This isolates the contribution of actually executing probing actions.
+    \item \textbf{No-Belief.} The probe phase still runs, but the encoder output is dropped and the task policy conditions only on $s_t$ (as in the reactive baseline, but trained with the same pipeline). This isolates the contribution of explicitly encoding the probing information.
+\end{itemize}
+Together these ablations test whether the gain stems from probing itself, from belief conditioning, or from incidental factors in the training pipeline.

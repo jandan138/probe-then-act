@@ -13,3 +13,14 @@ results_scoop_viewer_launch.log
 *.pth
 .venv/
 .worktrees/
+
+# LaTeX build artifacts
+paper/main.aux
+paper/main.bbl
+paper/main.blg
+paper/main.fdb_latexmk
+paper/main.fls
+paper/main.log
+paper/main.out
+paper/figures_symlink
+*.synctex.gz

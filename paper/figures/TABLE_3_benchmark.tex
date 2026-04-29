@@ -1,0 +1,19 @@
+\begin{table}[t]
+\centering
+\footnotesize
+\setlength{\tabcolsep}{3pt}
+\renewcommand{\arraystretch}{0.95}
+\caption{Cross-material benchmark composition. Scripted baseline transfer varies by 55pp, confirming discriminative difficulty. $E$: Young's modulus; $\nu$: Poisson ratio.}
+\label{tab:benchmark}
+\begin{tabular}{llcc}
+\toprule
+Split & Material ($E$, $\nu$) & Scripted & Role \\
+\midrule
+ID & Sand ($5{\times}10^4$, $0.3$) & 32\% & Training \\
+OOD-Mat. & Snow ($1{\times}10^5$, $0.2$) & 87\% & Unseen family \\
+OOD-Mat. & Elastoplastic ($5{\times}10^4$, $0.4$) & 70\% & Unseen family \\
+OOD-Par. & Sand-Hard ($8{\times}10^4$) & -- & Param.\ shift \\
+OOD-Par. & Sand-Soft ($2{\times}10^4$) & -- & Param.\ shift \\
+\bottomrule
+\end{tabular}
+\end{table}
