@@ -14,10 +14,13 @@ import re
 import shutil
 import sys
 from pathlib import Path
+from typing import Optional
 
 
-def resolve_input_path(input_path: str, base_dir: Path, venues_dir: Path) -> Path | None:
+def resolve_input_path(input_path: str, base_dir: Path, venues_dir: Path) -> Optional[Path]:
     """Resolve a \input{path} to an actual file."""
+    # Compute paper root from venues_dir (venues/<venue>/ -> paper/)
+    paper_dir = venues_dir.parent.parent
     # Try relative to base_dir first
     p = (base_dir / input_path).resolve()
     if p.exists():
@@ -31,11 +34,31 @@ def resolve_input_path(input_path: str, base_dir: Path, venues_dir: Path) -> Pat
         p = (base / (input_path + ".tex")).resolve()
         if p.exists():
             return p
+    # Try paper root (for paths like figures/... from shared/sections/)
+    p = (paper_dir / input_path).resolve()
+    if p.exists():
+        return p
+    p = (paper_dir / (input_path + ".tex")).resolve()
+    if p.exists():
+        return p
+    # Try shared/figures/ for TABLE_*.tex files (input may already have figures/ prefix)
+    shared_figures = paper_dir / "shared" / "figures"
+    # Strip leading figures/ if present to avoid double path
+    clean_path = input_path
+    if clean_path.startswith("figures/"):
+        clean_path = clean_path[8:]
+    p = (shared_figures / clean_path).resolve()
+    if p.exists():
+        return p
+    p = (shared_figures / (clean_path + ".tex")).resolve()
+    if p.exists():
+        return p
     return None
 
 
-def resolve_figure_path(fig_path: str, base_dir: Path) -> Path | None:
+def resolve_figure_path(fig_path: str, base_dir: Path, venues_dir: Path) -> Optional[Path]:
     """Resolve \includegraphics{path} using graphicspath."""
+    paper_dir = venues_dir.parent.parent
     # Common figure extensions
     extensions = ["", ".pdf", ".png", ".jpg", ".eps"]
     # Try relative to base_dir
@@ -43,10 +66,23 @@ def resolve_figure_path(fig_path: str, base_dir: Path) -> Path | None:
         p = (base_dir / (fig_path + ext)).resolve()
         if p.exists():
             return p
-    # Try shared/figures/
-    shared_figures = base_dir.parents[1] / "shared" / "figures"
+    # Try relative to venues/
     for ext in extensions:
-        p = (shared_figures / (fig_path + ext)).resolve()
+        p = (venues_dir / (fig_path + ext)).resolve()
+        if p.exists():
+            return p
+    # Try paper root (for paths like figures/... from shared/sections/)
+    for ext in extensions:
+        p = (paper_dir / (fig_path + ext)).resolve()
+        if p.exists():
+            return p
+    # Try shared/figures/ (fig_path may already have figures/ prefix)
+    shared_figures = paper_dir / "shared" / "figures"
+    clean_fig = fig_path
+    if clean_fig.startswith("figures/"):
+        clean_fig = clean_fig[8:]
+    for ext in extensions:
+        p = (shared_figures / (clean_fig + ext)).resolve()
         if p.exists():
             return p
     return None
@@ -88,12 +124,16 @@ def process_bibliography(content: str, venue_dir: Path) -> str:
 
     bbl_content = bbl_file.read_text(encoding="utf-8")
     # Replace \bibliography{...} and \bibliographystyle{...} with .bbl content
+    # Use str.replace to avoid regex escape issues with bbl content
     content = re.sub(r"\\bibliographystyle\{[^}]+\}\n?", "", content)
-    content = re.sub(r"\\bibliography\{[^}]+\}\n?", f"\n{bbl_content}\n", content)
+    # Find and replace bibliography command with bbl content
+    bib_match = re.search(r"\\bibliography\{[^}]+\}\n?", content)
+    if bib_match:
+        content = content[:bib_match.start()] + "\n" + bbl_content + "\n" + content[bib_match.end():]
     return content
 
 
-def copy_figures(content: str, output_dir: Path, base_dir: Path) -> str:
+def copy_figures(content: str, output_dir: Path, venues_dir: Path) -> str:
     """Copy figures to output dir and rewrite paths."""
     fig_dir = output_dir / "figures"
     fig_dir.mkdir(exist_ok=True)
@@ -102,7 +142,7 @@ def copy_figures(content: str, output_dir: Path, base_dir: Path) -> str:
 
     def replace_fig(match):
         fig_path = match.group(1)
-        resolved = resolve_figure_path(fig_path, base_dir)
+        resolved = resolve_figure_path(fig_path, venues_dir, venues_dir)
         if resolved is None:
             print(f"Warning: could not resolve figure {fig_path}", file=sys.stderr)
             return match.group(0)
