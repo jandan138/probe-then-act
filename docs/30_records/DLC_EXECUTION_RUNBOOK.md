@@ -118,13 +118,25 @@ python -u pta/scripts/run_ood_eval_v2.py \
   --methods m7_noprobe m7_nobelief
 ```
 
+The ablation OOD rows use the final 500k checkpoints:
+
+```text
+checkpoints/m7_pta_noprobe_seed{seed}/m7_pta_final.zip
+checkpoints/m7_pta_nobelief_seed{seed}/m7_pta_final.zip
+```
+
+This differs from the earlier M1/M7/M8 baseline rows, which used their existing
+`best/best_model.zip` checkpoint policy. The final-checkpoint policy is
+intentional for DLC-resumed ablations because eval callbacks were disabled during
+the final 400k-to-500k resume segment, so `best/best_model.zip` was not refreshed.
+
 ## Worker Modes
 
 `run_task.sh` supports only these modes:
 
 - `smoke_env`: verifies CUDA visibility and `train_m7.py --help`.
 - `train_ablation <no_probe|no_belief> <seed>`: runs 500K-step M7 ablation
-  training and verifies the expected best checkpoint after success.
+  training and verifies the expected final checkpoint after success.
 - `eval_ood [args...]`: runs corrected resumable OOD evaluation; without args it
   evaluates `m7_noprobe` and `m7_nobelief`.
 - `custom <command...>`: guarded escape hatch for bounded experiment commands.
@@ -153,8 +165,8 @@ Each worker record includes `mode`, `command`, `exit_code`, `hostname`,
 Expected ablation checkpoints:
 
 ```text
-checkpoints/m7_pta_noprobe_seed{seed}/best/best_model.zip
-checkpoints/m7_pta_nobelief_seed{seed}/best/best_model.zip
+checkpoints/m7_pta_noprobe_seed{seed}/m7_pta_final.zip
+checkpoints/m7_pta_nobelief_seed{seed}/m7_pta_final.zip
 ```
 
 Expected OOD outputs:

@@ -1,0 +1,15 @@
+\begin{table}[t]
+\centering
+\caption{Ablation study on OOD Elastoplastic split. Removing the probe phase degrades transfer by 27.6pp, removing the belief encoder degrades by 14.4pp. Both components contribute to the observed adaptation.}
+\label{tab:ablation}
+\begin{tabular}{lccc}
+\toprule
+Variant & Transfer (\%) & Spill (\%) & Success (\%) \\
+\midrule
+M7 Full (Ours) & \textbf{60.7$\pm$43.3} & 39.3$\pm$43.3 & 66.7 \\
+M7 No-Probe & 33.1$\pm$46.8 & 51.7$\pm$40.6 & 33.3 \\
+M7 No-Belief & 46.3$\pm$40.1 & 53.7$\pm$40.1 & 46.7 \\
+M1 Baseline & 46.0$\pm$40.0 & 54.0$\pm$40.0 & 50.0 \\
+\bottomrule
+\end{tabular}
+\end{table}

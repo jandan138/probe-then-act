@@ -61,14 +61,14 @@ METHODS = {
     },
     "m7_noprobe": {
         "seeds": [42, 0, 1],
-        "ckpt_pattern": "checkpoints/m7_pta_noprobe_seed{seed}/best/best_model",
+        "ckpt_pattern": "checkpoints/m7_pta_noprobe_seed{seed}/m7_pta_final",
         "use_privileged": False,
         "use_m7_env": True,
         "ablation": "no_probe",
     },
     "m7_nobelief": {
         "seeds": [42, 0, 1],
-        "ckpt_pattern": "checkpoints/m7_pta_nobelief_seed{seed}/best/best_model",
+        "ckpt_pattern": "checkpoints/m7_pta_nobelief_seed{seed}/m7_pta_final",
         "use_privileged": False,
         "use_m7_env": True,
         "ablation": "no_belief",
@@ -219,11 +219,21 @@ def result_key(row):
     return (row["method"], int(row["seed"]), row["split"])
 
 
+def resolve_checkpoint_path(project_root: Path, ckpt_pattern: str, seed: int) -> Path | None:
+    ckpt_path = project_root / ckpt_pattern.format(seed=seed)
+    if ckpt_path.exists():
+        return ckpt_path
+    zip_path = ckpt_path.with_suffix(".zip")
+    if zip_path.exists():
+        return zip_path
+    return None
+
+
 def append_result_row(path: Path, row: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     write_header = not path.exists() or path.stat().st_size == 0
     with path.open("a", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=RESULT_FIELDNAMES)
+        writer = csv.DictWriter(f, fieldnames=RESULT_FIELDNAMES, lineterminator="\n")
         if write_header:
             writer.writeheader()
         writer.writerow({field: row[field] for field in RESULT_FIELDNAMES})
@@ -261,7 +271,7 @@ def write_result_rows(path: Path, rows: list[dict]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp_path = path.with_suffix(path.suffix + ".tmp")
     with tmp_path.open("w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=RESULT_FIELDNAMES)
+        writer = csv.DictWriter(f, fieldnames=RESULT_FIELDNAMES, lineterminator="\n")
         writer.writeheader()
         for row in rows:
             writer.writerow({field: row[field] for field in RESULT_FIELDNAMES})
@@ -381,7 +391,9 @@ def write_aggregate_results(path: Path, all_rows: list[dict]):
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp_path = path.with_suffix(path.suffix + ".tmp")
     with tmp_path.open("w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=list(agg_rows[0].keys()))
+        writer = csv.DictWriter(
+            f, fieldnames=list(agg_rows[0].keys()), lineterminator="\n"
+        )
         writer.writeheader()
         writer.writerows(agg_rows)
     tmp_path.replace(path)
@@ -421,19 +433,20 @@ def main():
             continue
 
         for seed in method_cfg["seeds"]:
-            ckpt_path = _PROJECT_ROOT / method_cfg["ckpt_pattern"].format(seed=seed)
-            if not ckpt_path.exists() and not ckpt_path.with_suffix(".zip").exists():
+            ckpt_path = resolve_checkpoint_path(
+                _PROJECT_ROOT,
+                method_cfg["ckpt_pattern"],
+                seed,
+            )
+            if ckpt_path is None:
+                missing_path = _PROJECT_ROOT / method_cfg["ckpt_pattern"].format(seed=seed)
                 print(
-                    f"  SKIP: {method_name} seed={seed} — checkpoint not found: {ckpt_path}"
+                    f"  SKIP: {method_name} seed={seed} — checkpoint not found: {missing_path}"
                 )
                 continue
 
-            ckpt_str = str(ckpt_path)
-            if ckpt_path.with_suffix(".zip").exists() and not ckpt_path.exists():
-                ckpt_str = str(ckpt_path.with_suffix(".zip"))
-
             print(f"\n>>> {method_name} seed={seed}")
-            model = PPO.load(ckpt_str)
+            model = PPO.load(str(ckpt_path))
 
             for split_name in splits_to_eval:
                 split_cfg = SPLITS.get(split_name)

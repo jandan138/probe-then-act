@@ -1,0 +1,20 @@
+{
+  "current_round": 2,
+  "threadId": "019dd90e-bf21-7d31-949a-fa985b76cfbc",
+  "round1_score_content": 5.5,
+  "round1_score_presentation": 7.0,
+  "round2_score_content": 6.5,
+  "round2_score_presentation": 6.2,
+  "round2_score_overall": 6.4,
+  "round2_verdict": "Almost / conditional Yes — submit",
+  "status": "completed",
+  "model": "gpt-5.5",
+  "reasoning_effort": "xhigh",
+  "venue": "IEEE T-RL",
+  "paper_dir": "/home/zhuzihou/dev/probe-then-act/.worktrees/aris-resume-stage-d/paper",
+  "final_pages": 9,
+  "final_words": 5632,
+  "final_overfull": 0,
+  "final_undefined_refs": 0,
+  "timestamp": "2026-04-29T21:30:00"
+}

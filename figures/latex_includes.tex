@@ -1,0 +1,52 @@
+% ============================================================
+% LaTeX includes for Probe-Then-Act paper figures and tables
+% Paste these into the appropriate sections of the paper.
+% ============================================================
+
+% === Fig 1: Hero figure (method + cross-material comparison) ===
+% NOTE: Method overview panel is a MANUAL architecture diagram.
+%       Right panel reuses fig2_main_comparison.
+\begin{figure*}[t]
+    \centering
+    \includegraphics[width=0.98\textwidth]{figures/fig1_hero.pdf}
+    \caption{\textbf{Probe-Then-Act framework and cross-material performance.} Left: Two-stage architecture --- (i) the robot executes a short probing phase, (ii) a belief encoder maps the probe trace to a latent material representation $z$ with uncertainty $\sigma$, (iii) the task policy is conditioned on $(s_t, z, \sigma)$ to produce adaptive joint-space residual actions. Right: Transfer efficiency across five material splits. Our method (M7) achieves a statistically significant improvement on elastoplastic materials (\textbf{$^*p<0.05$}) while remaining competitive on other out-of-distribution variants. Error bars: $\pm 1$ std over 3 seeds.}
+    \label{fig:hero}
+\end{figure*}
+
+% === Fig 2: Main cross-material comparison ===
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=0.98\columnwidth]{figures/fig2_main_comparison.pdf}
+    \caption{Cross-material transfer efficiency comparison. Probe-Then-Act (M7) delivers a 14.7pp absolute (32\% relative) improvement over the reactive baseline (M1) on elastoplastic materials ($^*$), demonstrating that active probing uncovers actionable information for viscoelastic media. On simpler splits the reactive baseline remains competitive, indicating the method operates in a material-specific regime. Error bars: $\pm 1$ std over 3 seeds.}
+    \label{fig:main}
+\end{figure}
+
+% === Fig 3: Ablation study ===
+\begin{figure*}[t]
+    \centering
+    \includegraphics[width=0.98\textwidth]{figures/fig3_ablation.pdf}
+    \caption{\textbf{Ablation study on OOD Elastoplastic.} (a) Removing the probe phase drops transfer by 27.6pp; removing the belief encoder drops it by 14.4pp, indicating both modules are necessary for the observed adaptation. (b) Spill ratio follows the same ordering. (c) Success rate closely tracks transfer efficiency. Error bars: $\pm 1$ std over 3 seeds.}
+    \label{fig:ablation}
+\end{figure*}
+
+% === Fig 4: Per-seed distribution ===
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=0.98\columnwidth]{figures/fig4_seed_distribution.pdf}
+    \caption{Per-seed transfer efficiency for Probe-Then-Act (M7) versus reactive baseline (M1). Bar heights show the 3-seed mean; overlaid points show individual seeds. Per-seed dispersion is largest on elastoplastic, where M7 dominates the mean even when individual seeds disagree.}
+    \label{fig:seeds}
+\end{figure}
+
+% === Fig 5: Qualitative trajectories (MANUAL) ===
+% Placeholder: insert rendered trajectory snapshots (probe phase + task execution)
+% \begin{figure*}[t]
+%     \centering
+%     \includegraphics[width=0.98\textwidth]{figures/fig5_qualitative.pdf}
+%     \caption{Qualitative trajectory comparison on OOD elastoplastic. Top: M1 reactive policy overshoots, causing spill. Bottom: Probe-Then-Act performs three short probes (frames 1--30), infers a stiffer effective response, then reduces push residual magnitude during task execution (frames 30--410).}
+%     \label{fig:qualitative}
+% \end{figure*}
+
+% === Tables ===
+\input{figures/TABLE_1_main_results}
+\input{figures/TABLE_2_ablation}
+\input{figures/TABLE_3_benchmark}

@@ -64,7 +64,43 @@ Focus the next cycle on diagnosis and salvage. The selected strategy is **Option
 - Interpretation: this is an encouraging ID/training sanity result and suggests the probe phase may contribute to full M7's degradation. It is not OOD evidence yet; do not claim mechanism support until corrected ablation OOD finishes.
 - Local ARIS cron entries are paused, so no local automatic OOD or next-run launch should occur after R001.
 
-1. Train M7 ablations (`no_probe`, `no_belief`) to identify whether probing/belief causes the observed regressions.
-2. Run or implement M2 RNN-PPO only if the paper will retain an explicit-belief-vs-memory claim.
-3. Re-test elastoplastic with additional seeds only if ablations suggest the M7 gain is mechanistic rather than random.
-4. If broad OOD robustness remains negative, narrow the contribution to a failure analysis or pivot away from the current PTA mechanism.
+## 2026-04-29 Post-Ablation Result-to-Claim: Broad PTA Robustness Rejected
+
+**Status:** `claim_supported=no` for broad Probe-Then-Act OOD robustness (available result-to-claim review completed; Codex MCP-specific review remains unavailable and is not blocking routing).
+
+### Evidence Checked
+
+- Corrected OOD v2 is now expanded with `m7_noprobe` and `m7_nobelief`: `results/ood_eval_per_seed.csv` has `65` per-seed rows and `results/main_results.csv` has `25` aggregate rows.
+- All rows report `n_failed_episodes=0`; the verdict is not caused by Genesis crash accounting.
+- Ablation OOD used the intended final checkpoints: `checkpoints/m7_pta_noprobe_seed{seed}/m7_pta_final.zip` and `checkpoints/m7_pta_nobelief_seed{seed}/m7_pta_final.zip`.
+- Metrics remain transfer higher is better, spill lower is better, success higher is better.
+
+### Post-Ablation Numeric Verdict
+
+| System | All-OOD Transfer Delta vs M1 | All-OOD Spill Delta vs M1 | All-OOD Success Delta vs M1 | Verdict |
+|---|---:|---:|---:|---|
+| M7 full | -0.0858 | +0.0894 | 0.0000 | Worse overall; only elastoplastic improves |
+| M7 no-probe | -0.2733 | +0.1365 | -0.3333 | Much worse; removing probe damages M7 |
+| M7 no-belief | -0.1279 | +0.0693 | -0.2167 | Better than no-probe on some splits, still worse than M1 |
+
+### Component Interpretation
+
+- The ablations do not salvage the original claim. Every M7 variant underperforms M1 on all-OOD average transfer, and every M7 variant has worse all-OOD spill than M1.
+- Removing the probe hurts substantially, so the probe is not simply the source of M7's degradation. It helps within the M7 design but does not produce broad robustness over M1.
+- Removing the belief sometimes improves snow/ID-like behavior in seeds `42` and `0`, but seed `1` collapses and the aggregate remains below M1.
+- Full M7's elastoplastic advantage remains the only positive split, but it is seed-unstable and cannot support a broad OOD claim.
+- Failure is best described as architecture/training instability or a poor robustness/efficiency tradeoff relative to the reactive PPO baseline, not a single removable module.
+
+### Reviewer Consensus
+
+- Reject the broad claim that active Probe-Then-Act improves OOD robustness over reactive PPO.
+- A narrow internal-mechanism statement is supportable only with metric scope: probing helps relative to `m7_noprobe`, while belief helps transfer/success relative to `m7_nobelief` but not all-OOD spill.
+- A paper-facing PTA robustness story is not currently supportable; M2/RNN would not rescue the broad claim unless a new repaired method is introduced.
+- Additional elastoplastic-only runs are only worth doing if the project explicitly pivots to a narrow dynamics-adaptation story.
+
+### Updated Routing
+
+1. Stop the broad PTA robustness paper path for the current method.
+2. Do not launch M2/RNN, uncertainty/M6, or paper writing as automatic next steps.
+3. If continuing this project, choose explicitly between a lightweight failure-analysis note and a new method/pivot.
+4. If trying to salvage a narrow elastoplastic claim, first require a concrete hypothesis and extra-seed confirmation plan; otherwise treat the signal as hypothesis-generating only.
