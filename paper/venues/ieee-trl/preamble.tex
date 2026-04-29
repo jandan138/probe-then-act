@@ -1,0 +1,40 @@
+% IEEE T-RL Preamble
+% Venue-specific package configuration
+
+% Input path: shared first, then local (for \input{figures/...})
+\makeatletter
+\def\input@path{{../../shared/}{./}}
+\makeatother
+
+% Math
+\usepackage{amsmath,amssymb,amsfonts,amsthm,mathtools}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+
+% Typography
+\usepackage{hyperref}
+\usepackage{url}
+\usepackage{booktabs}
+\usepackage{nicefrac}
+\usepackage{microtype}
+\usepackage{xcolor}
+\usepackage{graphicx}
+\usepackage{subcaption}
+\usepackage{multirow}
+\usepackage{algorithm}
+\usepackage{algorithmic}
+\usepackage{cite}
+\usepackage[capitalize,noabbrev]{cleveref}
+
+% Theorems (continuous numbering)
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}
+\newtheorem{proposition}[theorem]{Proposition}
+\theoremstyle{definition}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{assumption}[theorem]{Assumption}
+\crefname{assumption}{Assumption}{Assumptions}
+\Crefname{assumption}{Assumption}{Assumptions}
+
+% Figure paths: shared first, then local overrides
+\graphicspath{{../../shared/}{./}}

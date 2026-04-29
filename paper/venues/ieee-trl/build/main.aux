@@ -1,0 +1,159 @@
+\relax 
+\providecommand\hyper@newdestlabel[2]{}
+\providecommand\HyField@AuxAddToFields[1]{}
+\providecommand\HyField@AuxAddToCoFields[2]{}
+\citation{huang2022plasticinelab,lin2022diffskill,shi2023robocook}
+\citation{tobin2017domain,peng2018sim2real}
+\citation{hausman2018learning,xie2018learning}
+\citation{calandra2018more}
+\citation{genesis2024}
+\@writefile{toc}{\contentsline {section}{\numberline {I}Introduction}{1}{section.1}\protected@file@percent }
+\newlabel{sec:introduction}{{I}{1}{Introduction}{section.1}{}}
+\newlabel{sec:introduction@cref}{{[section][1][]I}{[1][1][]1}{}{}{}}
+\citation{genesis2024}
+\@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces \textbf  {\textsc  {Probe-Then-Act}{} framework and per-split effect.} Left: schematic illustration of the two-stage architecture --- (i) the robot executes a short fixed open-loop probing phase, (ii) an encoder maps the probe trace to a latent task-conditioning vector $z$ with a learned scale parameter $\sigma $ (not a calibrated posterior), (iii) the task policy is conditioned on $(s_t, z, \sigma )$ to produce adaptive joint-space residual actions. Material piles below the schematic illustrate the three Genesis MPM families used in the benchmark; the schematic is for explanation and is not a Genesis render (Genesis renders appear in \cref  {fig:scene_schematic}). Right: per-split transfer-efficiency delta of \textsc  {Probe-Then-Act}{} (M7) versus the matched reactive baseline (M1), in percentage points; hollow downward markers show the M8 privileged-parameter delta. \textsc  {Probe-Then-Act}{} wins by $+14.7$\,pp on OOD elastoplastic and underperforms on the four other splits ($-13$ to $-22$\,pp), with M8 collapsing to $-46$\,pp on elastoplastic. Means over 3 training seeds, 10 evaluation episodes per seed; this overview shows mean deltas only and the comparison is descriptive, not significance-tested. Matched-seed dispersion is shown in \cref  {fig:seeds}; absolute values for all three methods are in \cref  {fig:main}.}}{2}{figure.caption.1}\protected@file@percent }
+\providecommand*\caption@xref[2]{\@setref\relax\@undefined{#1}}
+\newlabel{fig:hero}{{1}{2}{\textbf {\PTA {} framework and per-split effect.} Left: schematic illustration of the two-stage architecture --- (i) the robot executes a short fixed open-loop probing phase, (ii) an encoder maps the probe trace to a latent task-conditioning vector $z$ with a learned scale parameter $\sigma $ (not a calibrated posterior), (iii) the task policy is conditioned on $(s_t, z, \sigma )$ to produce adaptive joint-space residual actions. Material piles below the schematic illustrate the three Genesis MPM families used in the benchmark; the schematic is for explanation and is not a Genesis render (Genesis renders appear in \cref {fig:scene_schematic}). Right: per-split transfer-efficiency delta of \PTA {} (M7) versus the matched reactive baseline (M1), in percentage points; hollow downward markers show the M8 privileged-parameter delta. \PTA {} wins by $+14.7$\,pp on OOD elastoplastic and underperforms on the four other splits ($-13$ to $-22$\,pp), with M8 collapsing to $-46$\,pp on elastoplastic. Means over 3 training seeds, 10 evaluation episodes per seed; this overview shows mean deltas only and the comparison is descriptive, not significance-tested. Matched-seed dispersion is shown in \cref {fig:seeds}; absolute values for all three methods are in \cref {fig:main}}{figure.caption.1}{}}
+\newlabel{fig:hero@cref}{{[figure][1][]1}{[1][1][]2}{}{}{}}
+\@writefile{toc}{\contentsline {paragraph}{\numberline {\mbox  {I-}0a}The recoverable-deformation hypothesis.}{2}{paragraph.1.0.0.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{\numberline {\mbox  {I-}0b}Empirical evaluation.}{2}{paragraph.1.0.0.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{\numberline {\mbox  {I-}0c}Contributions.}{2}{paragraph.1.0.0.3}\protected@file@percent }
+\citation{bajcsy1988active}
+\citation{lederman1987hand}
+\citation{calandra2018more,xu2013tactile}
+\citation{bauza2020tactile}
+\citation{yu2016more,bauza2018data}
+\citation{huang2022plasticinelab}
+\citation{lin2022diffskill}
+\citation{shi2023robocook,shi2022robocraft}
+\citation{schenck2017learning}
+\citation{matl2020inferring}
+\citation{finn2017model,nagabandi2019learning}
+\citation{rakelly2019efficient,zintgraf2021varibad}
+\citation{nagabandi2018deep,clavera2019modelbased}
+\citation{yu2017preparing,peng2018sim2real}
+\citation{genesis2024}
+\citation{makoviychuk2021isaac}
+\citation{freeman2021brax}
+\citation{lin2021softgym}
+\citation{huang2022plasticinelab}
+\citation{genesis2024}
+\@writefile{toc}{\contentsline {paragraph}{\numberline {\mbox  {I-}0d}Scope of claims.}{3}{paragraph.1.0.0.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {II}Related Work}{3}{section.2}\protected@file@percent }
+\newlabel{sec:related}{{II}{3}{Related Work}{section.2}{}}
+\newlabel{sec:related@cref}{{[section][2][]II}{[1][3][]3}{}{}{}}
+\@writefile{toc}{\contentsline {paragraph}{\numberline {\mbox  {II-}0a}Active perception for manipulation.}{3}{paragraph.2.0.0.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{\numberline {\mbox  {II-}0b}Deformable and granular manipulation.}{3}{paragraph.2.0.0.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{\numberline {\mbox  {II-}0c}Online system identification and adaptation.}{3}{paragraph.2.0.0.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{\numberline {\mbox  {II-}0d}Multi-physics simulation and cross-material benchmarks.}{3}{paragraph.2.0.0.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {III}Method}{3}{section.3}\protected@file@percent }
+\newlabel{sec:method}{{III}{3}{Method}{section.3}{}}
+\newlabel{sec:method@cref}{{[section][3][]III}{[1][3][]3}{}{}{}}
+\citation{schulman2017proximal}
+\citation{genesis2024}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {III-A}}Problem Formulation}{4}{subsection.3.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {III-B}}Two-Stage Structure}{4}{subsection.3.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{\numberline {\mbox  {III-B}0a}Probe phase.}{4}{paragraph.3.2.0.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{\numberline {\mbox  {III-B}0b}Encoder.}{4}{paragraph.3.2.0.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{\numberline {\mbox  {III-B}0c}Task policy.}{4}{paragraph.3.2.0.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {III-C}}Training Objective}{4}{subsection.3.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {III-D}}Ablation Variants}{4}{subsection.3.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {IV}Experimental Setup}{4}{section.4}\protected@file@percent }
+\newlabel{sec:experiments}{{IV}{4}{Experimental Setup}{section.4}{}}
+\newlabel{sec:experiments@cref}{{[section][4][]IV}{[1][4][]4}{}{}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-A}}Benchmark Design}{4}{subsection.4.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{\numberline {\mbox  {IV-A}0a}Material choices.}{4}{paragraph.4.1.0.1}\protected@file@percent }
+\citation{raffin2021stable}
+\@writefile{lof}{\contentsline {figure}{\numberline {2}{\ignorespaces \textbf  {Genesis edge-push benchmark across material families.} Rendered frames from the Genesis MPM simulator after the pile has settled on the source platform. Scene geometry (Franka Panda, source platform, target bin, particle pile placement following Config~D, 5.5\,cm from the open edge) is identical across panels; only the MPM material parameters differ (overlaid bottom-right of each panel: Young's modulus $E$ in Pa, Poisson ratio $\nu $, density $\rho $ in kg\,m$^{-3}$). Equilibrium shapes are visibly distinct---granular sand spreads, cohesive snow holds together loosely, and the elastoplastic medium retains a tight rebounded block. Bottom-left (green) tag reports the scripted-controller transfer efficiency for that material as a discriminative-difficulty reference. Particle surface colours are chosen per panel for visual contrast and have no effect on dynamics.}}{5}{figure.caption.2}\protected@file@percent }
+\newlabel{fig:scene_schematic}{{2}{5}{\textbf {Genesis edge-push benchmark across material families.} Rendered frames from the Genesis MPM simulator after the pile has settled on the source platform. Scene geometry (Franka Panda, source platform, target bin, particle pile placement following Config~D, 5.5\,cm from the open edge) is identical across panels; only the MPM material parameters differ (overlaid bottom-right of each panel: Young's modulus $E$ in Pa, Poisson ratio $\nu $, density $\rho $ in kg\,m$^{-3}$). Equilibrium shapes are visibly distinct---granular sand spreads, cohesive snow holds together loosely, and the elastoplastic medium retains a tight rebounded block. Bottom-left (green) tag reports the scripted-controller transfer efficiency for that material as a discriminative-difficulty reference. Particle surface colours are chosen per panel for visual contrast and have no effect on dynamics}{figure.caption.2}{}}
+\newlabel{fig:scene_schematic@cref}{{[figure][2][]2}{[1][4][]5}{}{}{}}
+\@writefile{toc}{\contentsline {paragraph}{\numberline {\mbox  {IV-A}0b}OOD parameter splits.}{5}{paragraph.4.1.0.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-B}}Evaluation Protocol}{5}{subsection.4.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-C}}Compared Systems}{5}{subsection.4.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-D}}Implementation Details}{5}{subsection.4.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {V}Results}{5}{section.5}\protected@file@percent }
+\newlabel{sec:results}{{V}{5}{Results}{section.5}{}}
+\newlabel{sec:results@cref}{{[section][5][]V}{[1][5][]5}{}{}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-A}}Main Cross-Material Results}{5}{subsection.5.1}\protected@file@percent }
+\newlabel{sec:results_main}{{\mbox  {V-A}}{5}{Main Cross-Material Results}{subsection.5.1}{}}
+\newlabel{sec:results_main@cref}{{[subsection][1][5]\mbox  {V-A}}{[1][5][]5}{}{}{}}
+\@writefile{toc}{\contentsline {paragraph}{\numberline {\mbox  {V-A}0a}Gain on the elastoplastic (recoverable-rebound) split.}{5}{paragraph.5.1.0.1}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {I}{\ignorespaces Cross-material transfer efficiency (\%) across five evaluation splits. Mean $\pm $ seed standard deviation over 3 training seeds (10 deterministic episodes per seed). M7 leads on OOD elastoplastic by 14.7\,pp; we report this as a directional, descriptive comparison, \emph  {not} a significance-tested result---per-seed dispersion on elastoplastic is $\sim 40$\,pp and the test is underpowered (\cref  {sec:results_stats}). M8 std is $0.0$ because M8 was scored on a single seed (oracle baseline).}}{6}{table.caption.3}\protected@file@percent }
+\newlabel{tab:main_results}{{I}{6}{Cross-material transfer efficiency (\%) across five evaluation splits. Mean $\pm $ seed standard deviation over 3 training seeds (10 deterministic episodes per seed). M7 leads on OOD elastoplastic by 14.7\,pp; we report this as a directional, descriptive comparison, \emph {not} a significance-tested result---per-seed dispersion on elastoplastic is $\sim 40$\,pp and the test is underpowered (\cref {sec:results_stats}). M8 std is $0.0$ because M8 was scored on a single seed (oracle baseline)}{table.caption.3}{}}
+\newlabel{tab:main_results@cref}{{[table][1][]I}{[1][5][]6}{}{}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {3}{\ignorespaces \textbf  {Absolute transfer-efficiency landscape.} 3-method $\times $ 5-split heatmap of mean transfer efficiency (\%). M1 and M7 cells are 3-seed means (10 deterministic episodes per seed; per-seed dispersion in \cref  {fig:seeds}); the M8 row, marked with a dagger ($\dagger $) on its row label, is scored from a single trained seed and is diagnostic rather than statistically comparable to M1/M7. The OOD-elastoplastic column is outlined to flag the conditional finding (magenta callout above): \textsc  {Probe-Then-Act}{} (M7) attains $60.7$\% transfer there versus $46.0$\% for the reactive baseline (M1) and $0$\% for the privileged-parameter baseline (M8). The complementary effect plot in \cref  {fig:hero} reports the same data as deltas relative to M1. M8 here is a sand-only-trained residual policy that additionally receives ground-truth $(E,\nu ,\rho ,\dots  )$, not a broadly trained oracle; its elastoplastic collapse contains zero NaN events. Across all (method, split, seed) combinations reported in \cref  {tab:main_results,tab:ablation}, total NaN-rollout count was zero.}}{6}{figure.caption.4}\protected@file@percent }
+\newlabel{fig:main}{{3}{6}{\textbf {Absolute transfer-efficiency landscape.} 3-method $\times $ 5-split heatmap of mean transfer efficiency (\%). M1 and M7 cells are 3-seed means (10 deterministic episodes per seed; per-seed dispersion in \cref {fig:seeds}); the M8 row, marked with a dagger ($\dagger $) on its row label, is scored from a single trained seed and is diagnostic rather than statistically comparable to M1/M7. The OOD-elastoplastic column is outlined to flag the conditional finding (magenta callout above): \PTA {} (M7) attains $60.7$\% transfer there versus $46.0$\% for the reactive baseline (M1) and $0$\% for the privileged-parameter baseline (M8). The complementary effect plot in \cref {fig:hero} reports the same data as deltas relative to M1. M8 here is a sand-only-trained residual policy that additionally receives ground-truth $(E,\nu ,\rho ,\dots )$, not a broadly trained oracle; its elastoplastic collapse contains zero NaN events. Across all (method, split, seed) combinations reported in \cref {tab:main_results,tab:ablation}, total NaN-rollout count was zero}{figure.caption.4}{}}
+\newlabel{fig:main@cref}{{[figure][3][]3}{[1][5][]6}{}{}{}}
+\@writefile{toc}{\contentsline {paragraph}{\numberline {\mbox  {V-A}0b}Loss on granular and within-family OOD.}{6}{paragraph.5.1.0.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{\numberline {\mbox  {V-A}0c}Privileged-parameter collapse on the elastoplastic split.}{6}{paragraph.5.1.0.3}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {II}{\ignorespaces Ablation study on OOD Elastoplastic split. Removing the probe phase degrades transfer by 27.6pp, removing the belief encoder degrades by 14.4pp. Both components contribute to the observed adaptation.}}{6}{table.caption.5}\protected@file@percent }
+\newlabel{tab:ablation}{{II}{6}{Ablation study on OOD Elastoplastic split. Removing the probe phase degrades transfer by 27.6pp, removing the belief encoder degrades by 14.4pp. Both components contribute to the observed adaptation}{table.caption.5}{}}
+\newlabel{tab:ablation@cref}{{[table][2][]II}{[1][6][]6}{}{}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-B}}Ablation Study}{6}{subsection.5.2}\protected@file@percent }
+\newlabel{sec:results_ablation}{{\mbox  {V-B}}{6}{Ablation Study}{subsection.5.2}{}}
+\newlabel{sec:results_ablation@cref}{{[subsection][2][5]\mbox  {V-B}}{[1][6][]6}{}{}{}}
+\@writefile{toc}{\contentsline {paragraph}{\numberline {\mbox  {V-B}0a}Both components are necessary.}{6}{paragraph.5.2.0.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{\numberline {\mbox  {V-B}0b}In this architecture, removing the probe is more damaging than removing the encoder output.}{6}{paragraph.5.2.0.2}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {4}{\ignorespaces \textbf  {Ablation study on OOD elastoplastic.} Cleveland dot-plot matrix; each row is a method, each column a metric. Filled markers are 3-seed means; the horizontal whisker spans the per-seed minimum--maximum, and the small white dots show individual seed values (10 deterministic episodes per seed). Spill is plotted as ``Retained material'' ($100-\textrm  {spill}$) so that all three columns are higher-is-better. Removing the probe drops transfer by 27.6\,pp; removing the encoder output drops it by 14.4\,pp. Both ablations fall below the reactive baseline on this split, which rules out wrapper-stack or model-capacity explanations.}}{7}{figure.caption.6}\protected@file@percent }
+\newlabel{fig:ablation}{{4}{7}{\textbf {Ablation study on OOD elastoplastic.} Cleveland dot-plot matrix; each row is a method, each column a metric. Filled markers are 3-seed means; the horizontal whisker spans the per-seed minimum--maximum, and the small white dots show individual seed values (10 deterministic episodes per seed). Spill is plotted as ``Retained material'' ($100-\textrm {spill}$) so that all three columns are higher-is-better. Removing the probe drops transfer by 27.6\,pp; removing the encoder output drops it by 14.4\,pp. Both ablations fall below the reactive baseline on this split, which rules out wrapper-stack or model-capacity explanations}{figure.caption.6}{}}
+\newlabel{fig:ablation@cref}{{[figure][4][]4}{[1][6][]7}{}{}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-C}}Statistical Reading of the Elastoplastic Gain}{7}{subsection.5.3}\protected@file@percent }
+\newlabel{sec:results_stats}{{\mbox  {V-C}}{7}{Statistical Reading of the Elastoplastic Gain}{subsection.5.3}{}}
+\newlabel{sec:results_stats@cref}{{[subsection][3][5]\mbox  {V-C}}{[1][7][]7}{}{}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-D}}Per-Split Pattern and the Recoverable-Deformation Hypothesis}{7}{subsection.5.4}\protected@file@percent }
+\newlabel{sec:results_analysis}{{\mbox  {V-D}}{7}{Per-Split Pattern and the Recoverable-Deformation Hypothesis}{subsection.5.4}{}}
+\newlabel{sec:results_analysis@cref}{{[subsection][4][5]\mbox  {V-D}}{[1][7][]7}{}{}{}}
+\@writefile{toc}{\contentsline {paragraph}{\numberline {\mbox  {V-D}0a}Elastoplastic (recoverable rebound): gain.}{7}{paragraph.5.4.0.1}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {III}{\ignorespaces Cross-material benchmark composition. Scripted baseline transfer varies by 55pp, confirming discriminative difficulty. $E$: Young's modulus; $\nu $: Poisson ratio.}}{7}{table.caption.7}\protected@file@percent }
+\newlabel{tab:benchmark}{{III}{7}{Cross-material benchmark composition. Scripted baseline transfer varies by 55pp, confirming discriminative difficulty. $E$: Young's modulus; $\nu $: Poisson ratio}{table.caption.7}{}}
+\newlabel{tab:benchmark@cref}{{[table][3][]III}{[1][7][]7}{}{}{}}
+\@writefile{toc}{\contentsline {paragraph}{\numberline {\mbox  {V-D}0b}Granular (ID sand and sand variants): loss.}{7}{paragraph.5.4.0.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{\numberline {\mbox  {V-D}0c}Cohesive (snow): mild loss.}{7}{paragraph.5.4.0.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {VI}Discussion}{7}{section.6}\protected@file@percent }
+\newlabel{sec:discussion}{{VI}{7}{Discussion}{section.6}{}}
+\newlabel{sec:discussion@cref}{{[section][6][]VI}{[1][7][]7}{}{}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VI-A}}The Recoverable-Deformation Hypothesis as a Candidate Heuristic}{7}{subsection.6.1}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {5}{\ignorespaces \textbf  {Paired-seed slope chart, M1 vs.\ \textsc  {Probe-Then-Act}{}.} One panel per material split; each thin line connects matched-seed transfer efficiencies (M1 left, \textsc  {Probe-Then-Act}{} right) for the same training seed. Green slopes indicate \textsc  {Probe-Then-Act}{} $>$ M1 on that seed, red slopes indicate the reverse; the heavy black line connects 3-seed means. The OOD-elastoplastic panel (highlighted) is the only split where the seed mean rises and where \textsc  {Probe-Then-Act}{} exceeds M1 on 2 of 3 matched seed pairs (the third is closer). On the four other splits all per-seed slopes go down. We treat this as a directional, descriptive comparison; per-seed dispersion is largest on elastoplastic ($\sim 40$\,pp) so significance is not claimed (\cref  {sec:results_stats}).}}{8}{figure.caption.8}\protected@file@percent }
+\newlabel{fig:seeds}{{5}{8}{\textbf {Paired-seed slope chart, M1 vs.\ \PTA {}.} One panel per material split; each thin line connects matched-seed transfer efficiencies (M1 left, \PTA {} right) for the same training seed. Green slopes indicate \PTA {} $>$ M1 on that seed, red slopes indicate the reverse; the heavy black line connects 3-seed means. The OOD-elastoplastic panel (highlighted) is the only split where the seed mean rises and where \PTA {} exceeds M1 on 2 of 3 matched seed pairs (the third is closer). On the four other splits all per-seed slopes go down. We treat this as a directional, descriptive comparison; per-seed dispersion is largest on elastoplastic ($\sim 40$\,pp) so significance is not claimed (\cref {sec:results_stats})}{figure.caption.8}{}}
+\newlabel{fig:seeds@cref}{{[figure][5][]5}{[1][7][]8}{}{}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VI-B}}Why the Privileged-Parameter Baseline Fails on the Elastoplastic Split}{8}{subsection.6.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VI-C}}What Does the Encoder Represent?}{8}{subsection.6.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VI-D}}Limitations}{8}{subsection.6.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VI-E}}Connection to Information-Gathering Control}{8}{subsection.6.5}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {VII}Conclusion}{8}{section.7}\protected@file@percent }
+\newlabel{sec:conclusion}{{VII}{8}{Conclusion}{section.7}{}}
+\newlabel{sec:conclusion@cref}{{[section][7][]VII}{[1][8][]8}{}{}{}}
+\bibstyle{IEEEtran}
+\bibdata{references}
+\bibcite{huang2022plasticinelab}{1}
+\bibcite{lin2022diffskill}{2}
+\bibcite{shi2023robocook}{3}
+\bibcite{tobin2017domain}{4}
+\bibcite{peng2018sim2real}{5}
+\bibcite{hausman2018learning}{6}
+\bibcite{xie2018learning}{7}
+\bibcite{calandra2018more}{8}
+\bibcite{genesis2024}{9}
+\bibcite{bajcsy1988active}{10}
+\bibcite{lederman1987hand}{11}
+\bibcite{xu2013tactile}{12}
+\bibcite{bauza2020tactile}{13}
+\bibcite{yu2016more}{14}
+\bibcite{bauza2018data}{15}
+\bibcite{shi2022robocraft}{16}
+\bibcite{schenck2017learning}{17}
+\bibcite{matl2020inferring}{18}
+\bibcite{finn2017model}{19}
+\bibcite{nagabandi2019learning}{20}
+\bibcite{rakelly2019efficient}{21}
+\bibcite{zintgraf2021varibad}{22}
+\bibcite{nagabandi2018deep}{23}
+\bibcite{clavera2019modelbased}{24}
+\bibcite{yu2017preparing}{25}
+\bibcite{makoviychuk2021isaac}{26}
+\bibcite{freeman2021brax}{27}
+\bibcite{lin2021softgym}{28}
+\bibcite{schulman2017proximal}{29}
+\bibcite{raffin2021stable}{30}
+\@writefile{toc}{\contentsline {section}{References}{9}{section*.9}\protected@file@percent }
+\gdef \@abspage@last{9}

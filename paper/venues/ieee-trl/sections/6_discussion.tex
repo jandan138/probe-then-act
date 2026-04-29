@@ -1,0 +1,31 @@
+\section{Discussion}
+\label{sec:discussion}
+
+\subsection{The Recoverable-Deformation Hypothesis as a Candidate Heuristic}
+
+The hypothesis is not validated by the present benchmark: the positive evidence comes from a single elastoplastic family, and recoverability is not isolated from confounders (task ease, particle density, control stability, sand-only training, the simulator's specific elastoplastic constitutive model). We offer it as a physically grounded interpretation of the asymmetry and as a design rule to be tested in future work.
+
+If the hypothesis holds more broadly, the implied prescription is to allocate probe time to a material if and only if the probe-induced perturbation relaxes back on the timescale of the subsequent task. Each row of the candidate prescription below beyond elastoplastic is an extrapolation, not a tested claim of this paper:
+\begin{itemize}
+    \item \textbf{Viscoelastic / elastic media} (gels, dough at rest, soft tissue, certain elastomers): probe-induced perturbations are expected to relax; \PTA{}-style probing is plausibly net-positive. Only the elastoplastic case is tested here.
+    \item \textbf{Granular media without cohesion} (dry sand, gravel, beads, rice): probe-induced perturbations do not relax. Probing was net-negative on every granular split we tested.
+    \item \textbf{Cohesive granular media} (wet sand, snow): partly recoverable in principle. Snow showed a 13.3pp loss in our setup; the broader regime is not tested.
+\end{itemize}
+
+This is a scope claim, not a universal recipe. A robotic stack handling mixed materials should include a coarse material-class router that selects between \PTA{} and a reactive policy.
+
+\subsection{Why the Privileged-Parameter Baseline Fails on the Elastoplastic Split}
+
+A residual PPO policy maps observation to joint residual, trained over rollouts. M8's training distribution is dominated by sand rollouts where rebound is negligible, so its residual head was never shaped to anticipate elastic rebound. At test time on elastoplastic, reading $(E, \nu)$ does not unlock a response curve that was never trained; the sand-shaped residual over-corrects and the rollout fails. \PTA{} sidesteps this by using the probe to \emph{elicit} a rebound response at test time that the encoder summarizes for the policy. We frame the lesson narrowly: in our matched, sand-only-trained setting, raw parameter access did not produce a useful elastoplastic policy whereas the probe trace did. A more carefully designed teacher---trained on a domain-randomized material mix, or given learned features of $(E,\nu,\rho)$ rather than raw values---could in principle close this gap.
+
+\subsection{What Does the Encoder Represent?}
+
+Because the encoder is trained end-to-end with the policy and never supervised against material labels, $z$ need not resemble a physically interpretable quantity, and we avoid calling it a material embedding. Removing $z$ loses 14.4pp of transfer on elastoplastic, so the latent carries task-relevant signal; characterizing its semantic content (e.g., regression of $z$ against held-out material parameters, or calibration of $\sigma_z$) and reusing the encoder across tasks sharing material families are natural next steps.
+
+\subsection{Limitations}
+
+The positive result rests on a single OOD split, with no test on other viscoelastic materials (gel, dough, foam) or on training distributions that include any non-sand material. With three seeds and $\sim$40pp per-seed variance on elastoplastic, the 14.7pp gap is directional rather than statistically conclusive. Probing physically degrades granular substrates (the 22pp loss on ID sand is predicted by the hypothesis but is also a hard scope limit: do not deploy \PTA{} on dry granular media). The probe is scripted and identical across materials; a learned probe policy that optimizes an information-gain surrogate may tighten the elastoplastic gain. All results are in Genesis MPM; sim-to-real transfer of probe-style policies on viscoelastic media---especially robustness to real tactile noise and rebound-timescale shifts---is open. Finally, the observation includes simulator-derived aggregate-particle statistics; a sim-to-real deployment would need vision or tactile estimates of those quantities. We use ``tactile'' throughout in the loose sense of contact-derived response inferred from joints and aggregate motion, not a simulated tactile-array sensor.
+
+\subsection{Connection to Information-Gathering Control}
+
+Conceptually, \PTA{} is a coarse instantiation of a broader principle: partition an episode into an information-gathering segment and an execution segment, and back-propagate task reward through both. Related ideas appear in active learning, Bayesian experimental design, and information-directed sampling in RL. A full treatment with probe length, shape, timing, and material-gated invocation as first-class decision variables is beyond this paper's scope and a natural follow-up.
