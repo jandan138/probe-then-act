@@ -40,8 +40,12 @@ def _coerce_rgb(rgb: Any) -> np.ndarray:
 
 
 def render_one(material: str, params: Dict[str, float], out_path: Path,
-               settle_steps: int, res: tuple[int, int]) -> None:
-    import genesis as gs
+               settle_steps: int, res: tuple[int, int],
+               surface_color: tuple[float, float, float, float] | None = None) -> None:
+    import os, genesis as gs
+    # Force the OSMesa platform buffer to be at least as large as the requested
+    # render resolution.  OffscreenRenderer reads this env var on init.
+    os.environ.setdefault("GS_OFFSCREEN_INIT_RES", f"{res[0]}x{res[1]}")
     if not gs._initialized:
         gs.init(
             backend=gs.cpu,
@@ -49,6 +53,31 @@ def render_one(material: str, params: Dict[str, float], out_path: Path,
             logging_level="warning",
             performance_mode=False,
         )
+
+    # Optional per-material override of the particle surface colour.  The
+    # SceneBuilder hard-codes a golden-tan colour for all materials so a
+    # paper figure cannot tell sand / snow / elastoplastic apart visually
+    # without this override.  We monkey-patch ``_add_particles`` instead of
+    # threading a new config key through the env so existing training code
+    # is unchanged.
+    if surface_color is not None:
+        from pta.envs.builders import scene_builder as _sb
+        _orig_add_particles = _sb.SceneBuilder._add_particles
+
+        def _patched(self, scene, config):
+            family = config.get("particle_material", "sand")
+            params = config.get("particle_params", {})
+            mat = self._material_builder.create_material(family, params)
+            return scene.add_entity(
+                material=mat,
+                morph=gs.morphs.Box(
+                    pos=config["particle_pos"], size=config["particle_size"],
+                ),
+                surface=gs.surfaces.Default(
+                    color=surface_color, vis_mode="particle",
+                ),
+            )
+        _sb.SceneBuilder._add_particles = _patched
 
     from pta.envs.builders.scene_builder import SceneBuilder
 
@@ -94,11 +123,27 @@ def main() -> None:
                         help="Number of physics steps before rendering")
     parser.add_argument("--width", type=int, default=1280)
     parser.add_argument("--height", type=int, default=960)
+    parser.add_argument(
+        "--surface-color", type=str, default=None,
+        help="Optional 'r,g,b,a' override for particle render colour "
+             "(0..1 floats).  E.g. '0.85,0.70,0.40,1.0' for sand.",
+    )
     args = parser.parse_args()
+
+    color = None
+    if args.surface_color is not None:
+        try:
+            parts = [float(s) for s in args.surface_color.split(",")]
+            assert len(parts) == 4
+            color = tuple(parts)
+        except Exception:
+            raise ValueError(
+                f"--surface-color must be 'r,g,b,a' floats, got {args.surface_color!r}"
+            )
 
     params = {"E": args.E, "nu": args.nu, "rho": args.rho}
     render_one(args.material, params, args.out, args.settle,
-               (args.width, args.height))
+               (args.width, args.height), surface_color=color)
 
 
 if __name__ == "__main__":
