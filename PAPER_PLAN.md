@@ -14,8 +14,8 @@
 |-------|----------|--------|---------|
 | Explicit probing can help context-conditioned RL when the elicited response is recoverable. | Elastoplastic split: 60.7% transfer for M7 vs 46.0% for M1; spill 39.3% vs 54.0%; success +16.7pp. | Narrowly supported; directional under three-seed variance | §1, §5 |
 | Probing can be harmful when it irreversibly perturbs the state. | M7 underperforms M1 by 13--22pp on the other four splits. | Supported descriptively | §1, §5, §6 |
-| Probe and encoder are necessary for the elastoplastic gain in this architecture. | No-probe and no-belief ablations both fall below the reactive baseline on elastoplastic. | Supported for this split and architecture | §5, Appendix |
-| Passive privileged material parameters are not sufficient in this sand-only residual-control architecture. | M8 collapses to 0% transfer on elastoplastic across three seeds. | Supporting observation only | §5, Appendix |
+| Probe and encoder are necessary for the elastoplastic transfer gain in this architecture. | No-probe drops transfer from 60.7% to 33.1%; no-belief drops transfer to 46.3%, removing nearly all of the full PTA gain over the 46.0% reactive baseline. | Supported for elastoplastic transfer gain; not a claim that every ablation is below reactive on every metric | §5, Appendix |
+| Passive privileged material parameters are not sufficient in this sand-only residual-control architecture. | M8 scores 0.0% transfer on elastoplastic in the single scored diagnostic seed while remaining strong elsewhere. | Supporting observation only; single-seed diagnostic | §5, Appendix |
 | The benchmark is a reproducible hidden-dynamics stress test. | Five splits, 55pp scripted-transfer spread, 3-seed protocol, ablation infrastructure. | Supported | §1, §4, Appendix |
 
 ## Structure
@@ -24,7 +24,7 @@
 - State hidden dynamics and context inference as the problem.
 - Present explicit probing as an active data-collection budget.
 - Reveal the asymmetric result early: one elastoplastic win and four losses.
-- End with benchmark and boundary-condition framing.
+- End with benchmark and recoverability-hypothesis framing.
 
 ### §1 Introduction
 - Open on hidden dynamics in RL, not robotics tool use.
@@ -65,7 +65,7 @@
 | Fig 2 | Heatmap | Transfer efficiency by method and split, emphasizing asymmetric material response. | Existing generated figure | HIGH |
 | Fig 3 | Dot plot | Ablation metrics with per-seed dispersion on elastoplastic. | Existing generated figure | HIGH |
 | Fig 4 | Paired-seed slope chart | Matched M7 vs M1 seed differences by split. | Existing generated figure | MEDIUM |
-| Table 1 | Main results | M1/M7/M8 transfer, spill, success, retained material. | Existing table | HIGH |
+| Table 1 | Main results | Cross-material transfer efficiency for M1/M7/M8 across five splits, with M8 disclosed as single-seed diagnostic. | Existing table | HIGH |
 | Table 2 | Ablation | Probe and encoder ablations on elastoplastic. | Existing table | HIGH |
 
 ## Citation Plan
