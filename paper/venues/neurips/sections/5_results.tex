@@ -61,13 +61,13 @@ With $n=3$ seeds, $10$ deterministic episodes per (method, seed, split), and a p
 \cref{fig:main} shows an asymmetric pattern: \PTA{} helps on elastoplastic and hurts elsewhere, with cohesive snow between. We restate the recoverable-deformation hypothesis from \cref{sec:introduction} as an interpretive proposal: this asymmetry is one realization, on one benchmark, of the sign pattern the hypothesis would predict, and confounders (task ease, particle density, control stability, sand-only training) are not isolated.
 
 \paragraph{Elastoplastic (recoverable rebound): gain.}
-A probe displaces particles, but the displacement partially relaxes during the brief settle before the task phase, so rebound information survives in the trace while substrate disruption is largely undone. This is the regime in which the hypothesis predicts a favorable probe trade, and \PTA{} achieves the 14.7pp transfer gain. A single recoverable material family does not establish the hypothesis; it is consistent with it.
+Under the hypothesis, a useful probe would displace particles while the brief settle allows part of that displacement to relax, leaving response information in the trace with less persistent task-state disruption. This is the regime in which the hypothesis predicts a favorable probe trade, and \PTA{} achieves the 14.7pp transfer gain. A single recoverable material family does not establish the hypothesis; it is consistent with it.
 
 \paragraph{Granular (ID sand and sand variants): loss.}
-Granular media without cohesion rearrange irreversibly: probes push grains forward and shift the centroid in a way that does not relax. The 22.2pp loss on ID sand is the cleanest signal---the policy was trained on this exact material yet loses because probing has degraded the substrate. Sand-Hard and Sand-Soft show the same direction at similar magnitude, weakening a generic ``any-OOD'' explanation though not isolating recoverability from intra-family confounders.
+The granular losses are consistent with an irreversible-rearrangement cost: a probe can push grains forward and shift the centroid in a way that does not relax on the task timescale. The 22.2pp loss on ID sand is the cleanest within-distribution negative result---the policy was trained on this exact material yet loses after the probing phase. Sand-Hard and Sand-Soft show the same direction at related magnitude, weakening a generic ``any-OOD'' explanation though not isolating recoverability from intra-family confounders.
 
 \paragraph{Cohesive (snow): mild loss.}
-Cohesive snow holds together against probe perturbations but does not actively relax, leaving a small permanent shift. \PTA{}'s 13.3pp snow loss sits between the granular losses ($\sim 20$pp) and the elastoplastic gain (+14.7pp), consistent with a partly-recoverable regime.
+Cohesive snow remains on the negative side of the tradeoff: \PTA{} loses 13.3pp, close to Sand-Hard's 13.5pp loss but smaller than the ID-sand and Sand-Soft losses. Under the hypothesis, this pattern is consistent with a partly recoverable or less disruptive regime, but it does not cleanly separate snow from all granular variants.
 
 \input{figures/TABLE_3_benchmark}
 
