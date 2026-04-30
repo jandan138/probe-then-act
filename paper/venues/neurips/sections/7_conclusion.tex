@@ -1,0 +1,8 @@
+\section{Conclusion and Limitations}
+\label{sec:conclusion}
+
+We presented \PTA{} as a minimal test of active in-episode context acquisition under hidden dynamics: a fixed probe elicits a response, an encoder summarizes the response, and a standard residual policy conditions on the resulting latent. In the cross-material Genesis benchmark, this mechanism improves transfer on the elastoplastic OOD split but underperforms a matched reactive baseline on the other four splits. The result is intentionally asymmetric: the paper supports a conditional finding about when probing helps, not a broad robustness claim.
+
+The pattern is consistent with a recoverable-response hypothesis. Probing appears useful when the probe-induced perturbation relaxes on the task timescale, as in the tested elastoplastic split, and detrimental when it irreversibly rearranges the substrate, as in the granular splits. This hypothesis remains interpretive. The current evidence comes from one positive material family, three seeds with high variance, and a simulator-specific residual-control setup; it should be treated as a hypothesis to test rather than a settled principle.
+
+Several limitations define the next steps. The probe is scripted rather than optimized for information gain; the observation includes simulator-derived aggregate-particle statistics; all training is sand-only; and no sim-to-real transfer is evaluated. Future work should learn probe policies and probe-gating decisions, test additional viscoelastic and granular media, characterize the learned latent representation, and evaluate probe-conditioned policies with realistic tactile or visual estimators.
