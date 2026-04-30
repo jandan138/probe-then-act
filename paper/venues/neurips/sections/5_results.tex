@@ -30,52 +30,20 @@ The privileged-parameter baseline M8 receives ground-truth material parameters a
 
 \input{figures/TABLE_2_ablation}
 
-\begin{figure*}[t]
-    \centering
-    \includegraphics[width=0.98\textwidth]{figures/fig3_ablation.pdf}
-    \caption{\textbf{Ablation study on OOD elastoplastic.} Cleveland dot-plot matrix; each row is a method, each column a metric. Filled markers are 3-seed means; the horizontal whisker spans the per-seed minimum--maximum, and the small white dots show individual seed values (10 deterministic episodes per seed). Spill is plotted as ``Retained material'' ($100-\textrm{spill}$) so that all three columns are higher-is-better. Removing the probe drops transfer by 27.6\,pp; removing the encoder output drops it by 14.4\,pp. No-Probe falls below the reactive baseline on transfer; No-Belief is near the reactive baseline on transfer but remains well below full \PTA{}. This pattern argues against a pure wrapper-stack or model-capacity explanation for the full elastoplastic gain.}
-    \label{fig:ablation}
-\end{figure*}
-
 \subsection{Ablation Study}
 \label{sec:results_ablation}
 
-\cref{tab:ablation} and \cref{fig:ablation} break down \PTA{}'s elastoplastic gain by component, holding all other training pipeline elements fixed.
+\cref{tab:ablation} breaks down \PTA{}'s elastoplastic gain by component, holding all other training pipeline elements fixed; Appendix \cref{fig:ablation} visualizes the per-seed ranges.
 
 \paragraph{Both components are necessary.}
-Removing the probing actions (M7-NoProbe) collapses transfer to 33.1\%---a 27.6pp drop from M7 Full and 12.9pp \emph{below} the reactive baseline. Removing only the belief encoding while keeping the probing phase (M7-NoBelief) preserves 46.3\% transfer, matching the reactive baseline but 14.4pp below \PTA{} Full. For auxiliary metrics, M7 Full has the lowest spill and highest success, while No-Belief remains close to M1 rather than clearly below it on every metric.
-
-The ablations argue against a pure wrapper-stack or model-capacity explanation. If the gain came only from an extra encoder forward pass or a larger wrapper, removing the information-bearing part of \PTA{} would not be expected to erase nearly all of the elastoplastic transfer gain. Instead, No-Probe falls below M1 and No-Belief returns to approximately the M1 transfer level, suggesting that the full gain depends on coupling the physical probe with a usable conditioning representation.
-
-\paragraph{In this architecture, removing the probe is more damaging than removing the encoder output.}
-On the elastoplastic split, removing the probe drops transfer by 27.6pp while removing only the encoder output drops it by 14.4pp. Within \PTA{}'s architecture and on this split, this is consistent with the physical probing interaction---which temporarily reshapes the particle pile and elicits an elastoplastic rebound---supplying signal that is not recoverable from passive observation alone. We do not generalize this ordering beyond the present architecture, ablation pair, and split: a different probe schedule, encoder, or material could in principle invert it.
+Removing the probing actions (M7-NoProbe) collapses transfer to 33.1\%---a 27.6pp drop from M7 Full and 12.9pp \emph{below} the reactive baseline. Removing only the belief encoding while keeping the probing phase (M7-NoBelief) preserves 46.3\% transfer, matching the reactive baseline but 14.4pp below \PTA{} Full. For auxiliary metrics, M7 Full has the lowest spill and highest success, while No-Belief remains close to M1 rather than clearly below it on every metric. The ablations therefore argue against a pure wrapper-stack or model-capacity explanation: the full elastoplastic gain depends on coupling the physical probe with a usable conditioning representation. We do not generalize the relative probe-versus-encoder ordering beyond this architecture, ablation pair, and split.
 
 \subsection{Statistical Reading of the Elastoplastic Gain}
 \label{sec:results_stats}
 
-With $n=3$ seeds, $10$ deterministic episodes per (method, seed, split), and a per-seed transfer standard deviation of $\sim$40pp on elastoplastic, classical significance tests are underpowered; we make no $p$-value claim on the 14.7pp gap. \cref{fig:seeds} shows that \PTA{} exceeds M1 on two of the three matched seed pairs: one large gain on seed 42 and one near-tie on seed 1; seed 0 is a sharp loss. The mean gain is supported by triangulation---higher mean transfer, lower mean spill (also 14.7pp), higher success rate---and by ablations that drop elastoplastic transfer to approximately the reactive baseline or below. The evidence is directional rather than statistically conclusive; a single adverse seed could narrow the gap. We release per-seed numbers and the benchmark code to make additional seeds straightforward to add.
+With $n=3$ seeds, $10$ deterministic episodes per (method, seed, split), and a per-seed transfer standard deviation of $\sim$40pp on elastoplastic, classical significance tests are underpowered; we make no $p$-value claim on the 14.7pp gap. Appendix \cref{fig:seeds} shows that \PTA{} exceeds M1 on two of the three matched seed pairs: one large gain on seed 42 and one near-tie on seed 1; seed 0 is a sharp loss. The mean gain is supported by triangulation---higher mean transfer, lower mean spill (also 14.7pp), higher success rate---and by ablations that drop elastoplastic transfer to approximately the reactive baseline or below. The evidence is directional rather than statistically conclusive; a single adverse seed could narrow the gap. We release per-seed numbers and the benchmark code to make additional seeds straightforward to add.
 
 \subsection{Per-Split Pattern and the Recoverable-Deformation Hypothesis}
 \label{sec:results_analysis}
 
-\cref{fig:main} shows an asymmetric pattern: \PTA{} helps on elastoplastic and hurts elsewhere, with cohesive snow between. We restate the recoverable-deformation hypothesis from \cref{sec:introduction} as an interpretive proposal: this asymmetry is one realization, on one benchmark, of the sign pattern the hypothesis would predict, and confounders (task ease, particle density, control stability, sand-only training) are not isolated.
-
-\paragraph{Elastoplastic (recoverable rebound): gain.}
-Under the hypothesis, a useful probe would displace particles while the brief settle allows part of that displacement to relax, leaving response information in the trace with less persistent task-state disruption. This is the regime in which the hypothesis predicts a favorable probe trade, and \PTA{} achieves the 14.7pp transfer gain. A single recoverable material family does not establish the hypothesis; it is consistent with it.
-
-\paragraph{Granular (ID sand and sand variants): loss.}
-The granular losses are consistent with an irreversible-rearrangement cost: a probe can push grains forward and shift the centroid in a way that does not relax on the task timescale. The 22.2pp loss on ID sand is the cleanest within-distribution negative result---the policy was trained on this exact material yet loses after the probing phase. Sand-Hard and Sand-Soft show the same direction at related magnitude, weakening a generic ``any-OOD'' explanation though not isolating recoverability from intra-family confounders.
-
-\paragraph{Cohesive (snow): mild loss.}
-Cohesive snow remains on the negative side of the tradeoff: \PTA{} loses 13.3pp, close to Sand-Hard's 13.5pp loss but smaller than the ID-sand and Sand-Soft losses. Under the hypothesis, this pattern is consistent with a partly recoverable or less disruptive regime, but it does not cleanly separate snow from all granular variants.
-
-\input{figures/TABLE_3_benchmark}
-
-\begin{figure}[t]
-    \centering
-    \includegraphics[width=0.98\columnwidth]{figures/fig4_seed_distribution.pdf}
-    \caption{\textbf{Paired-seed slope chart, M1 vs.\ \PTA{}.} One panel per material split; each thin line connects matched-seed transfer efficiencies (M1 left, \PTA{} right) for the same training seed. Green slopes indicate \PTA{} $>$ M1 on that seed, red slopes indicate the reverse; the heavy black line connects 3-seed means. The OOD-elastoplastic panel (highlighted) is the only split where the seed mean rises and where \PTA{} exceeds M1 on 2 of 3 matched seed pairs (one near tie, one large gain) and loses sharply on the remaining seed. On the four other splits the seed means decrease; individual slopes are mostly downward, with a small snow exception. We treat this as a directional, descriptive comparison; per-seed dispersion is largest on elastoplastic ($\sim 40$\,pp) so significance is not claimed (\cref{sec:results_stats}).}
-    \label{fig:seeds}
-\end{figure}
-
-\cref{fig:seeds} plots the per-seed numbers behind the seed-mean comparison.
+\cref{fig:main} shows the sign pattern behind the recoverable-deformation hypothesis: \PTA{} gains on elastoplastic (+14.7pp), but loses on ID sand, Sand-Hard, Sand-Soft, and snow. This is consistent with the hypothesis that probing is useful when the elicited response relaxes on the task timescale and harmful when the probe mainly leaves persistent state disruption. The evidence remains interpretive rather than identifying a law: there is only one positive material family, snow does not cleanly separate from all granular variants, and confounders such as task ease, particle density, control stability, and sand-only training are not isolated.
