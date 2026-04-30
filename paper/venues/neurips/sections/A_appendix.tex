@@ -1,1 +1,16 @@
-% NeurIPS Appendix
+\section{Appendix}
+
+\subsection{Benchmark Splits and Evaluation Protocol}
+The benchmark has one ID training split, sand, and four zero-shot evaluation splits: Sand-Hard, Sand-Soft, cohesive snow, and elastoplastic. Main results also report ID-sand evaluation, so the tables cover five evaluation splits in total. All methods train on sand only, and OOD scores therefore measure extrapolation under hidden material dynamics rather than interpolation over a labeled material mixture. M1 and M7 main-result means use three training seeds and ten deterministic evaluation episodes per seed. M8 is reported as a single-seed diagnostic privileged-parameter baseline. The reported metrics are transfer efficiency, spill ratio, and success rate, where success means exceeding 30\% transfer.
+
+\subsection{Probe-Then-Act Architecture Details}
+\PTA{} uses a two-stage episode with a fixed open-loop probing segment of length $H_p=3$ followed by a residual PPO task policy. During probing, the task residual is held at zero and the scripted probe trace is recorded. A two-layer MLP encoder with hidden size 256 maps the trace to a 16-dimensional latent mean and learned scale; the policy conditions on the current state together with this latent pair. We call this pair a belief for brevity, but it is task-conditioning information rather than a calibrated Bayesian posterior. The probe is fixed in this paper and is not optimized by an information-gain objective.
+
+\subsection{Ablation Interpretation}
+The no-probe and no-belief ablations are interpreted relative to the elastoplastic transfer gain. Removing the probe drops transfer from 60.7\% to 33.1\%, while removing the encoder output drops transfer to 46.3\%, nearly eliminating the full \PTA{} transfer gain over the 46.0\% reactive baseline. Spill and success follow the same ordering in the elastoplastic table: M7 Full has 39.3\% spill and 66.7\% success, versus 51.7\% spill and 33.3\% success for No-Probe, 53.7\% spill and 46.7\% success for No-Belief, and 54.0\% spill and 50.0\% success for M1. These ablations support the component interpretation on this architecture and split; they do not establish that active probing is generally useful across all material families.
+
+\subsection{Privileged-Parameter Baseline}
+The privileged-parameter baseline receives ground-truth material parameters concatenated to the policy observation but is trained in the same sand-only residual-control setting as the other compared systems. Its table row is a single-seed diagnostic observation: M8 remains competitive on ID sand, snow, and the parameter-shifted sand variants, but scores 0.0\% transfer on elastoplastic. In this setup, passive parameter access did not produce a useful elastoplastic response curve, whereas an in-episode probe trace did. This is not a universal claim that interaction traces dominate privileged information.
+
+\subsection{Failure Modes and Scope}
+The main failure mode is probe-induced degradation on irreversible or partly irreversible substrates. On ID sand, Sand-Hard, Sand-Soft, and snow, \PTA{} underperforms the reactive baseline; the paper therefore makes a narrow positive claim only on the elastoplastic split and explicitly avoids a broad robustness claim. The recoverability account is an explanatory hypothesis for this sign pattern, not a validated law. The current benchmark does not test additional recoverable material families, learned probe policies, probe-gating mechanisms, realistic tactile sensors, or sim-to-real deployment.
