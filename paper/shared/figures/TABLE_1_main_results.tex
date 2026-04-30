@@ -1,8 +1,10 @@
 \begin{table*}[t]
 \centering
-\caption{Cross-material transfer efficiency (\%) across five evaluation splits. Mean $\pm$ seed standard deviation over 3 training seeds (10 deterministic episodes per seed). M7 leads on OOD elastoplastic by 14.7\,pp; we report this as a directional, descriptive comparison, \emph{not} a significance-tested result---per-seed dispersion on elastoplastic is $\sim 40$\,pp and the test is underpowered (\cref{sec:results_stats}). M8 std is $0.0$ because M8 was scored on a single seed (oracle baseline).}
+\caption{Cross-material transfer efficiency (\%) across five evaluation splits. For M1 and M7, entries report mean $\pm$ seed standard deviation over 3 training seeds (10 deterministic episodes per seed). M7 leads on OOD elastoplastic by 14.7\,pp; we report this as a directional, descriptive comparison, \emph{not} a significance-tested result---per-seed dispersion on elastoplastic is $\sim 40$\,pp and the test is underpowered (\cref{sec:results_stats}). M8 is a single-seed diagnostic privileged-parameter baseline; no seed standard deviation is reported.}
 \label{tab:main_results}
-\begin{tabular}{lcccccc}
+\footnotesize
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{@{}lcccccc@{}}
 \toprule
 Method & ID Sand & OOD EP & OOD Snow & OOD Hard & OOD Soft & Avg OOD \\
 \midrule
