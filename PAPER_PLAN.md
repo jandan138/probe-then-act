@@ -1,7 +1,7 @@
 # Paper Plan
 
 **Title**: Probe-Then-Act: When Active Probing Helps Context-Conditioned Reinforcement Learning under Hidden Dynamics
-**One-sentence contribution**: Probe-Then-Act shows, on a controlled cross-material benchmark, that a deliberately minimal in-episode probing phase can improve context-conditioned RL on a recoverable elastoplastic OOD split while hurting on four irreversible or partly irreversible splits, identifying recoverability as a candidate boundary condition for active probing.
+**One-sentence contribution**: Probe-Then-Act characterizes when a deliberately minimal in-episode probing phase helps versus hurts context-conditioned RL on a controlled cross-material benchmark, showing a sharp asymmetry: benefit on one recoverable elastoplastic OOD split and harm on four irreversible or partly irreversible splits.
 **Venue**: NeurIPS
 **Type**: empirical/diagnostic
 **Date**: 2026-04-30
@@ -12,10 +12,10 @@
 
 | Claim | Evidence | Status | Section |
 |-------|----------|--------|---------|
-| Explicit probing can help context-conditioned RL when the elicited response is recoverable. | Elastoplastic split: 60.7% transfer for M7 vs 46.0% for M1; spill 39.3% vs 54.0%; success +16.7pp. | Narrowly supported | §1, §5 |
+| Explicit probing can help context-conditioned RL when the elicited response is recoverable. | Elastoplastic split: 60.7% transfer for M7 vs 46.0% for M1; spill 39.3% vs 54.0%; success +16.7pp. | Narrowly supported; directional under three-seed variance | §1, §5 |
 | Probing can be harmful when it irreversibly perturbs the state. | M7 underperforms M1 by 13--22pp on the other four splits. | Supported descriptively | §1, §5, §6 |
 | Probe and encoder are necessary for the elastoplastic gain in this architecture. | No-probe and no-belief ablations both fall below the reactive baseline on elastoplastic. | Supported for this split and architecture | §5, Appendix |
-| Passive privileged material parameters are not sufficient in the sand-only residual-control setup. | M8 collapses to 0% transfer on elastoplastic across three seeds. | Supporting observation only | §5, Appendix |
+| Passive privileged material parameters are not sufficient in this sand-only residual-control architecture. | M8 collapses to 0% transfer on elastoplastic across three seeds. | Supporting observation only | §5, Appendix |
 | The benchmark is a reproducible hidden-dynamics stress test. | Five splits, 55pp scripted-transfer spread, 3-seed protocol, ablation infrastructure. | Supported | §1, §4, Appendix |
 
 ## Structure
@@ -31,7 +31,7 @@
 - Explain why history/context policies may fail when normal rollouts do not elicit useful information early enough.
 - Introduce explicit probing as a minimal active intervention with possible state-perturbation cost.
 - Preview the recoverable-response interpretation.
-- Contributions: conditional empirical finding, benchmark, and boundary-condition hypothesis.
+- Contributions: conditional empirical finding, benchmark, and recoverability-based explanatory hypothesis.
 
 ### §2 Related Work
 - Context-conditioned RL and meta-RL.
@@ -79,6 +79,7 @@
 - A NeurIPS reviewer should understand by page 1 that the paper is a scoped diagnostic study, not a broad robustness claim.
 - The asymmetric result must be visible before the method section.
 - The appendix must provide enough protocol detail for reproducibility without padding the main text.
+- Recoverability must be framed as an explanatory hypothesis from current evidence, not as an identified law or validated boundary condition.
 
 ## Next Steps
 
