@@ -9,7 +9,7 @@
 \begin{figure*}[t]
     \centering
     \includegraphics[width=0.98\textwidth]{figures/fig1_hero.pdf}
-    \caption{\textbf{Probe-Then-Act framework and cross-material performance.} Left: Two-stage architecture --- (i) the robot executes a short probing phase, (ii) a belief encoder maps the probe trace to a latent material representation $z$ with uncertainty $\sigma$, (iii) the task policy is conditioned on $(s_t, z, \sigma)$ to produce adaptive joint-space residual actions. Right: Transfer efficiency across five material splits. Our method (M7) achieves a statistically significant improvement on elastoplastic materials (\textbf{$^*p<0.05$}) while remaining competitive on other out-of-distribution variants. Error bars: $\pm 1$ std over 3 seeds.}
+    \caption{\textbf{Probe-Then-Act framework and cross-material performance.} Left: Two-stage architecture --- (i) the robot executes a short probing phase, (ii) an encoder maps the probe trace to a latent task-conditioning vector $z$ with learned scale $\sigma$, (iii) the task policy is conditioned on $(s_t, z, \sigma)$ to produce joint-space residual actions. Right: Transfer-efficiency deltas across five material splits. M7 improves mean transfer on elastoplastic and underperforms on the four other splits; the comparison is descriptive, not significance-tested. Error bars: $\pm 1$ seed standard deviation.}
     \label{fig:hero}
 \end{figure*}
 
@@ -17,7 +17,7 @@
 \begin{figure}[t]
     \centering
     \includegraphics[width=0.98\columnwidth]{figures/fig2_main_comparison.pdf}
-    \caption{Cross-material transfer efficiency comparison. Probe-Then-Act (M7) delivers a 14.7pp absolute (32\% relative) improvement over the reactive baseline (M1) on elastoplastic materials ($^*$), demonstrating that active probing uncovers actionable information for viscoelastic media. On simpler splits the reactive baseline remains competitive, indicating the method operates in a material-specific regime. Error bars: $\pm 1$ std over 3 seeds.}
+    \caption{Cross-material transfer efficiency comparison. Probe-Then-Act (M7) delivers a 14.7pp absolute mean improvement over the reactive baseline (M1) on the elastoplastic split and underperforms on the other four splits. The result is directional and descriptive rather than statistically conclusive. Error bars: $\pm 1$ seed standard deviation.}
     \label{fig:main}
 \end{figure}
 
@@ -25,7 +25,7 @@
 \begin{figure*}[t]
     \centering
     \includegraphics[width=0.98\textwidth]{figures/fig3_ablation.pdf}
-    \caption{\textbf{Ablation study on OOD Elastoplastic.} (a) Removing the probe phase drops transfer by 27.6pp; removing the belief encoder drops it by 14.4pp, indicating both modules are necessary for the observed adaptation. (b) Spill ratio follows the same ordering. (c) Success rate closely tracks transfer efficiency. Error bars: $\pm 1$ std over 3 seeds.}
+    \caption{\textbf{Ablation study on OOD Elastoplastic.} (a) Removing the probe phase drops mean transfer by 27.6pp; removing the belief encoder drops it by 14.4pp, suggesting both components contribute to the observed split-specific gain. (b) Spill ratio follows the same ordering. (c) Success rate tracks transfer efficiency. Error bars: $\pm 1$ seed standard deviation.}
     \label{fig:ablation}
 \end{figure*}
 
@@ -33,7 +33,7 @@
 \begin{figure}[t]
     \centering
     \includegraphics[width=0.98\columnwidth]{figures/fig4_seed_distribution.pdf}
-    \caption{Per-seed transfer efficiency for Probe-Then-Act (M7) versus reactive baseline (M1). Bar heights show the 3-seed mean; overlaid points show individual seeds. Per-seed dispersion is largest on elastoplastic, where M7 dominates the mean even when individual seeds disagree.}
+    \caption{Per-seed transfer efficiency for Probe-Then-Act (M7) versus reactive baseline (M1). Bar heights show the 3-seed mean; overlaid points show individual seeds. Per-seed dispersion is largest on elastoplastic, where M7 has a higher mean despite disagreement across seeds.}
     \label{fig:seeds}
 \end{figure}
 

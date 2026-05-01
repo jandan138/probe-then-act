@@ -1,0 +1,20 @@
+{
+  "current_round": 1,
+  "status": "completed",
+  "model_panel": [
+    "general",
+    "research-glm5",
+    "research-kimi25",
+    "research-glm51",
+    "research-kimi26"
+  ],
+  "substantive_reviews": 4,
+  "empty_reviews": 1,
+  "venue": "NeurIPS",
+  "paper_dir": "/home/zhuzihou/dev/probe-then-act/.worktrees/paper-polish-review/paper",
+  "final_abstract_words": 229,
+  "final_conclusion_page": 9,
+  "final_pages_aux": 14,
+  "final_critical_log_matches": 0,
+  "timestamp": "2026-05-01T00:00:00"
+}
