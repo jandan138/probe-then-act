@@ -85,9 +85,32 @@ Monitor:
 
 Gate G0 passes only if the job succeeds and the worker record has `exit_code=0`.
 
+## Checkpoint Prerequisite For G2
+
+The encoder-sensitivity audit re-evaluates existing M7 seed 42. Before submitting `pta_encoder_sensitivity_m7_ep`, restore or provide the checkpoint bundle so this file exists on the CPFS checkout:
+
+```text
+checkpoints/m7_pta_seed42/best/best_model.zip
+```
+
+Verify it before G2:
+
+```bash
+test -f checkpoints/m7_pta_seed42/best/best_model.zip
+"$PYTHON_BIN" - <<'PY'
+from stable_baselines3 import PPO
+
+path = "checkpoints/m7_pta_seed42/best/best_model.zip"
+model = PPO.load(path, device="cpu")
+print(path, model.num_timesteps)
+PY
+```
+
+If the file is missing, restore the checkpoint bundle first. Do not submit `pta_encoder_sensitivity_m7_ep` until the checkpoint loads successfully.
+
 ## Audit Jobs
 
-Submit probe integrity jobs after G0 passes:
+Submit probe integrity jobs after G0 passes. These jobs do not need policy checkpoints:
 
 ```bash
 for split in id_sand ood_elastoplastic ood_snow ood_sand_hard ood_sand_soft; do
@@ -102,7 +125,7 @@ for split in id_sand ood_elastoplastic ood_snow ood_sand_hard ood_sand_soft; do
 done
 ```
 
-Submit encoder sensitivity job after G0 passes:
+Submit encoder sensitivity job after G0 passes and after `checkpoints/m7_pta_seed42/best/best_model.zip` has been restored and verified:
 
 ```bash
 bash pta/scripts/dlc/launch_job.sh pta_encoder_sensitivity_m7_ep 0 1 "$DLC_DATA_SOURCES" \
