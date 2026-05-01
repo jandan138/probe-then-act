@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -50,7 +51,10 @@ def test_run_task_train_ablation_dry_run_builds_expected_command(tmp_path):
     result = _run_task(tmp_path, "train_ablation", "no_probe", "42")
 
     assert result.returncode == 0, result.stderr
-    assert "python -u pta/scripts/train_m7.py --ablation no_probe --seed 42" in result.stdout
+    assert re.search(
+        r"python3? -u pta/scripts/train_m7.py --ablation no_probe --seed 42",
+        result.stdout,
+    )
     record = _record(tmp_path)
     assert record["mode"] == "train_ablation"
     assert record["exit_code"] == 0
@@ -63,10 +67,11 @@ def test_run_task_eval_ood_dry_run_uses_ablation_default(tmp_path):
     result = _run_task(tmp_path, "eval_ood")
 
     assert result.returncode == 0, result.stderr
-    assert (
-        "python -u pta/scripts/run_ood_eval_v2.py --residual-scale 0.05 "
-        "--methods m7_noprobe m7_nobelief"
-    ) in result.stdout
+    assert re.search(
+        r"python3? -u pta/scripts/run_ood_eval_v2.py --residual-scale 0.05 "
+        r"--methods m7_noprobe m7_nobelief",
+        result.stdout,
+    )
     record = _record(tmp_path)
     assert record["mode"] == "eval_ood"
     assert record["result_hint"] == "results/main_results.csv"
