@@ -1,6 +1,7 @@
 # Build artifacts
 venues/*/build/
 arxiv-submission/
+submissions/
 
 # LaTeX intermediate files
 *.aux
