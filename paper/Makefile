@@ -3,7 +3,7 @@
 
 VENUES := ieee-trl neurips
 SHARED_DIR := shared
-SHARED_SRCS := $(shell find $(SHARED_DIR) -type f \( -name '*.tex' -o -name '*.pdf' -o -name '*.bib' -o -name '*.py' \) 2>/dev/null)
+SHARED_SRCS := $(shell find $(SHARED_DIR) -path '$(SHARED_DIR)/figures/tmp' -prune -o -type f \( -name '*.tex' -o -name '*.pdf' -o -name '*.png' -o -name '*.jpg' -o -name '*.jpeg' -o -name '*.bib' -o -name '*.py' \) -print 2>/dev/null)
 
 # Generate build rules for each venue
 define VENUE_RULE
@@ -30,7 +30,7 @@ endef
 
 $(foreach v,$(VENUES),$(eval $(call VENUE_RULE,$(v))))
 
-.PHONY: all clean check arxiv
+.PHONY: all clean check arxiv nips2026
 all: $(foreach v,$(VENUES),$(v))
 
 clean: $(foreach v,$(VENUES),clean-$(v))
@@ -44,3 +44,6 @@ check:
 
 arxiv:
 	@python3 scripts/flatten.py --venue neurips --output arxiv-submission/
+
+nips2026: neurips
+	@python3 scripts/package_nips2026.py
