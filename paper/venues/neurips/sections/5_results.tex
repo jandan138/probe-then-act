@@ -1,7 +1,7 @@
 \section{Results}
 \label{sec:results}
 
-We read the results as a diagnostic of active context acquisition rather than as a leaderboard comparison. The key question is not whether \PTA{} dominates across materials, but whether the sign of its effect is compatible with a recoverability-based interpretation of probe-induced perturbations.
+We read the results as a diagnostic of active context acquisition rather than as a leaderboard comparison. The key question is not whether \PTA{} dominates across materials, but whether learned context can compensate for the state shift created by the intervention that produced it.
 
 We organize the results around three questions: (i) does active probing improve cross-material transfer, and on which materials? (\cref{sec:results_main}), (ii) which components drive the observed elastoplastic gain? (\cref{sec:results_ablation}), and (iii) is the per-split pattern compatible with the recoverable-response lens from \cref{sec:introduction}? (\cref{sec:results_analysis}).
 
@@ -46,4 +46,4 @@ With $n=3$ seeds, $10$ deterministic episodes per (method, seed, split), and a p
 \subsection{Per-Split Pattern and Recoverability Interpretation}
 \label{sec:results_analysis}
 
-\cref{fig:main} shows the sign pattern behind the recoverability interpretation: \PTA{} gains on elastoplastic (+14.7pp), but loses on ID sand, Sand-Hard, Sand-Soft, and snow. This pattern is compatible with the idea that probing is useful when the elicited response relaxes on the task timescale and harmful when the probe mainly leaves persistent state disruption. The evidence remains interpretive rather than identifying a law: there is only one positive material family, snow does not cleanly separate from all granular variants, and confounders such as task ease, particle density, control stability, and sand-only training are not isolated. A proper test would independently vary recoverability, for example through controlled relaxation-time or damping parameters, while holding information content and task difficulty fixed.
+\cref{fig:main} shows the sign pattern behind the recoverability interpretation: \PTA{} gains on elastoplastic (+14.7pp), but loses on ID sand, Sand-Hard, Sand-Soft, and snow. This pattern is compatible with the idea that learned context is useful when the elicited response relaxes on the task timescale and harmful when the same intervention mainly leaves persistent state disruption. The evidence remains interpretive rather than identifying a law: there is only one positive material family, snow does not cleanly separate from all granular variants, and confounders such as task ease, particle density, control stability, and sand-only training are not isolated. A proper test would independently vary recoverability, for example through controlled relaxation-time or damping parameters, while holding information content and task difficulty fixed.
