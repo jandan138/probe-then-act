@@ -57,13 +57,13 @@ S.~J. Lederman and R.~L. Klatzky, ``Hand movements: A window into haptic object 
 D.~Xu, G.~E. Loeb, and J.~A. Fishel, ``Tactile identification of objects using {B}ayesian exploration,'' in \emph{Proc. {IEEE} Int. Conf. Robotics and Automation ({ICRA})}, 2013.
 
 \bibitem{bauza2020tactile}
-M.~Bauza, A.~Bronars, and A.~Rodriguez, ``Tactile object pose estimation from the first touch with geometric contact rendering,'' \emph{Conference on Robot Learning ({CoRL})}, 2020.
+M.~Bauza, A.~Rodriguez, B.~Lim, E.~Valls, and T.~Sechopoulos, ``Tactile object pose estimation from the first touch with geometric contact rendering,'' \emph{Conference on Robot Learning ({CoRL})}, 2020.
 
 \bibitem{yu2016more}
 K.-T. Yu, M.~Bauza, N.~Fazeli, and A.~Rodriguez, ``More than a million ways to be pushed: A high-fidelity experimental dataset of planar pushing,'' in \emph{Proc. {IEEE/RSJ} Int. Conf. Intelligent Robots and Systems ({IROS})}, 2016.
 
 \bibitem{bauza2018data}
-M.~Bauza and A.~Rodriguez, ``A data-efficient approach to precise and controlled pushing,'' in \emph{Conference on Robot Learning ({CoRL})}, 2018.
+M.~Bauza, F.~R. Hogan, and A.~Rodriguez, ``A data-efficient approach to precise and controlled pushing,'' in \emph{Proceedings of The 2nd Conference on Robot Learning}, 2018.
 
 \bibitem{dutta2025predictive}
 A.~Dutta, E.~Burdet, and M.~Kaboli, ``Predictive visuo-tactile interactive perception framework for object properties inference,'' \emph{{IEEE} Transactions on Robotics}, vol.~41, pp. 1386--1403, 2025.
@@ -81,7 +81,7 @@ K.~Zhang, B.~Li, K.~Hauser, and Y.~Li, ``{AdaptiGraph}: Material-adaptive graph-
 X.~Yang, Z.~Ji, and Y.-K. Lai, ``Differentiable physics-based system identification for robotic manipulation of elastoplastic materials,'' \emph{The International Journal of Robotics Research}, vol.~44, no.~13, pp. 2126--2155, 2025.
 
 \bibitem{millard2023granulargym}
-D.~Millard, D.~Pastor, J.~Bowkett, P.~Backes, and G.~Sukhatme, ``{GranularGym}: High performance simulation for robotic tasks with granular materials,'' in \emph{Robotics: Science and Systems ({RSS})}, 2023.
+D.~R. Millard, D.~Pastor, J.~Bowkett, P.~Backes, and G.~S. Sukhatme, ``{GranularGym}: High performance simulation for robotic tasks with granular materials,'' in \emph{Robotics: Science and Systems ({RSS})}, 2023.
 
 \bibitem{finn2017model}
 C.~Finn, P.~Abbeel, and S.~Levine, ``Model-agnostic meta-learning for fast adaptation of deep networks,'' in \emph{International Conference on Machine Learning ({ICML})}, 2017.
@@ -113,10 +113,10 @@ M.~Memmel, A.~Wagenmaker, C.~Zhu, D.~Fox, and A.~Gupta, ``{ASID}: Active explora
 V.~Makoviychuk, L.~Wawrzyniak, Y.~Guo, M.~Lu, K.~Storey, M.~Macklin, D.~Hoeller, N.~Rudin, A.~Allshire, A.~Handa, and G.~State, ``Isaac gym: High performance {GPU}-based physics simulation for robot learning,'' in \emph{Advances in Neural Information Processing Systems ({NeurIPS}) Datasets and Benchmarks Track}, 2021.
 
 \bibitem{freeman2021brax}
-C.~D. Freeman, E.~Frey, A.~Raichuk, S.~Girgin, I.~Mordatch, and O.~Bachem, ``{Brax}: A differentiable physics engine for large scale rigid body simulation,'' arXiv preprint arXiv:2106.13281, 2021.
+C.~D. Freeman, E.~Frey, A.~Raichuk, S.~Girgin, I.~Mordatch, and O.~Bachem, ``{Brax}: A differentiable physics engine for large scale rigid body simulation,'' in \emph{Advances in Neural Information Processing Systems ({NeurIPS}) Datasets and Benchmarks Track}, 2021.
 
 \bibitem{lin2021softgym}
-X.~Lin, Y.~Wang, J.~Olkin, and D.~Held, ``{SoftGym}: Benchmarking deep reinforcement learning for deformable object manipulation,'' in \emph{Conference on Robot Learning ({CoRL})}, 2021.
+X.~Lin, Y.~Wang, J.~Olkin, and D.~Held, ``{SoftGym}: Benchmarking deep reinforcement learning for deformable object manipulation,'' in \emph{Proceedings of the 2020 Conference on Robot Learning}, 2021.
 
 \bibitem{schulman2017proximal}
 J.~Schulman, F.~Wolski, P.~Dhariwal, A.~Radford, and O.~Klimov, ``Proximal policy optimization algorithms,'' \emph{arXiv preprint arXiv:1707.06347}, 2017.
