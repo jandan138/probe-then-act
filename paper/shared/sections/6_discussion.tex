@@ -1,18 +1,18 @@
 \section{Discussion}
 \label{sec:discussion}
 
-\subsection{The Recoverable-Deformation Hypothesis as a Candidate Heuristic}
+\subsection{The Recoverable-Deformation Hypothesis as a Testable Heuristic}
 
-The hypothesis is not validated by the present benchmark: the positive evidence comes from a single elastoplastic family, and recoverability is not isolated from confounders (task ease, particle density, control stability, sand-only training, the simulator's specific elastoplastic constitutive model). We offer it as a physically grounded interpretation of the asymmetry and as a design rule to be tested in future work.
+The present benchmark turns recoverability into a testable heuristic rather than a settled law: the positive evidence comes from a single elastoplastic family, and recoverability is not independently varied from task ease, particle density, control stability, sand-only training, or the simulator's specific elastoplastic constitutive model. We offer it as a physically grounded interpretation of the asymmetry and as a design rule for targeted follow-up experiments.
 
 If the hypothesis holds more broadly, the implied prescription is to allocate probe time to a material if and only if the probe-induced perturbation relaxes back on the timescale of the subsequent task. Each row of the candidate prescription below beyond elastoplastic is an extrapolation, not a tested claim of this paper:
 \begin{itemize}
     \item \textbf{Viscoelastic / elastic media} (gels, dough at rest, soft tissue, certain elastomers): probe-induced perturbations are expected to relax; \PTA{}-style probing is plausibly net-positive. Only the elastoplastic case is tested here.
     \item \textbf{Granular media without cohesion} (dry sand, gravel, beads, rice): probe-induced perturbations do not relax. Probing was net-negative on every granular split we tested.
-    \item \textbf{Cohesive granular media} (wet sand, snow): partly recoverable in principle. Snow showed a 13.3pp loss in our setup; the broader regime is not tested.
+    \item \textbf{Cohesive compacting media} (wet sand, snow): cohesive in appearance but capable of persistent compaction under contact loading. Snow showed a 13.3pp loss in our setup; the broader regime is not tested.
 \end{itemize}
 
-This is a scope claim, not a universal recipe. A robotic stack handling mixed materials should include a coarse material-class router that selects between \PTA{} and a reactive policy.
+This scope claim suggests a practical stack for mixed materials: use a coarse material-class router that selects between \PTA{} and a reactive policy.
 
 \subsection{Why the Privileged-Parameter Baseline Fails on the Elastoplastic Split}
 

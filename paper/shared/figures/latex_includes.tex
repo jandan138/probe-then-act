@@ -3,29 +3,52 @@
 % Paste these into the appropriate sections of the paper.
 % ============================================================
 
-% === Fig 1: Hero figure (method + cross-material comparison) ===
-% NOTE: Method overview panel is a MANUAL architecture diagram.
-%       Right panel reuses fig2_main_comparison.
-\begin{figure*}[t]
+% === PTA workflow ===
+% NOTE: Workflow panel is a manual architecture diagram.
+\begin{figure}[t]
     \centering
-    \includegraphics[width=0.98\textwidth]{figures/fig1_hero.pdf}
-    \caption{\textbf{Probe-Then-Act framework and cross-material performance.} Left: Two-stage architecture --- (i) the robot executes a short probing phase, (ii) an encoder maps the probe trace to a latent task-conditioning vector $z$ with learned scale $\sigma$, (iii) the task policy is conditioned on $(s_t, z, \sigma)$ to produce joint-space residual actions. Right: Transfer-efficiency deltas across five material splits. M7 improves mean transfer on elastoplastic and underperforms on the four other splits; the comparison is descriptive, not significance-tested. Error bars: $\pm 1$ seed standard deviation.}
-    \label{fig:hero}
-\end{figure*}
+    \includegraphics[width=0.74\textwidth]{figures/fig1_workflow.pdf}
+    \caption{\textbf{\PTA{} workflow.} A fixed probe yields a response trace, an encoder maps it to $(z,\sigma)$, and a residual PPO policy conditions on $(s_t,z,\sigma)$.}
+    \label{fig:pta_workflow}
+\end{figure}
 
-% === Fig 2: Main cross-material comparison ===
+% === Genesis edge-push benchmark renders ===
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=0.88\textwidth]{figures/fig5_scene_schematic.pdf}
+    \caption{\textbf{Genesis edge-push benchmark.} Representative settled-pile renders; geometry is fixed across panels, while MPM material parameters and scripted-transfer difficulty differ.}
+    \label{fig:scene_schematic}
+\end{figure}
+
+% === Main cross-material comparison ===
 \begin{figure}[t]
     \centering
     \includegraphics[width=0.98\columnwidth]{figures/fig2_main_comparison.pdf}
-    \caption{Cross-material transfer efficiency comparison. Probe-Then-Act (M7) delivers a 14.7pp absolute mean improvement over the reactive baseline (M1) on the elastoplastic split and underperforms on the other four splits. The result is directional and descriptive rather than statistically conclusive. Error bars: $\pm 1$ seed standard deviation.}
+    \caption{Cross-material transfer efficiency comparison. Probe-Then-Act (M7) delivers a 14.7pp absolute mean improvement over the reactive baseline (M1) on the elastoplastic split and underperforms on the other four splits. M1/M7 are 3-seed means with per-seed dispersion reported separately; M8 is a single-seed diagnostic row.}
     \label{fig:main}
+\end{figure}
+
+% === Per-split deltas ===
+\begin{figure}[b]
+    \centering
+    \includegraphics[width=0.68\textwidth]{figures/fig1_effect_delta.pdf}
+    \caption{\textbf{Per-split deltas relative to M1.} Filled circles show M7--M1; hollow triangles show single-seed M8--M1 diagnostics. The figure emphasizes sign direction across splits; deltas are descriptive.}
+    \label{fig:effect_delta}
+\end{figure}
+
+% === Late qualitative summary ===
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.82\textwidth]{figures/fig0_teaser.png}
+    \caption{\textbf{Qualitative summary of the information--intervention tradeoff.} The 2D schematic summarizes the descriptive pattern after the quantitative results: the fixed probe can reveal material response but also perturbs the particle state. In this benchmark, \PTA{} improves elastoplastic transfer (+14.7pp versus M1) and underperforms on the other splits; the M8 value is a single-seed elastoplastic diagnostic. Exact metrics are reported in \cref{tab:main_results,fig:main,fig:effect_delta}.}
+    \label{fig:teaser}
 \end{figure}
 
 % === Fig 3: Ablation study ===
 \begin{figure*}[t]
     \centering
     \includegraphics[width=0.98\textwidth]{figures/fig3_ablation.pdf}
-    \caption{\textbf{Ablation study on OOD Elastoplastic.} (a) Removing the probe phase drops mean transfer by 27.6pp; removing the belief encoder drops it by 14.4pp, suggesting both components contribute to the observed split-specific gain. (b) Spill ratio follows the same ordering. (c) Success rate tracks transfer efficiency. Error bars: $\pm 1$ seed standard deviation.}
+    \caption{\textbf{Ablation study on OOD Elastoplastic.} (a) Removing the probe phase drops mean transfer by 27.6pp and falls below M1; removing the belief encoder drops 14.4pp from full \PTA{} and returns to roughly M1-level transfer. (b) Spill ratio follows the same ordering. (c) Success rate tracks transfer efficiency. Error bars: $\pm 1$ seed standard deviation.}
     \label{fig:ablation}
 \end{figure*}
 

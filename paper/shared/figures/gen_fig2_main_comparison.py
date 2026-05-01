@@ -8,19 +8,22 @@ Cell colour = transfer efficiency %; cell text = numeric value.
 The OOD-Elastoplastic column is highlighted to signal the central finding.
 """
 import sys
-sys.path.insert(0, 'figures')
+from pathlib import Path
+
+SCRIPT_DIR = Path(__file__).resolve().parent
+ROOT = SCRIPT_DIR.parents[2]
+sys.path.insert(0, str(SCRIPT_DIR))
 from paper_plot_style import *
 import pandas as pd
 import numpy as np
 from matplotlib.patches import Rectangle
 
-df = pd.read_csv('results/main_results.csv')
+df = pd.read_csv(ROOT / 'results' / 'main_results.csv')
 
 methods = ['m1_reactive', 'm7_pta', 'm8_teacher']
 # Plain text only -- matplotlib has text.usetex=False so LaTeX macros
-# would render literally. Dagger marks the single-seed M8 row; explained
-# in the LaTeX caption.
-method_labels = ['M1 Reactive', 'M7 PTA (Ours)', r'M8 Privileged-Param$^{\dagger}$']
+# would render literally. M8's single-seed status is explained in the caption.
+method_labels = ['M1 Reactive', 'M7 PTA (Ours)', 'M8 Privileged-Param']
 
 splits = list(SPLIT_ORDER)   # canonical order: id_sand, EP, snow, hard, soft
 split_labels = ['ID\nSand', 'OOD\nElastoplastic', 'OOD\nSnow', 'OOD\nSand-Hard', 'OOD\nSand-Soft']
@@ -31,7 +34,7 @@ for i, m in enumerate(methods):
         v = df[(df['method'] == m) & (df['split'] == s)]['mean_transfer_mean'].values
         mat[i, j] = v[0] * 100 if len(v) else np.nan
 
-fig, ax = plt.subplots(1, 1, figsize=(7, 2.6))
+fig, ax = plt.subplots(1, 1, figsize=(7.2, 2.5), constrained_layout=True)
 im = ax.imshow(mat, cmap='YlGnBu', vmin=0, vmax=80, aspect='auto')
 
 # Cell text
@@ -58,16 +61,9 @@ for spine in ax.spines.values():
     spine.set_visible(False)
 
 cbar = fig.colorbar(im, ax=ax, fraction=0.04, pad=0.02)
-cbar.set_label('Transfer efficiency (%)', fontsize=9)
+cbar.set_label('Transfer efficiency (%)', fontsize=9, rotation=270, labelpad=13)
 cbar.ax.tick_params(labelsize=8)
 
-# Magenta-coloured title above the heatmap. The colour matches the
-# rectangle outline on the OOD-Elastoplastic column so the connection
-# between callout and highlighted column is unambiguous, without
-# needing an arrow that would have to cross data cells.
-ax.set_title('Only positive PTA split  (+14.7 pp vs M1)',
-             fontsize=9, color='#AA3377', fontweight='bold', pad=4)
-
-plt.tight_layout()
-save_fig(fig, 'fig2_main_comparison')
+fig.savefig(SCRIPT_DIR / 'fig2_main_comparison.pdf')
+print(f"Saved: {SCRIPT_DIR / 'fig2_main_comparison.pdf'}")
 plt.close()
