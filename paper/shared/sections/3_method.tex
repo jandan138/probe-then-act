@@ -1,13 +1,13 @@
 \section{Method}
 \label{sec:method}
 
-We formalize \PTA{} as a two-stage decision process that augments a standard finite-horizon MDP with an explicit probing phase and a latent task-conditioning step.
+We formalize \PTA{} as a two-stage decision process that augments a standard finite-horizon MDP with an explicit probing phase and a latent task-conditioning step. The formulation makes explicit that probing changes both the information available to the network and the physical state distribution faced by the task policy.
 
 \subsection{Problem Formulation}
 
 An episode consists of a robot interacting with a material instance $m \in \calM$ drawn from a distribution over hidden physical properties (Young's modulus $E$, Poisson ratio $\nu$, density $\rho$, cohesion, and plasticity parameters). The robot receives observation $s_t \in \R^{d_s}$ at step $t$ and applies action $a_t \in \R^{d_a}$. The observation contains proprioceptive state (joint positions, end-effector pose, time fraction) and aggregate particle statistics computed from simulator state---mean $y$-coordinate, transfer fraction into the target region, and spill fraction off the platform---but \emph{not} the ground-truth material parameters $m$. The task reward combines transfer, spill, and success terms defined for our edge-push benchmark; Genesis provides the simulator.
 
-Our goal is to learn a policy $\pi_\theta(a_t \mid s_t, z, \sigma)$ that maximizes expected episode return over the material distribution, where $(z, \sigma)$ is a latent task-conditioning vector produced by an encoder $q_\phi$ from a short probing rollout. We refer to $(z, \sigma)$ as a ``belief'' for brevity but do not interpret it as a calibrated posterior: $\sigma$ is a learned scale used at training time, not a posterior standard deviation. $m$ is never observed; $z$ must be inferred entirely from the probing interaction.
+Our goal is to learn a policy $\pi_\theta(a_t \mid s_t, z, \sigma)$ that maximizes expected episode return over the material distribution, where $(z, \sigma)$ is a latent task-conditioning vector produced by an encoder $q_\phi$ from a short probing rollout. We refer to $(z, \sigma)$ as a ``belief'' for brevity but do not interpret it as a calibrated posterior: $\sigma$ is a learned scale used at training time, not a posterior standard deviation. $m$ is never observed; $z$ must be inferred entirely from the probing interaction, and its usefulness depends on the post-probe state as well as the encoded material response.
 
 \subsection{Two-Stage Structure}
 
