@@ -65,14 +65,23 @@ K.-T. Yu, M.~Bauza, N.~Fazeli, and A.~Rodriguez, ``More than a million ways to b
 \bibitem{bauza2018data}
 M.~Bauza and A.~Rodriguez, ``A data-efficient approach to precise and controlled pushing,'' in \emph{Conference on Robot Learning ({CoRL})}, 2018.
 
+\bibitem{dutta2025predictive}
+A.~Dutta, E.~Burdet, and M.~Kaboli, ``Predictive visuo-tactile interactive perception framework for object properties inference,'' \emph{{IEEE} Transactions on Robotics}, vol.~41, pp. 1386--1403, 2025.
+
+\bibitem{ai2024robopack}
+B.~Ai, S.~Tian, H.~Shi, Y.~Wang, C.~Tan, Y.~Li, and J.~Wu, ``{RoboPack}: Learning tactile-informed dynamics models for dense packing,'' in \emph{Robotics: Science and Systems ({RSS})}, 2024.
+
 \bibitem{shi2022robocraft}
 H.~Shi, H.~Xu, Z.~Huang, Y.~Li, and J.~Wu, ``{RoboCraft}: Learning to see, simulate, and shape elasto-plastic objects with graph networks,'' in \emph{Robotics: Science and Systems ({RSS})}, 2022.
 
-\bibitem{schenck2017learning}
-C.~Schenck, J.~Tompson, S.~Levine, and D.~Fox, ``Learning robotic manipulation of granular media,'' in \emph{Conference on Robot Learning ({CoRL})}, 2017.
+\bibitem{zhang2024adaptigraph}
+K.~Zhang, B.~Li, K.~Hauser, and Y.~Li, ``{AdaptiGraph}: Material-adaptive graph-based neural dynamics for robotic manipulation,'' in \emph{Robotics: Science and Systems ({RSS})}, 2024.
 
-\bibitem{matl2020inferring}
-C.~Matl, Y.~Narang, R.~Bajcsy, F.~Ramos, and D.~Fox, ``Inferring the material properties of granular media for robotic tasks,'' in \emph{Proc. {IEEE} Int. Conf. Robotics and Automation ({ICRA})}, 2020.
+\bibitem{yang2025differentiable}
+X.~Yang, Z.~Ji, and Y.-K. Lai, ``Differentiable physics-based system identification for robotic manipulation of elastoplastic materials,'' \emph{The International Journal of Robotics Research}, vol.~44, no.~13, pp. 2126--2155, 2025.
+
+\bibitem{millard2023granulargym}
+D.~Millard, D.~Pastor, J.~Bowkett, P.~Backes, and G.~Sukhatme, ``{GranularGym}: High performance simulation for robotic tasks with granular materials,'' in \emph{Robotics: Science and Systems ({RSS})}, 2023.
 
 \bibitem{finn2017model}
 C.~Finn, P.~Abbeel, and S.~Levine, ``Model-agnostic meta-learning for fast adaptation of deep networks,'' in \emph{International Conference on Machine Learning ({ICML})}, 2017.
@@ -94,6 +103,11 @@ I.~Clavera, J.~Rothfuss, J.~Schulman, Y.~Fujita, T.~Asfour, and P.~Abbeel, ``Mod
 
 \bibitem{yu2017preparing}
 W.~Yu, J.~Tan, C.~K. Liu, and G.~Turk, ``Preparing for the unknown: Learning a universal policy with online system identification,'' in \emph{Robotics: Science and Systems ({RSS})}, 2017.
+
+\bibitem{memmel2024asid}
+\BIBentryALTinterwordspacing
+M.~Memmel, A.~Wagenmaker, C.~Zhu, D.~Fox, and A.~Gupta, ``{ASID}: Active exploration for system identification in robotic manipulation,'' in \emph{International Conference on Learning Representations ({ICLR})}, 2024, oral. [Online]. Available: \url{https://openreview.net/forum?id=jNR6s6OSBT}
+\BIBentrySTDinterwordspacing
 
 \bibitem{makoviychuk2021isaac}
 V.~Makoviychuk, L.~Wawrzyniak, Y.~Guo, M.~Lu, K.~Storey, M.~Macklin, D.~Hoeller, N.~Rudin, A.~Allshire, A.~Handa, and G.~State, ``Isaac gym: High performance {GPU}-based physics simulation for robot learning,'' in \emph{Advances in Neural Information Processing Systems ({NeurIPS}) Datasets and Benchmarks Track}, 2021.

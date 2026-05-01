@@ -5,10 +5,17 @@
 
 We build the cross-material benchmark in the Genesis multi-physics simulator~\cite{genesis2024} around a single \emph{edge-push} task. A Franka Panda arm (7 DoF) equipped with a flat scoop end-effector must push a pile of particles from an elevated source platform across a raised edge into a target bin, with spill onto the floor penalized. This task is deliberately simple kinematically---it is essentially a horizontal push followed by a settle---which reduces, but does not eliminate, task-engineering confounds when comparing material-regime behavior.
 
-The five material splits and Genesis renders are summarized in Appendix \cref{tab:benchmark,fig:scene_schematic}; the same Franka, scoop, source platform, target bin, and pile placement (Config D, 5.5\,cm from the open edge) are used for every split, so cross-split differences come from material parameters alone. We use Genesis MPM at grid density 128 with 25 substeps per control step (control $\Delta t = 2 \times 10^{-3}$~s).
+\cref{fig:scene_schematic} shows the fixed edge-push scene, and Appendix \cref{tab:benchmark} reports the split parameters. The same Franka, scoop, source platform, target bin, and pile placement (Config D, 5.5\,cm from the open edge) are used for every split, so cross-split differences come from material parameters alone. We use Genesis MPM at grid density 128 with 25 substeps per control step (control $\Delta t = 2 \times 10^{-3}$~s).
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=0.88\textwidth]{figures/fig5_scene_schematic.pdf}
+    \caption{\textbf{Genesis edge-push benchmark.} Representative settled-pile renders; geometry is fixed across panels, while MPM material parameters and scripted-transfer difficulty differ.}
+    \label{fig:scene_schematic}
+\end{figure}
 
 \paragraph{Material choices.}
-The three material families span physically distinct behaviors. \emph{Sand} (granular, $E=5 \times 10^4$, $\nu=0.3$, $\rho=2000$) is the training material and the hardest---a scripted baseline achieves only 32\% transfer because particles deform under the scoop and flow backward. \emph{Snow} (cohesive, $E=1 \times 10^5$, $\nu=0.2$, $\rho=400$) is the easiest (87\% scripted transfer) because cohesion allows the pile to translate as a block. \emph{Elastoplastic} ($E=5 \times 10^4$, $\nu=0.4$, $\rho=1000$) is intermediate (70\% scripted transfer) and exhibits recoverable elastic rebound: the pile partially relaxes back after each push, so a fixed residual over-corrects. We use ``elastoplastic'' throughout to refer to this Genesis material model and reserve ``viscoelastic'' as a description of the rebound behavior it exhibits, rather than as an independent material class. The 55pp spread between hardest and easiest is \emph{discriminative} by design, making a single push profile insufficient for uniformly high scripted transfer.
+The three material families span clean and boundary regimes. \emph{Sand} (granular, $E=5 \times 10^4$, $\nu=0.3$, $\rho=2000$) is the training material and the hardest---a scripted baseline achieves only 32\% transfer because particles deform under the scoop and flow backward. \emph{Elastoplastic} ($E=5 \times 10^4$, $\nu=0.4$, $\rho=1000$) is the clean recoverable case: the pile partially rebounds after each push, so a fixed residual over-corrects. \emph{Snow} (cohesive, $E=1 \times 10^5$, $\nu=0.2$, $\rho=400$) is deliberately a boundary case. Cohesion makes the scripted push easy (87\% transfer), but contact loading can leave a compacted or displaced region rather than a rebounded one, so recoverability is not equated with cohesion or task ease. We use ``elastoplastic'' throughout to refer to this Genesis material model and reserve ``viscoelastic'' as a description of the rebound behavior it exhibits, rather than as an independent material class. The 55pp spread between hardest and easiest is \emph{discriminative} by design, making a single push profile insufficient for uniformly high scripted transfer.
 
 \paragraph{OOD parameter splits.}
 In addition to family-level OOD (snow, elastoplastic), we evaluate on parameter-shifted sand variants: \textbf{Sand-Hard} ($E=8 \times 10^4$, 60\% stiffer) and \textbf{Sand-Soft} ($E=2 \times 10^4$, 60\% softer). These probe within-family generalization and serve as controls: if a method's gain on elastoplastic is driven by generic ``any-OOD'' robustness, the parameter splits should show similar gains.
@@ -24,7 +31,7 @@ We compare five systems, all trained with identical 500\,k-step PPO budgets and 
 \begin{itemize}
     \item \textbf{M1: Reactive PPO}---standard reactive baseline conditioned on $s_t$ only. No probe, no belief.
     \item \textbf{M7: \PTA{} (ours)}---the full two-stage architecture of \cref{sec:method}.
-    \item \textbf{M8: Privileged-Parameter Baseline}---a sand-only-trained residual policy that additionally receives ground-truth material parameters (7-D privileged observation) concatenated to $s_t$, but is otherwise matched to M1/M7. Not a broadly trained oracle; we do not treat it as a universal informational upper bound.
+    \item \textbf{M8: Privileged-Parameter Baseline}---a sand-only-trained residual policy that additionally receives ground-truth material parameters (7-D privileged observation) concatenated to $s_t$, but is otherwise matched to M1/M7. It tests parameter access under the same sand-only training protocol.
     \item \textbf{M7-NoProbe}---ablation that skips the probing phase; encoder sees a zero trace.
     \item \textbf{M7-NoBelief}---ablation that runs the probe but drops the encoder output.
 \end{itemize}

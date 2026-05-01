@@ -13,6 +13,7 @@ results_scoop_viewer_launch.log
 *.pth
 .venv/
 .worktrees/
+.superpowers/
 
 # LaTeX build artifacts
 paper/main.aux
@@ -27,6 +28,7 @@ paper/figures_symlink
 
 # Working scratch (image2 outputs, screenshots dropped in conversation)
 paper/figures/tmp/
+paper/shared/figures/tmp/
 
 # Local mid-loop PDF snapshots (the canonical round artefacts are
 # main_round{0..6}.pdf which ARE tracked).
