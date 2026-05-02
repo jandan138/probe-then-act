@@ -34,7 +34,21 @@ export EGL_DEVICE_ID=0
 cd "$PTA_CODE_ROOT"
 ```
 
-`PTA_CODE_ROOT` and `GENESIS_ROOT` must be worker-visible CPFS paths because `launch_job.sh` embeds `PTA_CODE_ROOT` into the command executed inside the DLC worker. Do not use a DSW-local `/shared/smartbot/...` path here unless you have verified it is mounted inside DLC workers.
+`PTA_CODE_ROOT` and `GENESIS_ROOT` must be worker-visible CPFS paths. `launch_job.sh` uses `PTA_CODE_ROOT` to choose the `run_task.sh` script path, but `run_task.sh` still needs `PTA_CODE_ROOT` in the worker environment when the code root differs from `/cpfs/shared/simulation/zhuzihou/dev/probe-then-act`. For custom one-off jobs from an alternate worktree, pass it explicitly:
+
+```bash
+bash pta/scripts/dlc/launch_job.sh <name> 0 1 "$DLC_DATA_SOURCES" \
+  custom env PTA_CODE_ROOT=/cpfs/shared/simulation/zhuzihou/dev/probe-then-act-g2-provisional \
+    PYOPENGL_PLATFORM=egl EGL_DEVICE_ID=0 "$PYTHON_BIN" -u <script> <args>
+```
+
+Do not use a DSW-local `/shared/smartbot/...` path here unless you have verified it is mounted inside DLC workers.
+
+Image safety gate: the verified Genesis/PTA training image is `pj4090acr-registry-vpc.cn-beijing.cr.aliyuncs.com/pj4090/mahaoxiang:genmanip-mahaoxiang`. `launch_job.sh` now defaults to this image, but keep `DLC_IMAGE` exported and verify every submitted training job with `dlc get job <JOB_ID>` before counting it as a valid submission. The expected field is:
+
+```text
+JobSpecs[0].Image = pj4090acr-registry-vpc.cn-beijing.cr.aliyuncs.com/pj4090/mahaoxiang:genmanip-mahaoxiang
+```
 
 ## Local DSW Preflight
 
@@ -149,6 +163,43 @@ Pass criteria:
 - G2 encoder sensitivity: `audit_encoder_m7_pta_s42_ood_elastoplastic.json` has `passes == true`, `transfer_range_pp <= 5.0`, and `total_failed_episodes == 0`.
 
 If G1 or G2 fails, do not submit extra seed training jobs.
+
+## 2026-05-01 Gate Status
+
+Completed gates and current DLC status:
+
+- G0 smoke job `dlcy7gu8a1ghjg77`: succeeded.
+- G1 probe-integrity jobs for all five splits: succeeded. The elastoplastic gate file `results/presub/audit_probe_ood_elastoplastic_seed123.json` passed the displacement threshold.
+- G2 encoder sensitivity job `dlc1skykqxol8zl0`: DLC job succeeded, worker record `results/dlc/runs/20260501T141214Z_custom_dlc1skykqxol8zl0-master-0.json` has `exit_code=0`, but the gate failed.
+
+G2 result file:
+
+```text
+results/presub/audit_encoder_m7_pta_s42_ood_elastoplastic.json
+```
+
+Observed G2 result:
+
+```text
+passes=false
+transfer_range_pp=65.99578301705962
+total_failed_episodes=0
+reasons=["encoder sensitivity transfer range exceeded threshold"]
+```
+
+Initial gate decision: do not submit G3/G4 extra seed training/evaluation under this gate result. The DLC job itself was healthy; the method/checkpoint failed the sensitivity criterion. The later six-seed G3 training submission was an explicit operator override for evidence collection only; G4 extra-seed evaluation still waits for worker-record and checkpoint verification.
+
+Recovery training job `dlc1hn82yye94ojd` succeeded on 2026-05-01. Worker record `results/dlc/runs/20260501T113021Z_custom_dlc1hn82yye94ojd-master-0.json` has `exit_code=0`.
+
+Final recovered artifacts are registered under:
+
+```text
+/cpfs/shared/simulation/zhuzihou/artifacts/probe-then-act/20260501/20260501_dlc1hn82yye94ojd_m7_pta_seed42_final_recovery/
+```
+
+This final recovery archive contains 12 M7 seed42 checkpoint zip files, all SB3-load verified. The final checkpoint `checkpoints/m7_pta_seed42/m7_pta_final.zip` has `num_timesteps=500224` and `sha256=55bf288ab6211f15b016a6210b51435c5650d71a5ff0a4fc65e04c5835085116`.
+
+The G2 result remains a method/checkpoint gate failure, not an infrastructure failure. Do not submit G4 extra seed evaluation unless the submitted G3 training jobs finish successfully, their worker records show `exit_code=0`, and the resulting checkpoints load with SB3.
 
 ## Extra Seed Training Jobs
 

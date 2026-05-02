@@ -23,7 +23,7 @@ else
 fi
 
 WORKSPACE_ID=${DLC_WORKSPACE_ID:-"270969"}
-IMAGE=${DLC_IMAGE:-"dsw-registry-vpc.cn-beijing.cr.aliyuncs.com/pai-training-algorithm/pytorch:py311-cu126"}
+IMAGE=${DLC_IMAGE:-"pj4090acr-registry-vpc.cn-beijing.cr.aliyuncs.com/pj4090/mahaoxiang:genmanip-mahaoxiang"}
 CODE_ROOT=${PTA_CODE_ROOT:-${DLC_CODE_ROOT:-"/cpfs/shared/simulation/zhuzihou/dev/probe-then-act"}}
 DLC_BIN=${DLC_BIN:-"$CODE_ROOT/dlc"}
 GPU_COUNT=${DLC_GPU_COUNT:-1}
