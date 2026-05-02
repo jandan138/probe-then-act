@@ -364,6 +364,12 @@ def test_register_run_copies_matched_encoder_sidecars_into_run_dir_and_bundle(tm
     for relative_path in expected_paths:
         assert relative_path in names
 
+    restore_root = tmp_path / "restore"
+    registry.restore_bundle(archive, restore_root)
+
+    for relative_path in expected_paths:
+        assert (restore_root / relative_path).is_file()
+
 
 def test_register_run_accepts_explicit_artifact_path(tmp_path, monkeypatch):
     _write(
