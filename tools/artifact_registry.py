@@ -81,7 +81,7 @@ REQUIREMENTS: dict[str, tuple[ArtifactCandidate, ...]] = {
             min_num_timesteps=50_000,
         ),
         ArtifactCandidate(
-            "m7_pta_seed42_best_model_metadata",
+            "m7_pta_seed42_best_metadata",
             _best_policy_metadata("m7_pta", 42),
             kind="policy_metadata",
             required_for="g2-matched-encoder",
@@ -336,6 +336,12 @@ def _load_torch():
     return torch
 
 
+def _load_latent_belief_encoder():
+    from pta.models.belief.latent_belief_encoder import LatentBeliefEncoder
+
+    return LatentBeliefEncoder
+
+
 def _load_json_object(path: Path) -> dict[str, object]:
     payload = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(payload, dict):
@@ -356,8 +362,49 @@ def _verify_policy_checkpoint(row: dict[str, object], ppo: object) -> None:
         )
 
 
-def _verify_policy_metadata(row: dict[str, object]) -> None:
-    _load_json_object(Path(str(row["source_path"])))
+def _expected_policy_metadata_paths(row: dict[str, object]) -> tuple[str, str]:
+    metadata_path = PurePosixPath(str(row["relative_path"]))
+    encoder_path = metadata_path.with_name("belief_encoder.pt")
+    encoder_metadata_path = metadata_path.with_name("belief_encoder_metadata.json")
+    return encoder_path.as_posix(), encoder_metadata_path.as_posix()
+
+
+def _expected_encoder_metadata_paths(row: dict[str, object]) -> tuple[str, str]:
+    metadata_path = PurePosixPath(str(row["relative_path"]))
+    policy_path = metadata_path.with_name("best_model.zip")
+    encoder_path = metadata_path.with_name("belief_encoder.pt")
+    return policy_path.as_posix(), encoder_path.as_posix()
+
+
+def _require_matched_policy_metadata(metadata: dict[str, object]) -> None:
+    expected = {
+        "protocol": "matched_encoder_v1",
+        "encoder_mode": "matched",
+        "legacy_policy_only": False,
+    }
+    for key, value in expected.items():
+        if metadata.get(key) != value:
+            raise ValueError(f"policy metadata {key} must be {value!r}")
+
+
+def _verify_policy_metadata(row: dict[str, object], repo_root: Path) -> None:
+    metadata = _load_json_object(Path(str(row["source_path"])))
+    _require_matched_policy_metadata(metadata)
+    encoder_path, encoder_metadata_path = _expected_policy_metadata_paths(row)
+    _metadata_hash_target(
+        repo_root,
+        metadata,
+        "belief_encoder_path",
+        "belief_encoder_sha256",
+        expected_relative_path=encoder_path,
+    )
+    _metadata_hash_target(
+        repo_root,
+        metadata,
+        "belief_encoder_metadata_path",
+        "belief_encoder_metadata_sha256",
+        expected_relative_path=encoder_metadata_path,
+    )
 
 
 def _verify_belief_encoder(row: dict[str, object], torch_module: object) -> None:
@@ -373,15 +420,32 @@ def _verify_belief_encoder(row: dict[str, object], torch_module: object) -> None
     for field in ("state_dict", "config"):
         if field not in payload:
             raise ValueError(f"belief encoder missing {field}")
+    if not isinstance(payload["config"], dict):
+        raise ValueError("belief encoder config must be a dict")
+    if not isinstance(payload["state_dict"], dict):
+        raise ValueError("belief encoder state_dict must be a dict")
+    encoder_cls = _load_latent_belief_encoder()
+    encoder = encoder_cls(**payload["config"])
+    encoder.load_state_dict(payload["state_dict"])
 
 
-def _metadata_hash_target(repo_root: Path, metadata: dict[str, object], path_key: str, hash_key: str) -> None:
+def _metadata_hash_target(
+    repo_root: Path,
+    metadata: dict[str, object],
+    path_key: str,
+    hash_key: str,
+    expected_relative_path: str | None = None,
+) -> None:
     repo_root = repo_root.resolve()
     relative_path = metadata.get(path_key)
     expected_sha256 = metadata.get(hash_key)
     if not isinstance(relative_path, str) or not isinstance(expected_sha256, str):
         raise ValueError(f"metadata missing {path_key}/{hash_key}")
     relative_path = validate_registry_relative_path(relative_path, {"checkpoints"}, path_key)
+    if expected_relative_path is not None and relative_path != expected_relative_path:
+        raise RuntimeError(
+            f"{path_key} {relative_path} does not match expected {expected_relative_path}"
+        )
     target = repo_root / relative_path
     if not target.is_file():
         raise FileNotFoundError(f"metadata target missing for {path_key}: {relative_path}")
@@ -397,8 +461,21 @@ def _metadata_hash_target(repo_root: Path, metadata: dict[str, object], path_key
 
 def _verify_belief_encoder_metadata(row: dict[str, object], repo_root: Path) -> None:
     metadata = _load_json_object(Path(str(row["source_path"])))
-    _metadata_hash_target(repo_root, metadata, "paired_policy_path", "paired_policy_sha256")
-    _metadata_hash_target(repo_root, metadata, "belief_encoder_path", "belief_encoder_sha256")
+    policy_path, encoder_path = _expected_encoder_metadata_paths(row)
+    _metadata_hash_target(
+        repo_root,
+        metadata,
+        "paired_policy_path",
+        "paired_policy_sha256",
+        expected_relative_path=policy_path,
+    )
+    _metadata_hash_target(
+        repo_root,
+        metadata,
+        "belief_encoder_path",
+        "belief_encoder_sha256",
+        expected_relative_path=encoder_path,
+    )
 
 
 def verify_artifacts(
@@ -423,7 +500,7 @@ def verify_artifacts(
                     ppo = _load_ppo()
                 _verify_policy_checkpoint(row, ppo)
             elif kind == "policy_metadata":
-                _verify_policy_metadata(row)
+                _verify_policy_metadata(row, repo_root)
             elif kind == "belief_encoder":
                 if torch_module is None:
                     torch_module = _load_torch()
