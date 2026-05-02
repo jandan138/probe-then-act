@@ -5,7 +5,6 @@ import csv
 import json
 import math
 import os
-import random
 import sys
 from pathlib import Path
 from typing import Iterable
@@ -53,6 +52,9 @@ SPLIT_NAMES = [
     "ood_sand_soft",
     "ood_snow",
 ]
+
+RANDOM_STRESS_MODE_NAME = "random_eval_encoder_stress"
+MATCHED_ENCODER_MODE_NAME = "matched_encoder_checkpoint_audit"
 
 
 def displacement_stats(before: np.ndarray, after: np.ndarray) -> dict[str, float]:
@@ -186,12 +188,6 @@ def _load_ppo():
     return PPO
 
 
-def _load_torch():
-    import torch
-
-    return torch
-
-
 def _particle_positions(task) -> np.ndarray:
     positions = task.particles.get_particles_pos()
     if positions.dim() == 3:
@@ -204,6 +200,23 @@ def _write_json(path: Path, payload: dict) -> None:
     path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
     print(path)
     print(json.dumps(payload, indent=2, sort_keys=True), flush=True)
+
+
+def _checkpoint_payload_path(checkpoint: Path) -> str:
+    try:
+        return str(checkpoint.relative_to(PROJECT_ROOT))
+    except ValueError:
+        return str(checkpoint)
+
+
+def _m7_encoder_expected(method: str, seed: int, ablation: str) -> dict:
+    return {
+        "method": method,
+        "seed": seed,
+        "ablation": ablation,
+        "latent_dim": 16,
+        "n_probes": 3,
+    }
 
 
 def run_probe_integrity(args: argparse.Namespace) -> None:
@@ -253,20 +266,22 @@ def run_probe_integrity(args: argparse.Namespace) -> None:
 def run_encoder_sensitivity(args: argparse.Namespace) -> None:
     ev = _load_eval_module()
     PPO = _load_ppo()
-    torch = _load_torch()
     method_cfg = METHODS[args.method]
     checkpoint = ev.resolve_checkpoint_path(PROJECT_ROOT, method_cfg["ckpt_pattern"], args.seed)
     if checkpoint is None:
         raise FileNotFoundError(method_cfg["ckpt_pattern"].format(seed=args.seed))
     model = PPO.load(str(checkpoint), device="auto")
+    expected = _m7_encoder_expected(args.method, args.seed, method_cfg["ablation"])
 
     rows = []
     for encoder_seed in args.encoder_seeds:
-        random.seed(encoder_seed)
-        np.random.seed(encoder_seed)
-        torch.manual_seed(encoder_seed)
-        if torch.cuda.is_available():
-            torch.cuda.manual_seed_all(encoder_seed)
+        belief_encoder, encoder_identity = ev.resolve_m7_belief_encoder(
+            checkpoint,
+            method_cfg["ablation"],
+            encoder_mode="random-stress",
+            encoder_seed=encoder_seed,
+            expected=expected,
+        )
         env = ev.make_eval_env(
             split_config=ev.SPLITS[args.split],
             use_privileged=method_cfg["use_privileged"],
@@ -275,26 +290,73 @@ def run_encoder_sensitivity(args: argparse.Namespace) -> None:
             horizon=args.horizon,
             residual_scale=args.residual_scale,
             seed=args.seed + 2000,
+            belief_encoder=belief_encoder,
         )
         try:
             metrics = ev.evaluate_one(model, env, args.n_episodes, deterministic=True)
         finally:
             env.close()
-        rows.append({"encoder_seed": encoder_seed, **metrics})
+        rows.append({**encoder_identity, **metrics})
 
     gate = encoder_sensitivity_gate(rows, max_transfer_range_pp=args.max_transfer_range_pp)
     payload = {
-        "mode": "encoder_sensitivity",
+        "mode": RANDOM_STRESS_MODE_NAME,
         "method": args.method,
         "policy_seed": args.seed,
         "split": args.split,
         "n_episodes": args.n_episodes,
-        "checkpoint": str(checkpoint.relative_to(PROJECT_ROOT)),
+        "checkpoint": _checkpoint_payload_path(checkpoint),
         "rows": rows,
         **gate,
     }
     _write_json(
         Path(args.output_dir) / f"audit_encoder_{args.method}_s{args.seed}_{args.split}.json",
+        payload,
+    )
+
+
+def run_matched_encoder_audit(args: argparse.Namespace) -> None:
+    ev = _load_eval_module()
+    PPO = _load_ppo()
+    method_cfg = METHODS[args.method]
+    checkpoint = ev.resolve_checkpoint_path(PROJECT_ROOT, method_cfg["ckpt_pattern"], args.seed)
+    if checkpoint is None:
+        raise FileNotFoundError(method_cfg["ckpt_pattern"].format(seed=args.seed))
+    model = PPO.load(str(checkpoint), device="auto")
+    belief_encoder, encoder_identity = ev.resolve_m7_belief_encoder(
+        checkpoint,
+        method_cfg["ablation"],
+        encoder_mode="matched",
+        encoder_seed=None,
+        expected=_m7_encoder_expected(args.method, args.seed, method_cfg["ablation"]),
+    )
+    env = ev.make_eval_env(
+        split_config=ev.SPLITS[args.split],
+        use_privileged=method_cfg["use_privileged"],
+        use_m7_env=method_cfg["use_m7_env"],
+        ablation=method_cfg["ablation"],
+        horizon=args.horizon,
+        residual_scale=args.residual_scale,
+        seed=args.seed + 2000,
+        belief_encoder=belief_encoder,
+    )
+    try:
+        metrics = ev.evaluate_one(model, env, args.n_episodes, deterministic=True)
+    finally:
+        env.close()
+
+    payload = {
+        "mode": MATCHED_ENCODER_MODE_NAME,
+        "method": args.method,
+        "policy_seed": args.seed,
+        "split": args.split,
+        "n_episodes": args.n_episodes,
+        "checkpoint": _checkpoint_payload_path(checkpoint),
+        **encoder_identity,
+        **metrics,
+    }
+    _write_json(
+        Path(args.output_dir) / f"audit_matched_encoder_{args.method}_s{args.seed}_{args.split}.json",
         payload,
     )
 
@@ -356,6 +418,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         choices=[
             "probe-integrity",
             "encoder-sensitivity",
+            "matched-encoder-audit",
             "eval-extra-seeds",
             "summarize-five-seed",
         ],
@@ -395,6 +458,8 @@ def main(argv: list[str] | None = None) -> None:
         run_probe_integrity(args)
     elif args.mode == "encoder-sensitivity":
         run_encoder_sensitivity(args)
+    elif args.mode == "matched-encoder-audit":
+        run_matched_encoder_audit(args)
     elif args.mode == "eval-extra-seeds":
         run_eval_extra_seeds(args)
     elif args.mode == "summarize-five-seed":
