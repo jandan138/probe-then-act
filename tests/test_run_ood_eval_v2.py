@@ -260,12 +260,21 @@ def test_resolve_m7_ablations_use_zero_z_identity_without_sidecar(tmp_path, abla
     assert identity["encoder_sha256"] == ""
 
 
-def test_resolve_m7_random_stress_requires_seed_and_seeds_rngs(monkeypatch, tmp_path):
+def test_resolve_m7_random_stress_constructs_and_injects_seeded_encoder(
+    monkeypatch,
+    tmp_path,
+):
     from pta.scripts import run_ood_eval_v2
 
     policy_path = tmp_path / "best_model.zip"
     policy_path.write_text("policy", encoding="utf-8")
     calls = []
+
+    class MarkerEncoder:
+        def eval(self):
+            calls.append(("eval", None))
+
+    marker_encoder = MarkerEncoder()
 
     monkeypatch.setattr(
         run_ood_eval_v2.random,
@@ -281,6 +290,11 @@ def test_resolve_m7_random_stress_requires_seed_and_seeds_rngs(monkeypatch, tmp_
         sys.modules,
         "torch",
         types.SimpleNamespace(manual_seed=lambda seed: calls.append(("torch", seed))),
+    )
+    monkeypatch.setattr(
+        run_ood_eval_v2,
+        "_new_m7_random_encoder",
+        lambda: calls.append(("encoder", None)) or marker_encoder,
     )
 
     with pytest.raises(ValueError, match="requires --m7-random-encoder-seed"):
@@ -300,13 +314,62 @@ def test_resolve_m7_random_stress_requires_seed_and_seeds_rngs(monkeypatch, tmp_
         expected={},
     )
 
-    assert encoder is None
+    assert encoder is marker_encoder
     assert identity["encoder_mode"] == "random-stress"
     assert identity["encoder_seed"] == "123"
     assert identity["protocol"] == "random_stress"
-    assert ("random", 123) in calls
-    assert ("numpy", 123) in calls
-    assert ("torch", 123) in calls
+    assert calls == [
+        ("random", 123),
+        ("numpy", 123),
+        ("torch", 123),
+        ("encoder", None),
+        ("eval", None),
+    ]
+
+    captured = {}
+
+    class FakeBaseEnv:
+        observation_space = types.SimpleNamespace(shape=(8,))
+
+        def __init__(self, task_config, scene_config):
+            pass
+
+        def reset(self, seed=None):
+            return 0, {}
+
+    class FakeJointResidualWrapper:
+        def __init__(self, env, residual_scale, trajectory):
+            self.env = env
+            self.observation_space = env.observation_space
+
+    class FakeProbePhaseWrapper:
+        def __init__(self, env, **kwargs):
+            captured.update(kwargs)
+            self.env = env
+
+        def reset(self, seed=None):
+            return self.env.env.reset(seed=seed)
+
+    monkeypatch.setattr(run_ood_eval_v2, "_load_genesis_gym_wrapper", lambda: FakeBaseEnv)
+    monkeypatch.setattr(
+        run_ood_eval_v2,
+        "_load_joint_residual_wrapper",
+        lambda: FakeJointResidualWrapper,
+    )
+    monkeypatch.setattr(
+        run_ood_eval_v2,
+        "_load_probe_phase_wrapper",
+        lambda: FakeProbePhaseWrapper,
+    )
+
+    run_ood_eval_v2.make_eval_env(
+        split_config={"particle_material": "sand", "particle_params": {}},
+        use_privileged=False,
+        use_m7_env=True,
+        belief_encoder=encoder,
+    )
+
+    assert captured["belief_encoder"] is marker_encoder
 
 
 def test_make_eval_env_passes_loaded_encoder_through_probe_wrapper(monkeypatch):

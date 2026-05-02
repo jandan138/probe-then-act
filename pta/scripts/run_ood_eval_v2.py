@@ -301,6 +301,22 @@ def legacy_identity_defaults() -> dict:
     }
 
 
+def _new_m7_random_encoder(
+    trace_dim: int = 30,
+    latent_dim: int = 16,
+    hidden_dim: int = 128,
+    num_layers: int = 2,
+):
+    from pta.models.belief.latent_belief_encoder import LatentBeliefEncoder
+
+    return LatentBeliefEncoder(
+        trace_dim=trace_dim,
+        latent_dim=latent_dim,
+        hidden_dim=hidden_dim,
+        num_layers=num_layers,
+    )
+
+
 def resolve_m7_belief_encoder(
     policy_path: Path,
     ablation: str,
@@ -328,7 +344,9 @@ def resolve_m7_belief_encoder(
             torch.manual_seed(encoder_seed)
         except ImportError:
             pass
-        return None, {
+        encoder = _new_m7_random_encoder()
+        encoder.eval()
+        return encoder, {
             "encoder_mode": "random-stress",
             "encoder_seed": str(encoder_seed),
             "encoder_sha256": "",
