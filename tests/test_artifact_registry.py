@@ -20,6 +20,45 @@ def _write(path: Path, data: bytes = b"checkpoint") -> Path:
     return path
 
 
+def _write_json(path: Path, payload: dict) -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    return path
+
+
+def _write_matched_encoder_artifacts(
+    repo_root: Path,
+    *,
+    policy_bytes: bytes = b"policy checkpoint",
+    encoder_bytes: bytes = b"encoder checkpoint",
+    policy_sha256: str | None = None,
+    encoder_sha256: str | None = None,
+) -> None:
+    policy_path = _write(
+        repo_root / "checkpoints" / "m7_pta_seed42" / "best" / "best_model.zip",
+        policy_bytes,
+    )
+    encoder_path = _write(
+        repo_root / "checkpoints" / "m7_pta_seed42" / "best" / "belief_encoder.pt",
+        encoder_bytes,
+    )
+    _write_json(policy_path.with_suffix(".json"), {"protocol": "matched_encoder_v1"})
+    _write_json(
+        repo_root
+        / "checkpoints"
+        / "m7_pta_seed42"
+        / "best"
+        / "belief_encoder_metadata.json",
+        {
+            "protocol": "matched_encoder_v1",
+            "paired_policy_path": "checkpoints/m7_pta_seed42/best/best_model.zip",
+            "paired_policy_sha256": policy_sha256 or hashlib.sha256(policy_bytes).hexdigest(),
+            "belief_encoder_path": "checkpoints/m7_pta_seed42/best/belief_encoder.pt",
+            "belief_encoder_sha256": encoder_sha256 or hashlib.sha256(encoder_bytes).hexdigest(),
+        },
+    )
+
+
 def test_requirement_sets_include_presub_artifacts():
     assert registry.requirement_paths("presub-g2") == [
         "checkpoints/m7_pta_seed42/best/best_model.zip"
@@ -30,6 +69,15 @@ def test_requirement_sets_include_presub_artifacts():
         "checkpoints/m7_pta_seed2/best/best_model.zip",
         "checkpoints/m7_pta_seed3/best/best_model.zip",
     }
+
+
+def test_requirement_paths_include_matched_encoder_sidecars():
+    assert registry.requirement_paths("g2-matched-encoder") == [
+        "checkpoints/m7_pta_seed42/best/best_model.zip",
+        "checkpoints/m7_pta_seed42/best/best_model.json",
+        "checkpoints/m7_pta_seed42/best/belief_encoder.pt",
+        "checkpoints/m7_pta_seed42/best/belief_encoder_metadata.json",
+    ]
 
 
 def test_scan_missing_required_exits_nonzero(tmp_path):
@@ -71,6 +119,19 @@ class FakePPO:
         return FakeModel()
 
 
+class FakeTorch:
+    loaded_paths = []
+
+    @staticmethod
+    def load(path: str, **kwargs):
+        FakeTorch.loaded_paths.append((path, kwargs))
+        return {
+            "format_version": 1,
+            "state_dict": {"encoder.weight": b"weights"},
+            "config": {"trace_dim": 30, "latent_dim": 16},
+        }
+
+
 def test_verify_loads_checkpoint_and_records_timesteps(tmp_path, monkeypatch):
     checkpoint = _write(
         tmp_path / "checkpoints" / "m7_pta_seed42" / "best" / "best_model.zip",
@@ -85,6 +146,48 @@ def test_verify_loads_checkpoint_and_records_timesteps(tmp_path, monkeypatch):
     assert row["num_timesteps"] == 500000
     assert row["sha256"] == hashlib.sha256(b"verified checkpoint").hexdigest()
     assert FakePPO.loaded_paths[-1] == (str(checkpoint.resolve()), "auto")
+
+
+def test_verify_uses_type_specific_validation_for_matched_encoder_artifacts(tmp_path, monkeypatch):
+    _write_matched_encoder_artifacts(tmp_path)
+    FakePPO.loaded_paths.clear()
+    FakeTorch.loaded_paths.clear()
+    monkeypatch.setattr(registry, "_load_ppo", lambda: FakePPO)
+    monkeypatch.setattr(registry, "_load_torch", lambda: FakeTorch)
+
+    manifest = registry.verify_artifacts(tmp_path, ["g2-matched-encoder"])
+
+    rows = {row["logical_name"]: row for row in manifest["artifacts"]}
+    assert rows["m7_pta_seed42_best"]["kind"] == "policy_checkpoint"
+    assert rows["m7_pta_seed42_best"]["load_status"] == "loaded"
+    assert rows["m7_pta_seed42_best_model_metadata"]["kind"] == "policy_metadata"
+    assert rows["m7_pta_seed42_best_model_metadata"]["load_status"] == "loaded"
+    assert rows["m7_pta_seed42_belief_encoder"]["kind"] == "belief_encoder"
+    assert rows["m7_pta_seed42_belief_encoder"]["load_status"] == "loaded"
+    assert rows["m7_pta_seed42_belief_encoder_metadata"]["kind"] == "belief_encoder_metadata"
+    assert rows["m7_pta_seed42_belief_encoder_metadata"]["load_status"] == "loaded"
+    assert FakePPO.loaded_paths == [
+        (str((tmp_path / "checkpoints/m7_pta_seed42/best/best_model.zip").resolve()), "auto")
+    ]
+    assert FakeTorch.loaded_paths == [
+        (
+            str((tmp_path / "checkpoints/m7_pta_seed42/best/belief_encoder.pt").resolve()),
+            {"map_location": "cpu", "weights_only": True},
+        )
+    ]
+
+
+def test_verify_metadata_hash_mismatch_fails_required_matched_encoder_load(tmp_path, monkeypatch):
+    _write_matched_encoder_artifacts(tmp_path, encoder_sha256="0" * 64)
+    monkeypatch.setattr(registry, "_load_ppo", lambda: FakePPO)
+    monkeypatch.setattr(registry, "_load_torch", lambda: FakeTorch)
+
+    manifest = registry.verify_artifacts(tmp_path, ["g2-matched-encoder"])
+
+    rows = {row["logical_name"]: row for row in manifest["artifacts"]}
+    assert rows["m7_pta_seed42_belief_encoder_metadata"]["load_status"] == "failed"
+    assert "belief_encoder_sha256" in rows["m7_pta_seed42_belief_encoder_metadata"]["load_error"]
+    assert registry.failed_required_loads(manifest) == ["m7_pta_seed42_belief_encoder_metadata"]
 
 
 def test_verify_load_failure_marks_required_artifact_failed(tmp_path, monkeypatch):
@@ -225,6 +328,41 @@ def test_register_run_copies_artifact_and_writes_manifest(tmp_path, monkeypatch)
     assert row["storage_path"] == str(copied.resolve())
     assert row["sha256"] == hashlib.sha256(b"durable checkpoint").hexdigest()
     assert Path(row["source_path"]) == checkpoint.resolve()
+
+
+def test_register_run_copies_matched_encoder_sidecars_into_run_dir_and_bundle(tmp_path, monkeypatch):
+    _write_matched_encoder_artifacts(tmp_path / "repo")
+    FakePPO.loaded_paths.clear()
+    FakeTorch.loaded_paths.clear()
+    monkeypatch.setattr(registry, "_load_ppo", lambda: FakePPO)
+    monkeypatch.setattr(registry, "_load_torch", lambda: FakeTorch)
+
+    manifest = registry.register_run(
+        repo_root=tmp_path / "repo",
+        artifact_root=tmp_path / "artifact-root",
+        run_id="20260501_matched_encoder",
+        origin="local",
+        requirements=["g2-matched-encoder"],
+        command="python train_m7.py --seed 42",
+    )
+
+    run_dir = Path(manifest["run_dir"])
+    expected_paths = [
+        "checkpoints/m7_pta_seed42/best/best_model.zip",
+        "checkpoints/m7_pta_seed42/best/best_model.json",
+        "checkpoints/m7_pta_seed42/best/belief_encoder.pt",
+        "checkpoints/m7_pta_seed42/best/belief_encoder_metadata.json",
+    ]
+    for relative_path in expected_paths:
+        assert (run_dir / relative_path).is_file()
+    assert [row["relative_path"] for row in manifest["artifacts"]] == expected_paths
+
+    archive = registry.bundle_run(run_dir)
+
+    with tarfile.open(archive, "r:gz") as bundle:
+        names = set(bundle.getnames())
+    for relative_path in expected_paths:
+        assert relative_path in names
 
 
 def test_register_run_accepts_explicit_artifact_path(tmp_path, monkeypatch):

@@ -40,7 +40,7 @@ SAFE_RUN_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
 class ArtifactCandidate:
     logical_name: str
     relative_path: str
-    kind: str = "checkpoint"
+    kind: str = "policy_checkpoint"
     required_for: str = "manual"
     required: bool = True
     min_num_timesteps: int | None = None
@@ -50,19 +50,60 @@ def _best_checkpoint(method: str, seed: int) -> str:
     return f"checkpoints/{method}_seed{seed}/best/best_model.zip"
 
 
+def _best_policy_metadata(method: str, seed: int) -> str:
+    return f"checkpoints/{method}_seed{seed}/best/best_model.json"
+
+
+def _best_belief_encoder(method: str, seed: int) -> str:
+    return f"checkpoints/{method}_seed{seed}/best/belief_encoder.pt"
+
+
+def _best_belief_encoder_metadata(method: str, seed: int) -> str:
+    return f"checkpoints/{method}_seed{seed}/best/belief_encoder_metadata.json"
+
+
 REQUIREMENTS: dict[str, tuple[ArtifactCandidate, ...]] = {
     "presub-g2": (
         ArtifactCandidate(
             "m7_pta_seed42_best",
             _best_checkpoint("m7_pta", 42),
+            kind="policy_checkpoint",
             required_for="presub-g2",
             min_num_timesteps=50_000,
+        ),
+    ),
+    "g2-matched-encoder": (
+        ArtifactCandidate(
+            "m7_pta_seed42_best",
+            _best_checkpoint("m7_pta", 42),
+            kind="policy_checkpoint",
+            required_for="g2-matched-encoder",
+            min_num_timesteps=50_000,
+        ),
+        ArtifactCandidate(
+            "m7_pta_seed42_best_model_metadata",
+            _best_policy_metadata("m7_pta", 42),
+            kind="policy_metadata",
+            required_for="g2-matched-encoder",
+        ),
+        ArtifactCandidate(
+            "m7_pta_seed42_belief_encoder",
+            _best_belief_encoder("m7_pta", 42),
+            kind="belief_encoder",
+            required_for="g2-matched-encoder",
+        ),
+        ArtifactCandidate(
+            "m7_pta_seed42_belief_encoder_metadata",
+            _best_belief_encoder_metadata("m7_pta", 42),
+            kind="belief_encoder_metadata",
+            required_for="g2-matched-encoder",
         ),
     ),
     "presub-extra-eval": tuple(
         ArtifactCandidate(
             f"{method}_seed{seed}_best",
             _best_checkpoint(method, seed),
+            kind="policy_checkpoint",
             required_for="presub-extra-eval",
             min_num_timesteps=50_000,
         )
@@ -74,6 +115,7 @@ REQUIREMENTS: dict[str, tuple[ArtifactCandidate, ...]] = {
             ArtifactCandidate(
                 f"m1_reactive_seed{seed}_best",
                 _best_checkpoint("m1_reactive", seed),
+                kind="policy_checkpoint",
                 required_for="corrected-ood-replay",
                 min_num_timesteps=50_000,
             )
@@ -83,6 +125,7 @@ REQUIREMENTS: dict[str, tuple[ArtifactCandidate, ...]] = {
             ArtifactCandidate(
                 f"m7_pta_seed{seed}_best",
                 _best_checkpoint("m7_pta", seed),
+                kind="policy_checkpoint",
                 required_for="corrected-ood-replay",
                 min_num_timesteps=50_000,
             )
@@ -91,6 +134,7 @@ REQUIREMENTS: dict[str, tuple[ArtifactCandidate, ...]] = {
         ArtifactCandidate(
             "m8_teacher_seed42_best",
             _best_checkpoint("m8_teacher", 42),
+            kind="policy_checkpoint",
             required_for="corrected-ood-replay",
             min_num_timesteps=50_000,
         ),
@@ -100,6 +144,7 @@ REQUIREMENTS: dict[str, tuple[ArtifactCandidate, ...]] = {
             ArtifactCandidate(
                 f"m7_pta_noprobe_seed{seed}_final",
                 f"checkpoints/m7_pta_noprobe_seed{seed}/m7_pta_final.zip",
+                kind="policy_checkpoint",
                 required_for="ablation-replay",
                 min_num_timesteps=500_000,
             )
@@ -109,6 +154,7 @@ REQUIREMENTS: dict[str, tuple[ArtifactCandidate, ...]] = {
             ArtifactCandidate(
                 f"m7_pta_nobelief_seed{seed}_final",
                 f"checkpoints/m7_pta_nobelief_seed{seed}/m7_pta_final.zip",
+                kind="policy_checkpoint",
                 required_for="ablation-replay",
                 min_num_timesteps=500_000,
             )
@@ -284,43 +330,105 @@ def _load_ppo():
     return PPO
 
 
+def _load_torch():
+    import torch
+
+    return torch
+
+
+def _load_json_object(path: Path) -> dict[str, object]:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise ValueError("metadata JSON must be an object")
+    return payload
+
+
+def _verify_policy_checkpoint(row: dict[str, object], ppo: object) -> None:
+    model = ppo.load(str(row["source_path"]), device="auto")
+    num_timesteps = getattr(model, "num_timesteps", None)
+    row["num_timesteps"] = num_timesteps
+    min_num_timesteps = row.get("min_num_timesteps")
+    if min_num_timesteps is not None and (
+        num_timesteps is None or num_timesteps < min_num_timesteps
+    ):
+        raise RuntimeError(
+            f"num_timesteps {num_timesteps} below required minimum {min_num_timesteps}"
+        )
+
+
+def _verify_policy_metadata(row: dict[str, object]) -> None:
+    _load_json_object(Path(str(row["source_path"])))
+
+
+def _verify_belief_encoder(row: dict[str, object], torch_module: object) -> None:
+    payload = torch_module.load(
+        str(row["source_path"]),
+        map_location="cpu",
+        weights_only=True,
+    )
+    if not isinstance(payload, dict):
+        raise ValueError("belief encoder checkpoint must be a dict")
+    if payload.get("format_version") != 1:
+        raise ValueError("belief encoder format_version must be 1")
+    for field in ("state_dict", "config"):
+        if field not in payload:
+            raise ValueError(f"belief encoder missing {field}")
+
+
+def _metadata_hash_target(repo_root: Path, metadata: dict[str, object], path_key: str, hash_key: str) -> None:
+    relative_path = metadata.get(path_key)
+    expected_sha256 = metadata.get(hash_key)
+    if not isinstance(relative_path, str) or not isinstance(expected_sha256, str):
+        raise ValueError(f"metadata missing {path_key}/{hash_key}")
+    relative_path = validate_registry_relative_path(relative_path, {"checkpoints"}, path_key)
+    target = repo_root / relative_path
+    if not target.is_file():
+        raise FileNotFoundError(f"metadata target missing for {path_key}: {relative_path}")
+    actual_sha256 = sha256_file(target)
+    if actual_sha256 != expected_sha256:
+        raise RuntimeError(f"{hash_key} mismatch for {relative_path}")
+
+
+def _verify_belief_encoder_metadata(row: dict[str, object], repo_root: Path) -> None:
+    metadata = _load_json_object(Path(str(row["source_path"])))
+    _metadata_hash_target(repo_root, metadata, "paired_policy_path", "paired_policy_sha256")
+    _metadata_hash_target(repo_root, metadata, "belief_encoder_path", "belief_encoder_sha256")
+
+
 def verify_artifacts(
     repo_root: Path,
     requirements: list[str],
     artifact_paths: list[str] | None = None,
 ) -> dict[str, object]:
     manifest = build_scan_manifest(repo_root, requirements, artifact_paths)
+    repo_root = repo_root.resolve()
     present_rows = [
         row
         for row in manifest["artifacts"]
         if isinstance(row, dict) and row.get("exists") and row.get("load_status") != "failed"
     ]
-    if not present_rows:
-        return manifest
-    try:
-        ppo = _load_ppo()
-    except Exception as exc:
-        for row in present_rows:
-            row["load_status"] = "failed"
-            row["load_error"] = str(exc)
-        return manifest
+    ppo = None
+    torch_module = None
     for row in present_rows:
         try:
-            model = ppo.load(str(row["source_path"]), device="auto")
-        except Exception as exc:  # SB3 raises a mix of zip/pickle/loading exceptions.
+            kind = row.get("kind")
+            if kind == "policy_checkpoint":
+                if ppo is None:
+                    ppo = _load_ppo()
+                _verify_policy_checkpoint(row, ppo)
+            elif kind == "policy_metadata":
+                _verify_policy_metadata(row)
+            elif kind == "belief_encoder":
+                if torch_module is None:
+                    torch_module = _load_torch()
+                _verify_belief_encoder(row, torch_module)
+            elif kind == "belief_encoder_metadata":
+                _verify_belief_encoder_metadata(row, repo_root)
+            else:
+                raise ValueError(f"unknown artifact kind: {kind}")
+        except Exception as exc:
             row["load_status"] = "failed"
             row["load_error"] = str(exc)
-            continue
-        num_timesteps = getattr(model, "num_timesteps", None)
-        row["num_timesteps"] = num_timesteps
-        min_num_timesteps = row.get("min_num_timesteps")
-        if min_num_timesteps is not None and (
-            num_timesteps is None or num_timesteps < min_num_timesteps
-        ):
-            row["load_status"] = "failed"
-            row["load_error"] = (
-                f"num_timesteps {num_timesteps} below required minimum {min_num_timesteps}"
-            )
             continue
         row["load_status"] = "loaded"
     return manifest
