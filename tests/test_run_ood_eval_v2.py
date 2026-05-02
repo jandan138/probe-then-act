@@ -226,6 +226,46 @@ def test_aggregate_results_keeps_encoder_protocols_separate():
     assert {row["mean_transfer_mean"] for row in agg_rows} == {0.0, 1.0}
 
 
+def test_aggregate_results_keeps_policy_hashes_separate():
+    from pta.scripts.run_ood_eval_v2 import aggregate_results
+
+    rows = [
+        _result_row(
+            method="m7_pta",
+            seed=0,
+            split="ood_snow",
+            encoder_mode="matched",
+            encoder_artifact="checkpoints/m7_pta_seed0/best/belief_encoder.pt",
+            encoder_sha256="encoder-sha",
+            policy_checkpoint="checkpoints/m7_pta_seed0/best/best_model.zip",
+            policy_sha256="policy-sha-a",
+            protocol="matched_encoder_v1",
+            mean_transfer=1.0,
+        ),
+        _result_row(
+            method="m7_pta",
+            seed=0,
+            split="ood_snow",
+            encoder_mode="matched",
+            encoder_artifact="checkpoints/m7_pta_seed0/best/belief_encoder.pt",
+            encoder_sha256="encoder-sha",
+            policy_checkpoint="checkpoints/m7_pta_seed0/best/best_model.zip",
+            policy_sha256="policy-sha-b",
+            protocol="matched_encoder_v1",
+            mean_transfer=0.0,
+        ),
+    ]
+
+    agg_rows = aggregate_results(rows)
+
+    assert len(agg_rows) == 2
+    assert {row["policy_sha256"] for row in agg_rows} == {
+        "policy-sha-a",
+        "policy-sha-b",
+    }
+    assert {row["mean_transfer_mean"] for row in agg_rows} == {0.0, 1.0}
+
+
 def test_result_key_uses_encoder_protocol_identity_fields():
     from pta.scripts.run_ood_eval_v2 import result_key
 

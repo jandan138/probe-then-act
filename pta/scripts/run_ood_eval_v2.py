@@ -600,6 +600,7 @@ def aggregate_results(all_rows):
             identity["encoder_artifact"],
             identity["encoder_sha256"],
             identity["policy_checkpoint"],
+            identity["policy_sha256"],
             identity["protocol"],
         )
         for metric in AGGREGATE_METRICS:
@@ -614,6 +615,7 @@ def aggregate_results(all_rows):
         encoder_artifact,
         encoder_sha256,
         policy_checkpoint,
+        policy_sha256,
         protocol,
     ), metrics in sorted(agg.items()):
         agg_row = {
@@ -624,6 +626,7 @@ def aggregate_results(all_rows):
             "encoder_artifact": encoder_artifact,
             "encoder_sha256": encoder_sha256,
             "policy_checkpoint": policy_checkpoint,
+            "policy_sha256": policy_sha256,
             "protocol": protocol,
             "n_seeds": len(metrics["mean_reward"]),
         }
