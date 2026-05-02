@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
 import math
 import os
 import random
@@ -26,8 +27,6 @@ from collections import defaultdict
 from pathlib import Path
 
 import numpy as np
-
-from pta.training.utils.checkpoint_io import load_m7_encoder_artifact, sha256_file
 
 _PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(_PROJECT_ROOT) not in sys.path:
@@ -257,6 +256,13 @@ RESULT_IDENTITY_FIELDS = [
     "policy_sha256",
     "protocol",
 ]
+LEGACY_IDENTITY = {
+    "encoder_mode": "legacy-unversioned",
+    "encoder_seed": "",
+    "encoder_sha256": "",
+    "policy_sha256": "",
+    "protocol": "legacy_unversioned",
+}
 RESULT_FLOAT_FIELDS = [
     "mean_reward",
     "std_reward",
@@ -269,16 +275,30 @@ RESULT_FLOAT_FIELDS = [
 
 
 def result_key(row):
+    identity = result_identity(row)
     return (
         row["method"],
         int(row["seed"]),
         row["split"],
-        row["encoder_mode"],
-        str(row["encoder_seed"]),
-        row["encoder_sha256"],
-        row["policy_sha256"],
-        row["protocol"],
+        identity["encoder_mode"],
+        str(identity["encoder_seed"]),
+        identity["encoder_sha256"],
+        identity["protocol"],
     )
+
+
+def sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with Path(path).open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def result_identity(row: dict) -> dict:
+    if any(field not in row for field in RESULT_IDENTITY_FIELDS):
+        return dict(LEGACY_IDENTITY)
+    return {field: str(row.get(field, "")) for field in RESULT_IDENTITY_FIELDS}
 
 
 def policy_only_identity(policy_path: Path) -> dict:
@@ -292,13 +312,7 @@ def policy_only_identity(policy_path: Path) -> dict:
 
 
 def legacy_identity_defaults() -> dict:
-    return {
-        "encoder_mode": "policy-only",
-        "encoder_seed": "",
-        "encoder_sha256": "",
-        "policy_sha256": "",
-        "protocol": "policy_only",
-    }
+    return dict(LEGACY_IDENTITY)
 
 
 def _new_m7_random_encoder(
@@ -336,16 +350,35 @@ def resolve_m7_belief_encoder(
     if encoder_mode == "random-stress":
         if encoder_seed is None:
             raise ValueError("random-stress requires --m7-random-encoder-seed")
-        random.seed(encoder_seed)
-        np.random.seed(encoder_seed)
+        python_state = random.getstate()
+        numpy_state = np.random.get_state()
         try:
             import torch
-
-            torch.manual_seed(encoder_seed)
         except ImportError:
-            pass
-        encoder = _new_m7_random_encoder()
-        encoder.eval()
+            torch = None
+        try:
+            if torch is not None and hasattr(torch, "random") and hasattr(
+                torch.random, "fork_rng"
+            ):
+                with torch.random.fork_rng():
+                    torch.manual_seed(encoder_seed)
+                    encoder = _new_m7_random_encoder()
+                    encoder.eval()
+            else:
+                torch_state = None
+                if torch is not None and hasattr(torch, "random") and hasattr(
+                    torch.random, "get_rng_state"
+                ):
+                    torch_state = torch.random.get_rng_state()
+                if torch is not None:
+                    torch.manual_seed(encoder_seed)
+                encoder = _new_m7_random_encoder()
+                encoder.eval()
+                if torch_state is not None:
+                    torch.random.set_rng_state(torch_state)
+        finally:
+            random.setstate(python_state)
+            np.random.set_state(numpy_state)
         return encoder, {
             "encoder_mode": "random-stress",
             "encoder_seed": str(encoder_seed),
@@ -353,6 +386,8 @@ def resolve_m7_belief_encoder(
             "policy_sha256": policy_sha256,
             "protocol": "random_stress",
         }
+    from pta.training.utils.checkpoint_io import load_m7_encoder_artifact
+
     encoder, metadata = load_m7_encoder_artifact(policy_path, expected=expected)
     return encoder, {
         "encoder_mode": "matched",
@@ -391,7 +426,8 @@ def coerce_nonnegative_int(value, field: str) -> int:
 
 
 def coerce_result_row(raw: dict) -> dict:
-    raw = {**legacy_identity_defaults(), **raw}
+    if any(field not in raw for field in RESULT_IDENTITY_FIELDS):
+        raw = {**legacy_identity_defaults(), **raw}
     required_fields = [
         field for field in RESULT_FIELDNAMES if field not in RESULT_IDENTITY_FIELDS
     ]
@@ -517,15 +553,34 @@ def evaluate_one(model, env, n_episodes, deterministic=True):
 def aggregate_results(all_rows):
     agg = defaultdict(lambda: defaultdict(list))
     for row in all_rows:
-        key = (row["method"], row["split"])
+        identity = result_identity(row)
+        key = (
+            row["method"],
+            row["split"],
+            identity["encoder_mode"],
+            str(identity["encoder_seed"]),
+            identity["encoder_sha256"],
+            identity["protocol"],
+        )
         for metric in AGGREGATE_METRICS:
             agg[key][metric].append(row[metric])
 
     agg_rows = []
-    for (method, split), metrics in sorted(agg.items()):
+    for (
+        method,
+        split,
+        encoder_mode,
+        encoder_seed,
+        encoder_sha256,
+        protocol,
+    ), metrics in sorted(agg.items()):
         agg_row = {
             "method": method,
             "split": split,
+            "encoder_mode": encoder_mode,
+            "encoder_seed": encoder_seed,
+            "encoder_sha256": encoder_sha256,
+            "protocol": protocol,
             "n_seeds": len(metrics["mean_reward"]),
         }
         for metric, values in metrics.items():

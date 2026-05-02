@@ -1,5 +1,6 @@
 import sys
 import types
+from pathlib import Path
 
 import pytest
 
@@ -187,6 +188,40 @@ def test_aggregate_results_reports_failed_episode_counts():
     assert agg_rows[0]["n_failed_episodes_mean"] == 0.5
 
 
+def test_aggregate_results_keeps_encoder_protocols_separate():
+    from pta.scripts.run_ood_eval_v2 import aggregate_results
+
+    rows = [
+        _result_row(
+            method="m7_pta",
+            seed=0,
+            split="ood_snow",
+            encoder_mode="matched",
+            encoder_sha256="matched-sha",
+            policy_sha256="policy-sha",
+            protocol="matched_encoder_v1",
+            mean_transfer=1.0,
+        ),
+        _result_row(
+            method="m7_pta",
+            seed=0,
+            split="ood_snow",
+            encoder_mode="random-stress",
+            encoder_seed="123",
+            encoder_sha256="",
+            policy_sha256="policy-sha",
+            protocol="random_stress",
+            mean_transfer=0.0,
+        ),
+    ]
+
+    agg_rows = aggregate_results(rows)
+
+    assert len(agg_rows) == 2
+    assert {row["encoder_mode"] for row in agg_rows} == {"matched", "random-stress"}
+    assert {row["mean_transfer_mean"] for row in agg_rows} == {0.0, 1.0}
+
+
 def test_result_key_uses_encoder_protocol_identity_fields():
     from pta.scripts.run_ood_eval_v2 import result_key
 
@@ -208,7 +243,6 @@ def test_result_key_uses_encoder_protocol_identity_fields():
         "matched",
         "",
         "encoder-digest",
-        "policy-digest",
         "matched_encoder_v1",
     )
 
@@ -276,20 +310,26 @@ def test_resolve_m7_random_stress_constructs_and_injects_seeded_encoder(
 
     marker_encoder = MarkerEncoder()
 
-    monkeypatch.setattr(
-        run_ood_eval_v2.random,
-        "seed",
-        lambda seed: calls.append(("random", seed)),
-    )
-    monkeypatch.setattr(
-        run_ood_eval_v2.np.random,
-        "seed",
-        lambda seed: calls.append(("numpy", seed)),
-    )
+    class FakeTorchRandom:
+        def fork_rng(self):
+            calls.append(("torch_fork", "enter"))
+
+            class ForkContext:
+                def __enter__(self):
+                    return None
+
+                def __exit__(self, exc_type, exc, tb):
+                    calls.append(("torch_fork", "exit"))
+
+            return ForkContext()
+
     monkeypatch.setitem(
         sys.modules,
         "torch",
-        types.SimpleNamespace(manual_seed=lambda seed: calls.append(("torch", seed))),
+        types.SimpleNamespace(
+            manual_seed=lambda seed: calls.append(("torch", seed)),
+            random=FakeTorchRandom(),
+        ),
     )
     monkeypatch.setattr(
         run_ood_eval_v2,
@@ -319,11 +359,11 @@ def test_resolve_m7_random_stress_constructs_and_injects_seeded_encoder(
     assert identity["encoder_seed"] == "123"
     assert identity["protocol"] == "random_stress"
     assert calls == [
-        ("random", 123),
-        ("numpy", 123),
+        ("torch_fork", "enter"),
         ("torch", 123),
         ("encoder", None),
         ("eval", None),
+        ("torch_fork", "exit"),
     ]
 
     captured = {}
@@ -370,6 +410,57 @@ def test_resolve_m7_random_stress_constructs_and_injects_seeded_encoder(
     )
 
     assert captured["belief_encoder"] is marker_encoder
+
+
+def test_random_stress_restores_numpy_and_python_random_state(monkeypatch, tmp_path):
+    from pta.scripts import run_ood_eval_v2
+
+    policy_path = tmp_path / "best_model.zip"
+    policy_path.write_text("policy", encoding="utf-8")
+
+    class MarkerEncoder:
+        def eval(self):
+            pass
+
+    def consume_randomness():
+        run_ood_eval_v2.random.random()
+        run_ood_eval_v2.np.random.random()
+        return MarkerEncoder()
+
+    monkeypatch.setattr(run_ood_eval_v2, "_new_m7_random_encoder", consume_randomness)
+    monkeypatch.setitem(
+        sys.modules,
+        "torch",
+        types.SimpleNamespace(manual_seed=lambda seed: None),
+    )
+
+    run_ood_eval_v2.random.seed(987)
+    run_ood_eval_v2.np.random.seed(654)
+    expected_python = run_ood_eval_v2.random.random()
+    expected_numpy = run_ood_eval_v2.np.random.random()
+    run_ood_eval_v2.random.seed(987)
+    run_ood_eval_v2.np.random.seed(654)
+
+    run_ood_eval_v2.resolve_m7_belief_encoder(
+        policy_path,
+        ablation="none",
+        encoder_mode="random-stress",
+        encoder_seed=123,
+        expected={},
+    )
+
+    assert run_ood_eval_v2.random.random() == expected_python
+    assert run_ood_eval_v2.np.random.random() == expected_numpy
+
+
+def test_run_ood_eval_v2_import_does_not_require_checkpoint_io_at_module_import():
+    import pta.scripts.run_ood_eval_v2 as run_ood_eval_v2
+
+    source = Path(run_ood_eval_v2.__file__).read_text(encoding="utf-8")
+    top_level_import_block = source.split("_PROJECT_ROOT", 1)[0]
+
+    assert "from pta.training.utils.checkpoint_io import" not in top_level_import_block
+    assert "import pta.training.utils.checkpoint_io" not in top_level_import_block
 
 
 def test_make_eval_env_passes_loaded_encoder_through_probe_wrapper(monkeypatch):
@@ -490,10 +581,44 @@ def test_load_completed_rows_reads_existing_csv(tmp_path):
             "policy-only",
             "",
             "",
-            "",
             "policy_only",
         )
     }
+
+
+def test_coerce_result_row_marks_missing_identity_as_legacy_unversioned():
+    from pta.scripts.run_ood_eval_v2 import coerce_result_row, result_key
+
+    raw = {
+        "method": "m7_pta",
+        "seed": "42",
+        "split": "id_sand",
+        "mean_reward": "1.0",
+        "std_reward": "0.0",
+        "mean_transfer": "0.2",
+        "std_transfer": "0.0",
+        "mean_spill": "0.1",
+        "std_spill": "0.0",
+        "success_rate": "1.0",
+        "n_failed_episodes": "0",
+    }
+
+    row = coerce_result_row(raw)
+
+    assert row["encoder_mode"] == "legacy-unversioned"
+    assert row["protocol"] == "legacy_unversioned"
+    assert row["encoder_seed"] == ""
+    assert row["encoder_sha256"] == ""
+    assert row["policy_sha256"] == ""
+    assert result_key(row) == (
+        "m7_pta",
+        42,
+        "id_sand",
+        "legacy-unversioned",
+        "",
+        "",
+        "legacy_unversioned",
+    )
 
 
 def test_load_completed_rows_ignores_file_when_resume_disabled(tmp_path):
