@@ -285,9 +285,11 @@ def load_m7_encoder_artifact(
 
     metadata = _read_json(paths.metadata_path)
     validate_m7_encoder_metadata(metadata, expected)
-    if paths.policy_path.exists() and metadata.get("paired_policy_sha256") != sha256_file(
-        paths.policy_path
-    ):
+    if not paths.policy_path.exists():
+        raise FileNotFoundError(
+            f"missing matched encoder paired policy file: {paths.policy_path}"
+        )
+    if metadata.get("paired_policy_sha256") != sha256_file(paths.policy_path):
         raise ValueError("paired_policy_sha256 mismatch for matched encoder")
     if metadata.get("belief_encoder_sha256") != sha256_file(paths.encoder_path):
         raise ValueError("belief_encoder_sha256 mismatch for matched encoder")
@@ -301,6 +303,13 @@ def load_m7_encoder_artifact(
     state_dict = payload.get("state_dict")
     if not isinstance(config, dict) or not isinstance(state_dict, dict):
         raise ValueError("matched encoder artifact must contain config and state_dict")
+    required_config = ("trace_dim", "latent_dim", "hidden_dim", "num_layers")
+    missing_config = [key for key in required_config if key not in config]
+    if missing_config:
+        raise ValueError(
+            "matched encoder config missing required keys: "
+            + ", ".join(missing_config)
+        )
 
     encoder = LatentBeliefEncoder(
         trace_dim=int(config["trace_dim"]),

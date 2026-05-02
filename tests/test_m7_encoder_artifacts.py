@@ -27,6 +27,43 @@ def _encoder(fill: float = 0.25) -> LatentBeliefEncoder:
     return encoder
 
 
+def _run_metadata(stage: str = "best") -> dict:
+    return {
+        "method": "m7_pta",
+        "seed": 42,
+        "ablation": "none",
+        "trace_dim": 30,
+        "latent_dim": 16,
+        "hidden_dim": 128,
+        "num_layers": 2,
+        "n_probes": 3,
+        "stage": stage,
+    }
+
+
+def _expected_metadata() -> dict:
+    return {
+        "method": "m7_pta",
+        "seed": 42,
+        "ablation": "none",
+        "latent_dim": 16,
+        "n_probes": 3,
+    }
+
+
+def _save_artifact(tmp_path: Path, *, stage: str = "best") -> Path:
+    policy_path = _write_policy(
+        tmp_path / "checkpoints" / "m7_pta_seed42" / "best" / "best_model.zip"
+    )
+    checkpoint_io.save_m7_encoder_artifact(
+        encoder=_encoder(fill=0.1),
+        policy_path=policy_path,
+        repo_root=tmp_path,
+        run_metadata=_run_metadata(stage=stage),
+    )
+    return policy_path
+
+
 def test_encoder_sidecar_paths_resolve_final_and_best_policy_paths(tmp_path):
     final_policy = tmp_path / "checkpoints" / "m7_pta_seed42" / "m7_pta_final.zip"
     best_policy = tmp_path / "checkpoints" / "m7_pta_seed42" / "best" / "best_model.zip"
@@ -192,4 +229,88 @@ def test_load_m7_encoder_artifact_rejects_missing_sidecar(tmp_path):
         checkpoint_io.load_m7_encoder_artifact(
             policy_path,
             expected={"method": "m7_pta"},
+        )
+
+
+def test_load_m7_encoder_artifact_rejects_protocol_mismatch(tmp_path):
+    policy_path = _save_artifact(tmp_path)
+    paths = checkpoint_io.m7_encoder_sidecar_paths(policy_path)
+    metadata = json.loads(paths.metadata_path.read_text(encoding="utf-8"))
+    metadata["protocol"] = "legacy_policy_only"
+    paths.metadata_path.write_text(json.dumps(metadata), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="protocol"):
+        checkpoint_io.load_m7_encoder_artifact(
+            policy_path,
+            expected=_expected_metadata(),
+        )
+
+
+def test_load_m7_encoder_artifact_requires_policy_hash_verification(tmp_path):
+    policy_path = _save_artifact(tmp_path)
+    policy_path.unlink()
+
+    with pytest.raises(FileNotFoundError, match="matched encoder.*policy"):
+        checkpoint_io.load_m7_encoder_artifact(
+            policy_path,
+            expected=_expected_metadata(),
+        )
+
+
+def test_load_m7_encoder_artifact_rejects_policy_hash_mismatch(tmp_path):
+    policy_path = _save_artifact(tmp_path)
+    policy_path.write_bytes(b"changed policy")
+
+    with pytest.raises(ValueError, match="paired_policy_sha256"):
+        checkpoint_io.load_m7_encoder_artifact(
+            policy_path,
+            expected=_expected_metadata(),
+        )
+
+
+def test_load_m7_encoder_artifact_rejects_encoder_hash_mismatch(tmp_path):
+    policy_path = _save_artifact(tmp_path)
+    paths = checkpoint_io.m7_encoder_sidecar_paths(policy_path)
+    paths.encoder_path.write_bytes(b"changed encoder")
+
+    with pytest.raises(ValueError, match="belief_encoder_sha256"):
+        checkpoint_io.load_m7_encoder_artifact(
+            policy_path,
+            expected=_expected_metadata(),
+        )
+
+
+@pytest.mark.parametrize(
+    "payload,match",
+    [
+        ({"format_version": 1, "config": {}}, "state_dict"),
+        ({"format_version": 1, "state_dict": {}, "config": {}}, "trace_dim"),
+        (
+            {
+                "format_version": 1,
+                "state_dict": {},
+                "config": {"trace_dim": 30, "latent_dim": 16, "hidden_dim": 128},
+            },
+            "num_layers",
+        ),
+        ({"format_version": 1, "state_dict": [], "config": {}}, "state_dict"),
+        ({"format_version": 1, "state_dict": {}, "config": []}, "config"),
+    ],
+)
+def test_load_m7_encoder_artifact_rejects_malformed_payload_config(
+    tmp_path,
+    payload,
+    match,
+):
+    policy_path = _save_artifact(tmp_path)
+    paths = checkpoint_io.m7_encoder_sidecar_paths(policy_path)
+    torch.save(payload, paths.encoder_path)
+    metadata = json.loads(paths.metadata_path.read_text(encoding="utf-8"))
+    metadata["belief_encoder_sha256"] = checkpoint_io.sha256_file(paths.encoder_path)
+    paths.metadata_path.write_text(json.dumps(metadata), encoding="utf-8")
+
+    with pytest.raises(ValueError, match=match):
+        checkpoint_io.load_m7_encoder_artifact(
+            policy_path,
+            expected=_expected_metadata(),
         )
