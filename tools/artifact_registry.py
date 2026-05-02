@@ -376,6 +376,7 @@ def _verify_belief_encoder(row: dict[str, object], torch_module: object) -> None
 
 
 def _metadata_hash_target(repo_root: Path, metadata: dict[str, object], path_key: str, hash_key: str) -> None:
+    repo_root = repo_root.resolve()
     relative_path = metadata.get(path_key)
     expected_sha256 = metadata.get(hash_key)
     if not isinstance(relative_path, str) or not isinstance(expected_sha256, str):
@@ -384,6 +385,11 @@ def _metadata_hash_target(repo_root: Path, metadata: dict[str, object], path_key
     target = repo_root / relative_path
     if not target.is_file():
         raise FileNotFoundError(f"metadata target missing for {path_key}: {relative_path}")
+    if target.is_symlink():
+        raise RuntimeError(f"metadata target is symlink for {path_key}: {relative_path}")
+    resolved_target = target.resolve()
+    if not path_is_within(resolved_target, repo_root):
+        raise RuntimeError(f"metadata target escapes repo root for {path_key}: {relative_path}")
     actual_sha256 = sha256_file(target)
     if actual_sha256 != expected_sha256:
         raise RuntimeError(f"{hash_key} mismatch for {relative_path}")

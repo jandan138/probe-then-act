@@ -190,6 +190,34 @@ def test_verify_metadata_hash_mismatch_fails_required_matched_encoder_load(tmp_p
     assert registry.failed_required_loads(manifest) == ["m7_pta_seed42_belief_encoder_metadata"]
 
 
+def test_verify_metadata_hash_target_rejects_symlink_escaping_repo_root(tmp_path, monkeypatch):
+    _write_matched_encoder_artifacts(tmp_path)
+    outside_encoder = _write(tmp_path / "outside" / "belief_encoder.pt", b"escaped encoder")
+    escaped_link = tmp_path / "checkpoints" / "escaped_belief_encoder.pt"
+    try:
+        escaped_link.symlink_to(outside_encoder)
+    except OSError as exc:
+        pytest.skip(f"symlink creation unsupported: {exc}")
+    _write_json(
+        tmp_path / "checkpoints" / "m7_pta_seed42" / "best" / "belief_encoder_metadata.json",
+        {
+            "protocol": "matched_encoder_v1",
+            "paired_policy_path": "checkpoints/m7_pta_seed42/best/best_model.zip",
+            "paired_policy_sha256": hashlib.sha256(b"policy checkpoint").hexdigest(),
+            "belief_encoder_path": "checkpoints/escaped_belief_encoder.pt",
+            "belief_encoder_sha256": hashlib.sha256(b"escaped encoder").hexdigest(),
+        },
+    )
+    monkeypatch.setattr(registry, "_load_ppo", lambda: FakePPO)
+    monkeypatch.setattr(registry, "_load_torch", lambda: FakeTorch)
+
+    manifest = registry.verify_artifacts(tmp_path, ["g2-matched-encoder"])
+
+    rows = {row["logical_name"]: row for row in manifest["artifacts"]}
+    assert rows["m7_pta_seed42_belief_encoder_metadata"]["load_status"] == "failed"
+    assert registry.failed_required_loads(manifest) == ["m7_pta_seed42_belief_encoder_metadata"]
+
+
 def test_verify_load_failure_marks_required_artifact_failed(tmp_path, monkeypatch):
     _write(tmp_path / "checkpoints" / "m7_pta_seed42" / "best" / "best_model.zip")
 
