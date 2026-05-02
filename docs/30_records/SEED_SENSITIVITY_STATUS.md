@@ -112,6 +112,19 @@ The G2 audit fixed the policy checkpoint at `m7_pta` policy seed `42` and varied
 
 Measured G2 range: `65.9958` percentage points. This is the strongest confirmed seed-sensitivity finding because the audit isolates encoder seed while holding policy seed, checkpoint, split, and method fixed.
 
+## M7 Matched-Encoder Protocol Update
+
+The old G2 result is now classified as a `random_eval_encoder_stress` diagnostic. It deliberately paired a fixed `m7_pta seed42` policy checkpoint with freshly initialized evaluation encoders, so it is not claim-bearing matched M7 evidence.
+
+The 12 verified-image six-seed replacement jobs submitted before encoder persistence are `policy-only legacy diagnostics`. They can support policy-seed variance analysis when the encoder protocol is stated, but they must not be mixed into matched-encoder M7 headline claims.
+
+Future full `m7_pta` claim artifacts must preserve the matched policy-plus-encoder bundle:
+
+- `best_model.zip`
+- `best_model.json`
+- `belief_encoder.pt`
+- `belief_encoder_metadata.json`
+
 ### Policy-seed transfer variance: observed across learned methods
 
 The existing 3-policy-seed OOD table also shows large `ood_elastoplastic` transfer ranges across policy seeds `0, 1, 42`. This is not the same as the G2 encoder audit, because training seed changes both the learned policy and training trajectory. It is still relevant to reviewer concerns about whether three seeds are sufficient evidence.

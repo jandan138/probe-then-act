@@ -9,7 +9,7 @@ This runbook prepares the NeurIPS pre-submission reliability package and contain
 The current paper is submission-ready structurally, but the core evidence is fragile: M7 improves on OOD elastoplastic with 3 seeds and high variance. Before spending more GPU on extra seeds, run two audits:
 
 - Probe integrity: the current 3-step zero-residual probe must measurably perturb particles.
-- Encoder sensitivity: M7 evaluation must not swing strongly when the freshly constructed evaluation encoder is initialized with different seeds.
+- Encoder sensitivity: the old G2 job is a random-evaluation-encoder stress diagnostic; corrected M7 G2 uses the matched encoder sidecar paired with the policy checkpoint.
 
 Only if both audits pass should the extra M1/M7 seed jobs be submitted.
 
@@ -163,6 +163,17 @@ Pass criteria:
 - G2 encoder sensitivity: `audit_encoder_m7_pta_s42_ood_elastoplastic.json` has `passes == true`, `transfer_range_pp <= 5.0`, and `total_failed_episodes == 0`.
 
 If G1 or G2 fails, do not submit extra seed training jobs.
+
+Corrected M7 G2 must also verify the matched artifact bundle before any claim-bearing evaluation:
+
+```bash
+python tools/artifact_registry.py verify \
+  --repo-root "$PTA_CODE_ROOT" \
+  --requirement g2-matched-encoder \
+  --manifest results/presub/g2_matched_encoder_manifest.json
+```
+
+For full `m7_pta` matched eval, the policy zip alone is insufficient. The claim artifact must include the paired policy metadata, `belief_encoder.pt`, and `belief_encoder_metadata.json` sidecars that identify the matched encoder protocol.
 
 ## 2026-05-01 Gate Status
 

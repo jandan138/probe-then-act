@@ -42,6 +42,11 @@ Use the new registry tool for future artifacts:
 ```bash
 python tools/artifact_registry.py verify \
   --repo-root /path/to/probe-then-act \
+  --requirement g2-matched-encoder \
+  --manifest /tmp/pta_g2_matched_encoder_verify.json
+
+python tools/artifact_registry.py verify \
+  --repo-root /path/to/probe-then-act \
   --requirement presub-g2 \
   --manifest /tmp/pta_presub_g2_verify.json
 
@@ -58,6 +63,15 @@ python tools/artifact_registry.py bundle \
 ```
 
 Current shortest path: do not upload checkpoints before training. The DSW side can start the five remaining ablation jobs without baseline checkpoints because those jobs train new `m7_noprobe` and `m7_nobelief` models.
+
+Matched M7 claim archives must include the complete policy-plus-encoder bundle for the evaluated checkpoint:
+
+- `best/best_model.zip`
+- `best/best_model.json`
+- `best/belief_encoder.pt`
+- `best/belief_encoder_metadata.json`
+
+Checkpoint `.zip` files and encoder `.pt` sidecars stay out of Git. Preserve them through the artifact registry or durable CPFS archives, with JSON metadata and SHA256 links committed only as documentation when needed.
 
 ## Build Manifest
 
