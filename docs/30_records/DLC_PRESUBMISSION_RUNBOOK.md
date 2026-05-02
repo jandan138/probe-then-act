@@ -9,7 +9,7 @@ This runbook prepares the NeurIPS pre-submission reliability package and contain
 The current paper is submission-ready structurally, but the core evidence is fragile: M7 improves on OOD elastoplastic with 3 seeds and high variance. Before spending more GPU on extra seeds, run two audits:
 
 - Probe integrity: the current 3-step zero-residual probe must measurably perturb particles.
-- Encoder sensitivity: the old G2 job is a random-evaluation-encoder stress diagnostic; corrected M7 G2 uses the matched encoder sidecar paired with the policy checkpoint.
+- G2 evaluation: the old `random_eval_encoder_stress` job is a non-claim-bearing diagnostic; corrected M7 G2 is a `matched-encoder-audit` using the encoder sidecar paired with the policy checkpoint.
 
 Only if both audits pass should the extra M1/M7 seed jobs be submitted.
 
@@ -116,7 +116,7 @@ for split in id_sand ood_elastoplastic ood_snow ood_sand_hard ood_sand_soft; do
 done
 ```
 
-Submit encoder sensitivity job after G0 passes:
+Submit the legacy random-evaluation-encoder stress diagnostic after G0 passes if you need to reproduce the old sensitivity finding. This is not claim-bearing matched M7 evidence:
 
 ```bash
 bash pta/scripts/dlc/launch_job.sh pta_encoder_sensitivity_m7_ep 0 1 "$DLC_DATA_SOURCES" \
@@ -129,6 +129,23 @@ bash pta/scripts/dlc/launch_job.sh pta_encoder_sensitivity_m7_ep 0 1 "$DLC_DATA_
     --n-episodes 3 \
     --max-transfer-range-pp 5.0 \
     --residual-scale 0.05
+```
+
+Submit the corrected matched-encoder G2 audit after the matched policy-plus-encoder bundle exists and the registry verifies it:
+
+```bash
+/cpfs/shared/simulation/zhuzihou/dev/Genesis/.venv/bin/python tools/pre_submission_audit.py \
+  --mode matched-encoder-audit \
+  --method m7_pta \
+  --seed 42 \
+  --split ood_elastoplastic \
+  --n-episodes 10
+```
+
+Expected corrected G2 output file:
+
+```text
+results/presub/audit_matched_encoder_m7_pta_s42_ood_elastoplastic.json
 ```
 
 Monitor each returned job id:
@@ -154,17 +171,22 @@ for path in sorted(Path("results/presub").glob("audit_probe_*.json")):
 for path in sorted(Path("results/presub").glob("audit_encoder_*.json")):
     data = json.loads(path.read_text(encoding="utf-8"))
     print(path.name, "passes", data["passes"], "transfer_range_pp", data["transfer_range_pp"], "total_failed_episodes", data["total_failed_episodes"], "reasons", data["reasons"])
+
+for path in sorted(Path("results/presub").glob("audit_matched_encoder_*.json")):
+    data = json.loads(path.read_text(encoding="utf-8"))
+    print(path.name, "passes", data["passes"], "total_failed_episodes", data["total_failed_episodes"], "reasons", data["reasons"])
 PY
 ```
 
 Pass criteria:
 
 - G1 probe integrity: `audit_probe_ood_elastoplastic_seed123.json` has `probe_rms_m >= 0.0001` or `probe_max_m >= 0.001`.
-- G2 encoder sensitivity: `audit_encoder_m7_pta_s42_ood_elastoplastic.json` has `passes == true`, `transfer_range_pp <= 5.0`, and `total_failed_episodes == 0`.
+- Legacy random-stress diagnostic: `audit_encoder_m7_pta_s42_ood_elastoplastic.json` records `random_eval_encoder_stress` behavior only. It is explicitly non-claim-bearing and does not satisfy corrected G2.
+- Corrected G2 matched-encoder audit: `audit_matched_encoder_m7_pta_s42_ood_elastoplastic.json` has `passes == true` and `total_failed_episodes == 0`.
 
 If G1 or G2 fails, do not submit extra seed training jobs.
 
-Corrected M7 G2 must also verify the matched artifact bundle before any claim-bearing evaluation:
+Corrected M7 G2 must also verify the matched artifact bundle before any claim-bearing evaluation, but registry verification does not substitute for the matched evaluation audit:
 
 ```bash
 python tools/artifact_registry.py verify \

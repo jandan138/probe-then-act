@@ -100,9 +100,9 @@ Next evidence gate: do not mark any row complete until `results/dlc/runs/*.json`
 
 ## Confirmed Seed Sensitivity
 
-### Encoder-seed sensitivity: confirmed for `m7_pta` evaluation
+### Legacy random-stress encoder sensitivity: confirmed for old `m7_pta` diagnostic only
 
-The G2 audit fixed the policy checkpoint at `m7_pta` policy seed `42` and varied only the freshly constructed evaluation encoder seed. The gate failed because transfer changed by about 66 percentage points.
+The old `random_eval_encoder_stress` G2 diagnostic fixed the policy checkpoint at `m7_pta` policy seed `42` and varied only the freshly constructed evaluation encoder seed. The gate failed because transfer changed by about 66 percentage points. This confirms sensitivity to random evaluation encoders in the legacy diagnostic protocol; it is not matched M7 headline evidence.
 
 | Policy seed | Encoder seed | Episodes | Mean transfer |
 |---:|---:|---:|---:|
@@ -110,7 +110,7 @@ The G2 audit fixed the policy checkpoint at `m7_pta` policy seed `42` and varied
 | `42` | `22` | 3 | `0.3101` |
 | `42` | `33` | 3 | `0.9701` |
 
-Measured G2 range: `65.9958` percentage points. This is the strongest confirmed seed-sensitivity finding because the audit isolates encoder seed while holding policy seed, checkpoint, split, and method fixed.
+Measured legacy random-stress G2 range: `65.9958` percentage points. This is the strongest confirmed diagnostic seed-sensitivity finding because the audit isolates evaluation encoder seed while holding policy seed, checkpoint, split, and method fixed, but it does not establish corrected matched-encoder M7 performance.
 
 ## M7 Matched-Encoder Protocol Update
 
