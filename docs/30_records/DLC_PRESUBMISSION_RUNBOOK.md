@@ -131,7 +131,7 @@ bash pta/scripts/dlc/launch_job.sh pta_encoder_sensitivity_m7_ep 0 1 "$DLC_DATA_
     --residual-scale 0.05
 ```
 
-Submit the corrected matched-encoder G2 audit after the matched policy-plus-encoder bundle exists and the registry verifies it:
+Run the corrected matched-encoder G2 audit directly from DSW or a local shell after the matched policy-plus-encoder bundle exists and the registry verifies it. This direct command does not submit a DLC job and does not return a JobId:
 
 ```bash
 /cpfs/shared/simulation/zhuzihou/dev/Genesis/.venv/bin/python tools/pre_submission_audit.py \
@@ -148,7 +148,7 @@ Expected corrected G2 output file:
 results/presub/audit_matched_encoder_m7_pta_s42_ood_elastoplastic.json
 ```
 
-Monitor each returned job id:
+Monitor only the DLC-submitted probe-integrity jobs and legacy random-stress diagnostic job ids:
 
 ```bash
 "$DLC_BIN" get job <JOB_ID> \
@@ -184,7 +184,7 @@ Pass criteria:
 - Legacy random-stress diagnostic: `audit_encoder_m7_pta_s42_ood_elastoplastic.json` records `random_eval_encoder_stress` behavior only. It is explicitly non-claim-bearing and does not satisfy corrected G2.
 - Corrected G2 matched-encoder audit: `audit_matched_encoder_m7_pta_s42_ood_elastoplastic.json` has `passes == true` and `total_failed_episodes == 0`.
 
-If G1 or G2 fails, do not submit extra seed training jobs.
+If G1 fails or corrected G2 has not passed, do not submit extra seed training jobs for claim strengthening.
 
 Corrected M7 G2 must also verify the matched artifact bundle before any claim-bearing evaluation, but registry verification does not substitute for the matched evaluation audit:
 
@@ -199,19 +199,20 @@ For full `m7_pta` matched eval, the policy zip alone is insufficient. The claim 
 
 ## 2026-05-01 Gate Status
 
-Completed gates and current DLC status:
+Completed checks and current DLC status:
 
 - G0 smoke job `dlcy7gu8a1ghjg77`: succeeded.
 - G1 probe-integrity jobs for all five splits: succeeded. The elastoplastic gate file `results/presub/audit_probe_ood_elastoplastic_seed123.json` passed the displacement threshold.
-- G2 encoder sensitivity job `dlc1skykqxol8zl0`: DLC job succeeded, worker record `results/dlc/runs/20260501T141214Z_custom_dlc1skykqxol8zl0-master-0.json` has `exit_code=0`, but the gate failed.
+- Legacy `random_eval_encoder_stress` diagnostic job `dlc1skykqxol8zl0`: DLC job succeeded, worker record `results/dlc/runs/20260501T141214Z_custom_dlc1skykqxol8zl0-master-0.json` has `exit_code=0`, and the diagnostic failed its sensitivity threshold. This is not a corrected matched-encoder G2 result.
+- Corrected matched-encoder G2: not yet passed or run in this status snapshot; it requires matched artifacts plus `results/presub/audit_matched_encoder_m7_pta_s42_ood_elastoplastic.json`.
 
-G2 result file:
+Legacy diagnostic result file:
 
 ```text
 results/presub/audit_encoder_m7_pta_s42_ood_elastoplastic.json
 ```
 
-Observed G2 result:
+Observed legacy diagnostic result:
 
 ```text
 passes=false
@@ -220,7 +221,7 @@ total_failed_episodes=0
 reasons=["encoder sensitivity transfer range exceeded threshold"]
 ```
 
-Initial gate decision: do not submit G3/G4 extra seed training/evaluation under this gate result. The DLC job itself was healthy; the method/checkpoint failed the sensitivity criterion. The later six-seed G3 training submission was an explicit operator override for evidence collection only; G4 extra-seed evaluation still waits for worker-record and checkpoint verification.
+Initial gate decision: do not treat the old random-stress diagnostic as matched M7 evidence. The DLC job itself was healthy, but the diagnostic only showed that pairing the policy with fresh random evaluation encoders is unstable. The later six-seed G3 training submission was an explicit operator override for evidence collection only; G4 extra-seed evaluation still waits for worker-record and checkpoint verification and corrected matched G2 completion.
 
 Recovery training job `dlc1hn82yye94ojd` succeeded on 2026-05-01. Worker record `results/dlc/runs/20260501T113021Z_custom_dlc1hn82yye94ojd-master-0.json` has `exit_code=0`.
 
@@ -232,11 +233,11 @@ Final recovered artifacts are registered under:
 
 This final recovery archive contains 12 M7 seed42 checkpoint zip files, all SB3-load verified. The final checkpoint `checkpoints/m7_pta_seed42/m7_pta_final.zip` has `num_timesteps=500224` and `sha256=55bf288ab6211f15b016a6210b51435c5650d71a5ff0a4fc65e04c5835085116`.
 
-The G2 result remains a method/checkpoint gate failure, not an infrastructure failure. Do not submit G4 extra seed evaluation unless the submitted G3 training jobs finish successfully, their worker records show `exit_code=0`, and the resulting checkpoints load with SB3.
+The legacy random-stress result remains a non-claim-bearing diagnostic, not an infrastructure failure and not a corrected matched method failure. Do not submit G4 extra seed evaluation for claim strengthening unless the submitted G3 training jobs finish successfully, their worker records show `exit_code=0`, the resulting checkpoints load with SB3, matched artifacts verify, and corrected matched G2 passes.
 
 ## Extra Seed Training Jobs
 
-Submit only after G1 and G2 pass.
+Submit only after G1 and corrected matched G2 pass.
 
 M1 seed 2 and seed 3:
 
@@ -334,7 +335,7 @@ Paper-strengthening gate G4 passes only if:
 
 ## Final Paper Step
 
-Do not strengthen the paper until G1, G2, and G4 are read. Regardless of extra-seed outcome, add the NeurIPS checklist before final upload and rebuild:
+Do not strengthen the paper until G1, corrected matched G2, and G4 are read. Regardless of extra-seed outcome, add the NeurIPS checklist before final upload and rebuild:
 
 ```bash
 cd "$PTA_CODE_ROOT/paper"

@@ -16,7 +16,7 @@ The record is intentionally conservative. It documents measured sensitivity and 
 
 - Main per-seed OOD table: `/cpfs/shared/simulation/zhuzihou/dev/probe-then-act/results/ood_eval_per_seed.csv`
 - G1 probe-integrity outputs: `/cpfs/shared/simulation/zhuzihou/dev/probe-then-act/results/presub/audit_probe_*_seed123.json`
-- G2 encoder-sensitivity output: `/cpfs/shared/simulation/zhuzihou/dev/probe-then-act/results/presub/audit_encoder_m7_pta_s42_ood_elastoplastic.json`
+- Legacy `random_eval_encoder_stress` diagnostic output: `/cpfs/shared/simulation/zhuzihou/dev/probe-then-act/results/presub/audit_encoder_m7_pta_s42_ood_elastoplastic.json`
 - New DLC worker records: `/cpfs/shared/simulation/zhuzihou/dev/probe-then-act/results/dlc/runs/*.json`
 - Durable artifact manifests: `/cpfs/shared/simulation/zhuzihou/artifacts/probe-then-act/20260501/*/artifact_manifest.json`
 
@@ -41,7 +41,8 @@ The active six-seed strengthening step adds policy seeds `2`, `3`, and `4` for `
 | G0 | DLC smoke job | none | Passed. |
 | G1 | Probe-integrity audit on five splits | audit seed `123` | Passed for the required elastoplastic criterion. |
 | Recovery | Recovered `m7_pta` policy checkpoint | policy seed `42` | Passed; final checkpoint reached about 500k timesteps. |
-| G2 | Encoder-sensitivity audit on `m7_pta` / `ood_elastoplastic` | policy seed `42`; encoder seeds `11, 22, 33` | Failed. |
+| Legacy G2 diagnostic | `random_eval_encoder_stress` on `m7_pta` / `ood_elastoplastic` | policy seed `42`; encoder seeds `11, 22, 33` | Failed diagnostic threshold; non-claim-bearing. |
+| Corrected G2 | Matched-encoder audit on `m7_pta` / `ood_elastoplastic` | policy seed `42`; matched encoder sidecar | Not yet passed or run; wait for matched artifacts and audit output. |
 | G3 | Six-seed extension training for main methods and ablations | policy seeds `2, 3, 4` | Submitted; completion not verified. |
 | G4 | Extra-seed OOD evaluation | policy seeds `2, 3, 4` | Not submitted; wait for checkpoint verification. |
 
@@ -102,7 +103,7 @@ Next evidence gate: do not mark any row complete until `results/dlc/runs/*.json`
 
 ### Legacy random-stress encoder sensitivity: confirmed for old `m7_pta` diagnostic only
 
-The old `random_eval_encoder_stress` G2 diagnostic fixed the policy checkpoint at `m7_pta` policy seed `42` and varied only the freshly constructed evaluation encoder seed. The gate failed because transfer changed by about 66 percentage points. This confirms sensitivity to random evaluation encoders in the legacy diagnostic protocol; it is not matched M7 headline evidence.
+The old `random_eval_encoder_stress` G2 diagnostic fixed the policy checkpoint at `m7_pta` policy seed `42` and varied only the freshly constructed evaluation encoder seed. The diagnostic threshold failed because transfer changed by about 66 percentage points. This confirms sensitivity to random evaluation encoders in the legacy diagnostic protocol; it is not matched M7 headline evidence.
 
 | Policy seed | Encoder seed | Episodes | Mean transfer |
 |---:|---:|---:|---:|
@@ -127,7 +128,7 @@ Future full `m7_pta` claim artifacts must preserve the matched policy-plus-encod
 
 ### Policy-seed transfer variance: observed across learned methods
 
-The existing 3-policy-seed OOD table also shows large `ood_elastoplastic` transfer ranges across policy seeds `0, 1, 42`. This is not the same as the G2 encoder audit, because training seed changes both the learned policy and training trajectory. It is still relevant to reviewer concerns about whether three seeds are sufficient evidence.
+The existing 3-policy-seed OOD table also shows large `ood_elastoplastic` transfer ranges across policy seeds `0, 1, 42`. This is not the same as the legacy random-stress G2 diagnostic, because training seed changes both the learned policy and training trajectory. It is still relevant to reviewer concerns about whether three seeds are sufficient evidence.
 
 | Method | Policy seeds | `ood_elastoplastic` mean transfer values | Range |
 |---|---:|---|---:|
@@ -149,12 +150,13 @@ The result should be described as high policy-seed variance, not as a proven mec
 
 - `m8_teacher`: only policy seed `42` is present, so there is no seed-sensitivity measurement.
 - Extra policy seeds `2`, `3`, and `4` for `m1_reactive`, `m7_pta`, `m7_noprobe`, and `m7_nobelief`: submitted but not yet completed, loaded, or evaluated.
-- G2-style encoder-seed sensitivity for `m1_reactive`, `m7_noprobe`, `m7_nobelief`, or `m8_teacher`: not measured by the current G2 audit.
+- Legacy random-stress encoder-seed sensitivity for `m1_reactive`, `m7_noprobe`, `m7_nobelief`, or `m8_teacher`: not measured by the old diagnostic.
+- Corrected matched-encoder G2 for `m7_pta`: not yet passed or run; it requires matched artifacts and `audit_matched_encoder_m7_pta_s42_ood_elastoplastic.json`.
 
 ## Implication For G3/G4
 
 The immediate blocker is not DLC reliability. G0, G1, checkpoint recovery, artifact registration, and worker records indicate that the execution path is functioning.
 
-The blocker is evidence quality: G2 found that `m7_pta` evaluation can swing strongly when only encoder seed changes, and the existing OOD table already shows large policy-seed transfer ranges on `ood_elastoplastic` across multiple learned methods.
+The blocker is evidence quality: the legacy `random_eval_encoder_stress` diagnostic found that `m7_pta` evaluation can swing strongly when paired with fresh random evaluation encoders, while corrected matched-encoder G2 is still pending. The existing OOD table also shows large policy-seed transfer ranges on `ood_elastoplastic` across multiple learned methods.
 
-The six-seed training jobs were intentionally submitted despite the G2 failure to collect candidate seeds for later analysis. Do not submit G4 evaluation or strengthen paper claims until the 12 worker records finish successfully and the resulting checkpoints load.
+The six-seed training jobs were intentionally submitted despite the legacy diagnostic failure to collect candidate seeds for later analysis. Do not submit G4 evaluation or strengthen paper claims until the 12 worker records finish successfully, the resulting checkpoints load, matched artifacts verify, and corrected matched G2 passes.
