@@ -139,6 +139,37 @@ def test_save_m7_encoder_artifact_writes_state_metadata_and_hash_links(tmp_path)
     assert metadata == saved_metadata
 
 
+@pytest.mark.parametrize(
+    "reserved_key",
+    [
+        "protocol",
+        "paired_policy_path",
+        "paired_policy_sha256",
+        "belief_encoder_path",
+        "belief_encoder_sha256",
+        "created_at_utc",
+        "run_metadata",
+    ],
+)
+def test_save_m7_encoder_artifact_rejects_reserved_metadata_keys(
+    tmp_path,
+    reserved_key,
+):
+    policy_path = _write_policy(
+        tmp_path / "checkpoints" / "m7_pta_seed42" / "best" / "best_model.zip"
+    )
+    run_metadata = _run_metadata()
+    run_metadata[reserved_key] = "collision"
+
+    with pytest.raises(ValueError, match=reserved_key):
+        checkpoint_io.save_m7_encoder_artifact(
+            encoder=_encoder(fill=0.5),
+            policy_path=policy_path,
+            repo_root=tmp_path,
+            run_metadata=run_metadata,
+        )
+
+
 def test_load_m7_encoder_artifact_restores_exact_state_dict(tmp_path):
     policy_path = _write_policy(
         tmp_path / "checkpoints" / "m7_pta_seed42" / "m7_pta_final.zip"
@@ -175,6 +206,26 @@ def test_load_m7_encoder_artifact_restores_exact_state_dict(tmp_path):
     assert metadata["stage"] == "final"
     for key, value in source.state_dict().items():
         assert torch.equal(value, loaded.state_dict()[key])
+
+
+def test_load_m7_encoder_artifact_uses_weights_only_loading(tmp_path, monkeypatch):
+    policy_path = _save_artifact(tmp_path)
+    paths = checkpoint_io.m7_encoder_sidecar_paths(policy_path)
+    original_load = checkpoint_io.torch.load
+    captured = {}
+
+    def recording_load(*args, **kwargs):
+        captured["weights_only"] = kwargs.get("weights_only")
+        return original_load(*args, **kwargs)
+
+    monkeypatch.setattr(checkpoint_io.torch, "load", recording_load)
+
+    checkpoint_io.load_m7_encoder_artifact(
+        policy_path,
+        expected=_expected_metadata(),
+    )
+
+    assert captured["weights_only"] is True
 
 
 @pytest.mark.parametrize(

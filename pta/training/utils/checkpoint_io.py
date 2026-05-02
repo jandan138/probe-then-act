@@ -19,6 +19,17 @@ import torch
 
 M7_ENCODER_PROTOCOL = "matched_encoder_v1"
 M7_ENCODER_FORMAT_VERSION = 1
+M7_ENCODER_RESERVED_METADATA_KEYS = frozenset(
+    {
+        "protocol",
+        "paired_policy_path",
+        "paired_policy_sha256",
+        "belief_encoder_path",
+        "belief_encoder_sha256",
+        "created_at_utc",
+        "run_metadata",
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -211,6 +222,9 @@ def save_m7_encoder_artifact(
     missing = [field for field in required if field not in run_metadata]
     if missing:
         raise ValueError("missing encoder metadata fields: " + ", ".join(missing))
+    reserved = sorted(M7_ENCODER_RESERVED_METADATA_KEYS.intersection(run_metadata))
+    if reserved:
+        raise ValueError("reserved encoder metadata fields: " + ", ".join(reserved))
 
     payload = {
         "format_version": M7_ENCODER_FORMAT_VERSION,
@@ -294,7 +308,7 @@ def load_m7_encoder_artifact(
     if metadata.get("belief_encoder_sha256") != sha256_file(paths.encoder_path):
         raise ValueError("belief_encoder_sha256 mismatch for matched encoder")
 
-    payload = torch.load(paths.encoder_path, map_location=map_location, weights_only=False)
+    payload = torch.load(paths.encoder_path, map_location=map_location, weights_only=True)
     if not isinstance(payload, dict):
         raise ValueError("matched encoder artifact must be a dictionary")
     if payload.get("format_version") != M7_ENCODER_FORMAT_VERSION:
