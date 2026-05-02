@@ -589,7 +589,13 @@ def evaluate_one(model, env, n_episodes, deterministic=True):
 
 
 def aggregate_results(all_rows):
-    agg = defaultdict(lambda: defaultdict(list))
+    agg = defaultdict(
+        lambda: {
+            "metrics": defaultdict(list),
+            "seeds": set(),
+            "identity_values": defaultdict(set),
+        }
+    )
     for row in all_rows:
         identity = result_identity(row)
         key = (
@@ -597,14 +603,25 @@ def aggregate_results(all_rows):
             row["split"],
             identity["encoder_mode"],
             str(identity["encoder_seed"]),
-            identity["encoder_artifact"],
-            identity["encoder_sha256"],
-            identity["policy_checkpoint"],
-            identity["policy_sha256"],
             identity["protocol"],
         )
+        seed = int(row["seed"])
+        if seed in agg[key]["seeds"]:
+            raise ValueError(
+                "duplicate aggregate row for "
+                f"method={row['method']} split={row['split']} seed={seed} "
+                f"protocol={identity['protocol']}"
+            )
+        agg[key]["seeds"].add(seed)
+        for field in (
+            "encoder_artifact",
+            "encoder_sha256",
+            "policy_checkpoint",
+            "policy_sha256",
+        ):
+            agg[key]["identity_values"][field].add(str(identity[field]))
         for metric in AGGREGATE_METRICS:
-            agg[key][metric].append(row[metric])
+            agg[key]["metrics"][metric].append(row[metric])
 
     agg_rows = []
     for (
@@ -612,24 +629,22 @@ def aggregate_results(all_rows):
         split,
         encoder_mode,
         encoder_seed,
-        encoder_artifact,
-        encoder_sha256,
-        policy_checkpoint,
-        policy_sha256,
         protocol,
-    ), metrics in sorted(agg.items()):
+    ), bucket in sorted(agg.items()):
+        identity_values = bucket["identity_values"]
         agg_row = {
             "method": method,
             "split": split,
             "encoder_mode": encoder_mode,
             "encoder_seed": encoder_seed,
-            "encoder_artifact": encoder_artifact,
-            "encoder_sha256": encoder_sha256,
-            "policy_checkpoint": policy_checkpoint,
-            "policy_sha256": policy_sha256,
+            "encoder_artifact": _aggregate_identity_values(identity_values["encoder_artifact"]),
+            "encoder_sha256": _aggregate_identity_values(identity_values["encoder_sha256"]),
+            "policy_checkpoint": _aggregate_identity_values(identity_values["policy_checkpoint"]),
+            "policy_sha256": _aggregate_identity_values(identity_values["policy_sha256"]),
             "protocol": protocol,
-            "n_seeds": len(metrics["mean_reward"]),
+            "n_seeds": len(bucket["seeds"]),
         }
+        metrics = bucket["metrics"]
         for metric, values in metrics.items():
             agg_row[f"{metric}_mean"] = float(np.mean(values))
             agg_row[f"{metric}_std"] = float(np.std(values))
@@ -637,6 +652,11 @@ def aggregate_results(all_rows):
                 agg_row[f"{metric}_sum"] = int(np.sum(values))
         agg_rows.append(agg_row)
     return agg_rows
+
+
+def _aggregate_identity_values(values: set[str]) -> str:
+    non_empty = sorted(value for value in values if value)
+    return ";".join(non_empty)
 
 
 def write_aggregate_results(path: Path, all_rows: list[dict]):

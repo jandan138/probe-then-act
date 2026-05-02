@@ -315,3 +315,6 @@ def test_matched_encoder_audit_uses_matched_resolver_and_writes_named_payload(mo
     assert payload["encoder_mode"] == "matched"
     assert payload["encoder_sha256"] == "encoder-sha"
     assert payload["mean_transfer"] == 0.88
+    assert payload["passes"] is True
+    assert payload["total_failed_episodes"] == 0
+    assert payload["reasons"] == []

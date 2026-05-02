@@ -176,6 +176,18 @@ def encoder_sensitivity_gate(
     }
 
 
+def matched_encoder_gate(metrics: dict) -> dict:
+    total_failed_episodes = int(metrics.get("n_failed_episodes", 0))
+    reasons = []
+    if total_failed_episodes:
+        reasons.append("matched encoder eval had failed episodes")
+    return {
+        "passes": not reasons,
+        "total_failed_episodes": total_failed_episodes,
+        "reasons": reasons,
+    }
+
+
 def _load_eval_module():
     from pta.scripts import run_ood_eval_v2
 
@@ -354,6 +366,7 @@ def run_matched_encoder_audit(args: argparse.Namespace) -> None:
         "checkpoint": _checkpoint_payload_path(checkpoint),
         **encoder_identity,
         **metrics,
+        **matched_encoder_gate(metrics),
     }
     _write_json(
         Path(args.output_dir) / f"audit_matched_encoder_{args.method}_s{args.seed}_{args.split}.json",

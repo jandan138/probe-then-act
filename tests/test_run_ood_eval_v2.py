@@ -226,7 +226,7 @@ def test_aggregate_results_keeps_encoder_protocols_separate():
     assert {row["mean_transfer_mean"] for row in agg_rows} == {0.0, 1.0}
 
 
-def test_aggregate_results_keeps_policy_hashes_separate():
+def test_aggregate_results_combines_matched_encoder_seeds_with_distinct_artifacts():
     from pta.scripts.run_ood_eval_v2 import aggregate_results
 
     rows = [
@@ -236,7 +236,7 @@ def test_aggregate_results_keeps_policy_hashes_separate():
             split="ood_snow",
             encoder_mode="matched",
             encoder_artifact="checkpoints/m7_pta_seed0/best/belief_encoder.pt",
-            encoder_sha256="encoder-sha",
+            encoder_sha256="encoder-sha-a",
             policy_checkpoint="checkpoints/m7_pta_seed0/best/best_model.zip",
             policy_sha256="policy-sha-a",
             protocol="matched_encoder_v1",
@@ -244,12 +244,12 @@ def test_aggregate_results_keeps_policy_hashes_separate():
         ),
         _result_row(
             method="m7_pta",
-            seed=0,
+            seed=1,
             split="ood_snow",
             encoder_mode="matched",
-            encoder_artifact="checkpoints/m7_pta_seed0/best/belief_encoder.pt",
-            encoder_sha256="encoder-sha",
-            policy_checkpoint="checkpoints/m7_pta_seed0/best/best_model.zip",
+            encoder_artifact="checkpoints/m7_pta_seed1/best/belief_encoder.pt",
+            encoder_sha256="encoder-sha-b",
+            policy_checkpoint="checkpoints/m7_pta_seed1/best/best_model.zip",
             policy_sha256="policy-sha-b",
             protocol="matched_encoder_v1",
             mean_transfer=0.0,
@@ -258,12 +258,37 @@ def test_aggregate_results_keeps_policy_hashes_separate():
 
     agg_rows = aggregate_results(rows)
 
-    assert len(agg_rows) == 2
-    assert {row["policy_sha256"] for row in agg_rows} == {
-        "policy-sha-a",
-        "policy-sha-b",
-    }
-    assert {row["mean_transfer_mean"] for row in agg_rows} == {0.0, 1.0}
+    assert len(agg_rows) == 1
+    assert agg_rows[0]["n_seeds"] == 2
+    assert agg_rows[0]["mean_transfer_mean"] == 0.5
+    assert agg_rows[0]["policy_sha256"] == "policy-sha-a;policy-sha-b"
+    assert agg_rows[0]["encoder_sha256"] == "encoder-sha-a;encoder-sha-b"
+
+
+def test_aggregate_results_rejects_duplicate_seed_within_protocol_group():
+    from pta.scripts.run_ood_eval_v2 import aggregate_results
+
+    rows = [
+        _result_row(
+            method="m7_pta",
+            seed=0,
+            split="ood_snow",
+            encoder_mode="matched",
+            policy_sha256="policy-sha-a",
+            protocol="matched_encoder_v1",
+        ),
+        _result_row(
+            method="m7_pta",
+            seed=0,
+            split="ood_snow",
+            encoder_mode="matched",
+            policy_sha256="policy-sha-b",
+            protocol="matched_encoder_v1",
+        ),
+    ]
+
+    with pytest.raises(ValueError, match="duplicate aggregate row"):
+        aggregate_results(rows)
 
 
 def test_result_key_uses_encoder_protocol_identity_fields():

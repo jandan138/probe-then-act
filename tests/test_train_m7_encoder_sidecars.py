@@ -135,6 +135,89 @@ def test_best_checkpoint_sidecar_callback_writes_sidecars_for_new_best(tmp_path)
     assert json.loads(paths.metadata_path.read_text())["stage"] == "best"
 
 
+def test_periodic_checkpoint_sidecar_callback_writes_matched_sidecars(tmp_path):
+    model = FakeModel()
+    model.num_timesteps = 2
+    encoder = _encoder(fill=0.44)
+    checkpoint_dir = tmp_path / "checkpoints" / "m7_pta_seed42"
+    callback = train_m7.M7PeriodicCheckpointSidecarCallback(
+        encoder=encoder,
+        save_freq=2,
+        save_path=checkpoint_dir,
+        name_prefix="m7_pta",
+        repo_root=tmp_path,
+        metadata=_metadata(stage="periodic"),
+    )
+    callback.init_callback(model)
+
+    assert callback.on_step() is True
+    assert callback.on_step() is True
+
+    policy_path = checkpoint_dir / "m7_pta_2_steps" / "m7_pta_2_steps.zip"
+    paths = checkpoint_io.m7_encoder_sidecar_paths(policy_path)
+    assert policy_path.exists()
+    assert policy_path.with_suffix(".json").exists()
+    assert paths.encoder_path.exists()
+    assert paths.metadata_path.exists()
+    metadata = json.loads(paths.metadata_path.read_text())
+    assert metadata["stage"] == "periodic"
+    assert metadata["num_timesteps"] == 2
+    assert metadata["paired_policy_path"] == (
+        "checkpoints/m7_pta_seed42/m7_pta_2_steps/m7_pta_2_steps.zip"
+    )
+
+
+def test_periodic_and_final_sidecars_remain_policy_specific(tmp_path):
+    model = FakeModel()
+    model.num_timesteps = 1
+    encoder = _encoder(fill=0.55)
+    checkpoint_dir = tmp_path / "checkpoints" / "m7_pta_seed42"
+    callback = train_m7.M7PeriodicCheckpointSidecarCallback(
+        encoder=encoder,
+        save_freq=1,
+        save_path=checkpoint_dir,
+        name_prefix="m7_pta",
+        repo_root=tmp_path,
+        metadata=_metadata(stage="periodic"),
+    )
+    callback.init_callback(model)
+
+    assert callback.on_step() is True
+    first_policy = checkpoint_dir / "m7_pta_1_steps" / "m7_pta_1_steps.zip"
+    first_metadata_path = checkpoint_io.m7_encoder_sidecar_paths(first_policy).metadata_path
+    first_metadata = json.loads(first_metadata_path.read_text())
+
+    model.num_timesteps = 2
+    assert callback.on_step() is True
+    train_m7.save_m7_policy_with_encoder(
+        model,
+        encoder,
+        checkpoint_dir / "m7_pta_final",
+        repo_root=tmp_path,
+        metadata=_metadata(stage="final"),
+    )
+
+    second_policy = checkpoint_dir / "m7_pta_2_steps" / "m7_pta_2_steps.zip"
+    final_policy = checkpoint_dir / "m7_pta_final.zip"
+    assert json.loads(first_metadata_path.read_text()) == first_metadata
+    assert checkpoint_io.load_m7_encoder_artifact(
+        first_policy,
+        expected={"method": "m7_pta", "seed": 42, "ablation": "none"},
+    )[1]["paired_policy_path"] == (
+        "checkpoints/m7_pta_seed42/m7_pta_1_steps/m7_pta_1_steps.zip"
+    )
+    assert checkpoint_io.load_m7_encoder_artifact(
+        second_policy,
+        expected={"method": "m7_pta", "seed": 42, "ablation": "none"},
+    )[1]["paired_policy_path"] == (
+        "checkpoints/m7_pta_seed42/m7_pta_2_steps/m7_pta_2_steps.zip"
+    )
+    assert checkpoint_io.load_m7_encoder_artifact(
+        final_policy,
+        expected={"method": "m7_pta", "seed": 42, "ablation": "none"},
+    )[1]["paired_policy_path"] == "checkpoints/m7_pta_seed42/m7_pta_final.zip"
+
+
 def test_main_derives_trace_dim_from_m7_inner_observation_space(tmp_path, monkeypatch):
     observed_encoders = []
     inner_trace_dim = 47

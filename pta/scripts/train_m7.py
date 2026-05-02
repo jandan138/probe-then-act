@@ -131,6 +131,63 @@ class M7BestModelSidecarCallback:
         return True
 
 
+class M7PeriodicCheckpointSidecarCallback:
+    """CheckpointCallback-compatible periodic saver for matched full M7 artifacts."""
+
+    def __init__(self, *, encoder, save_freq, save_path, name_prefix, repo_root, metadata):
+        self.encoder = encoder
+        self.save_freq = int(save_freq)
+        self.save_path = Path(save_path)
+        self.name_prefix = name_prefix
+        self.repo_root = Path(repo_root)
+        self.metadata = dict(metadata)
+        self.model = None
+        self.parent = None
+        self.n_calls = 0
+        self.num_timesteps = 0
+        self.locals = {}
+        self.globals = {}
+
+    def init_callback(self, model):
+        self.model = model
+
+    def on_training_start(self, locals_, globals_):
+        self.locals = locals_
+        self.globals = globals_
+        self.num_timesteps = int(getattr(self.model, "num_timesteps", 0))
+
+    def on_rollout_start(self):
+        pass
+
+    def on_rollout_end(self):
+        pass
+
+    def on_training_end(self):
+        pass
+
+    def update_locals(self, locals_):
+        self.locals.update(locals_)
+
+    def update_child_locals(self, locals_):
+        self.update_locals(locals_)
+
+    def on_step(self) -> bool:
+        self.n_calls += 1
+        self.num_timesteps = int(getattr(self.model, "num_timesteps", self.num_timesteps))
+        if self.n_calls % self.save_freq == 0:
+            step = self.num_timesteps or self.n_calls
+            checkpoint_name = f"{self.name_prefix}_{step}_steps"
+            metadata = {**self.metadata, "num_timesteps": int(step)}
+            save_m7_policy_with_encoder(
+                self.model,
+                self.encoder,
+                self.save_path / checkpoint_name / checkpoint_name,
+                repo_root=self.repo_root,
+                metadata=metadata,
+            )
+        return True
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Train M7 (Probe-Then-Act)",
@@ -375,17 +432,27 @@ def main() -> None:
     )
 
     # ---- Callbacks --------------------------------------------------------
-    checkpoint_callback = CheckpointCallback(
-        save_freq=50_000,
-        save_path=str(checkpoint_dir),
-        name_prefix="m7_pta",
-        save_replay_buffer=False,
-        save_vecnormalize=False,
-    )
-
     best_sidecar_callback = None
     if canonical_belief_encoder is not None:
         assert trace_dim is not None
+        checkpoint_callback = M7PeriodicCheckpointSidecarCallback(
+            encoder=canonical_belief_encoder,
+            save_freq=50_000,
+            save_path=checkpoint_dir,
+            name_prefix="m7_pta",
+            repo_root=_PROJECT_ROOT,
+            metadata={
+                "method": "m7_pta",
+                "seed": seed,
+                "ablation": ablation,
+                "trace_dim": trace_dim,
+                "latent_dim": args.latent_dim,
+                "hidden_dim": ENCODER_HIDDEN_DIM,
+                "num_layers": ENCODER_NUM_LAYERS,
+                "n_probes": args.n_probes,
+                "stage": "periodic",
+            },
+        )
         best_sidecar_callback = M7BestModelSidecarCallback(
             encoder=canonical_belief_encoder,
             policy_path=checkpoint_dir / "best" / "best_model.zip",
@@ -401,6 +468,14 @@ def main() -> None:
                 "n_probes": args.n_probes,
                 "stage": "best",
             },
+        )
+    else:
+        checkpoint_callback = CheckpointCallback(
+            save_freq=50_000,
+            save_path=str(checkpoint_dir),
+            name_prefix="m7_pta",
+            save_replay_buffer=False,
+            save_vecnormalize=False,
         )
 
     eval_callback = EvalCallback(
