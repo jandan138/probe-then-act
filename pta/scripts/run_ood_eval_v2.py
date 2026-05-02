@@ -19,12 +19,15 @@ import argparse
 import csv
 import math
 import os
+import random
 import re
 import sys
 from collections import defaultdict
 from pathlib import Path
 
 import numpy as np
+
+from pta.training.utils.checkpoint_io import load_m7_encoder_artifact, sha256_file
 
 _PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(_PROJECT_ROOT) not in sys.path:
@@ -101,7 +104,7 @@ SPLITS = {
 }
 
 
-def parse_args():
+def parse_args(argv=None):
     parser = argparse.ArgumentParser(description="OOD Evaluation v2")
     parser.add_argument("--n-episodes", type=int, default=10)
     parser.add_argument("--horizon", type=int, default=500)
@@ -125,7 +128,43 @@ def parse_args():
         default=None,
         help="Subset of splits to eval (default: all)",
     )
-    return parser.parse_args()
+    parser.add_argument(
+        "--m7-encoder-mode",
+        choices=("matched", "random-stress"),
+        default="matched",
+        help="M7 encoder protocol: load matched sidecar or seed a fresh random encoder.",
+    )
+    parser.add_argument(
+        "--m7-random-encoder-seed",
+        type=int,
+        default=None,
+        help="Required when --m7-encoder-mode=random-stress.",
+    )
+    return parser.parse_args(argv)
+
+
+def _load_genesis_gym_wrapper():
+    from pta.envs.wrappers.gym_wrapper import GenesisGymWrapper
+
+    return GenesisGymWrapper
+
+
+def _load_joint_residual_wrapper():
+    from pta.envs.wrappers.joint_residual_wrapper import JointResidualWrapper
+
+    return JointResidualWrapper
+
+
+def _load_privileged_obs_wrapper():
+    from pta.envs.wrappers.privileged_obs_wrapper import PrivilegedObsWrapper
+
+    return PrivilegedObsWrapper
+
+
+def _load_probe_phase_wrapper():
+    from pta.envs.wrappers.probe_phase_wrapper import ProbePhaseWrapper
+
+    return ProbePhaseWrapper
 
 
 def make_eval_env(
@@ -136,11 +175,11 @@ def make_eval_env(
     horizon=500,
     residual_scale=0.05,
     seed=0,
+    belief_encoder=None,
 ):
     """Create evaluation environment for a given split."""
-    from pta.envs.wrappers.gym_wrapper import GenesisGymWrapper
-    from pta.envs.wrappers.joint_residual_wrapper import JointResidualWrapper
-    from pta.envs.wrappers.privileged_obs_wrapper import PrivilegedObsWrapper
+    GenesisGymWrapper = _load_genesis_gym_wrapper()
+    JointResidualWrapper = _load_joint_residual_wrapper()
 
     scene_config = {
         "tool_type": "scoop",
@@ -167,16 +206,18 @@ def make_eval_env(
     )
 
     if use_m7_env:
-        from pta.envs.wrappers.probe_phase_wrapper import ProbePhaseWrapper
+        ProbePhaseWrapper = _load_probe_phase_wrapper()
 
         env = ProbePhaseWrapper(
             env,
             latent_dim=16,
             n_probes=3,
+            belief_encoder=belief_encoder,
             ablation=ablation,
             device="cpu",
         )
     elif use_privileged:
+        PrivilegedObsWrapper = _load_privileged_obs_wrapper()
         env = PrivilegedObsWrapper(env=env, scene_config=scene_config)
 
     env.reset(seed=seed)
@@ -195,6 +236,11 @@ RESULT_FIELDNAMES = [
     "method",
     "seed",
     "split",
+    "encoder_mode",
+    "encoder_seed",
+    "encoder_sha256",
+    "policy_sha256",
+    "protocol",
     "mean_reward",
     "std_reward",
     "mean_transfer",
@@ -203,6 +249,13 @@ RESULT_FIELDNAMES = [
     "std_spill",
     "success_rate",
     "n_failed_episodes",
+]
+RESULT_IDENTITY_FIELDS = [
+    "encoder_mode",
+    "encoder_seed",
+    "encoder_sha256",
+    "policy_sha256",
+    "protocol",
 ]
 RESULT_FLOAT_FIELDS = [
     "mean_reward",
@@ -216,7 +269,80 @@ RESULT_FLOAT_FIELDS = [
 
 
 def result_key(row):
-    return (row["method"], int(row["seed"]), row["split"])
+    return (
+        row["method"],
+        int(row["seed"]),
+        row["split"],
+        row["encoder_mode"],
+        str(row["encoder_seed"]),
+        row["encoder_sha256"],
+        row["policy_sha256"],
+        row["protocol"],
+    )
+
+
+def policy_only_identity(policy_path: Path) -> dict:
+    return {
+        "encoder_mode": "policy-only",
+        "encoder_seed": "",
+        "encoder_sha256": "",
+        "policy_sha256": sha256_file(policy_path),
+        "protocol": "policy_only",
+    }
+
+
+def legacy_identity_defaults() -> dict:
+    return {
+        "encoder_mode": "policy-only",
+        "encoder_seed": "",
+        "encoder_sha256": "",
+        "policy_sha256": "",
+        "protocol": "policy_only",
+    }
+
+
+def resolve_m7_belief_encoder(
+    policy_path: Path,
+    ablation: str,
+    encoder_mode: str,
+    encoder_seed: int | None,
+    expected: dict,
+):
+    policy_sha256 = sha256_file(policy_path)
+    if ablation in ("no_probe", "no_belief"):
+        return None, {
+            "encoder_mode": "zero-z",
+            "encoder_seed": "",
+            "encoder_sha256": "",
+            "policy_sha256": policy_sha256,
+            "protocol": "ablation_zero_z",
+        }
+    if encoder_mode == "random-stress":
+        if encoder_seed is None:
+            raise ValueError("random-stress requires --m7-random-encoder-seed")
+        random.seed(encoder_seed)
+        np.random.seed(encoder_seed)
+        try:
+            import torch
+
+            torch.manual_seed(encoder_seed)
+        except ImportError:
+            pass
+        return None, {
+            "encoder_mode": "random-stress",
+            "encoder_seed": str(encoder_seed),
+            "encoder_sha256": "",
+            "policy_sha256": policy_sha256,
+            "protocol": "random_stress",
+        }
+    encoder, metadata = load_m7_encoder_artifact(policy_path, expected=expected)
+    return encoder, {
+        "encoder_mode": "matched",
+        "encoder_seed": "",
+        "encoder_sha256": metadata["belief_encoder_sha256"],
+        "policy_sha256": metadata["paired_policy_sha256"],
+        "protocol": metadata["protocol"],
+    }
 
 
 def resolve_checkpoint_path(project_root: Path, ckpt_pattern: str, seed: int) -> Path | None:
@@ -247,7 +373,11 @@ def coerce_nonnegative_int(value, field: str) -> int:
 
 
 def coerce_result_row(raw: dict) -> dict:
-    if any(raw.get(field) in (None, "") for field in RESULT_FIELDNAMES):
+    raw = {**legacy_identity_defaults(), **raw}
+    required_fields = [
+        field for field in RESULT_FIELDNAMES if field not in RESULT_IDENTITY_FIELDS
+    ]
+    if any(raw.get(field) in (None, "") for field in required_fields):
         raise ValueError("missing result fields")
     floats = {}
     for field in RESULT_FLOAT_FIELDS:
@@ -262,6 +392,11 @@ def coerce_result_row(raw: dict) -> dict:
         "method": raw["method"],
         "seed": int(raw["seed"]),
         "split": raw["split"],
+        "encoder_mode": raw["encoder_mode"],
+        "encoder_seed": str(raw["encoder_seed"]),
+        "encoder_sha256": raw["encoder_sha256"],
+        "policy_sha256": raw["policy_sha256"],
+        "protocol": raw["protocol"],
         **floats,
         "n_failed_episodes": failed_episodes,
     }
@@ -446,6 +581,21 @@ def main():
                 continue
 
             print(f"\n>>> {method_name} seed={seed}")
+            belief_encoder = None
+            if method_cfg.get("use_m7_env", False):
+                belief_encoder, encoder_identity = resolve_m7_belief_encoder(
+                    ckpt_path,
+                    ablation=method_cfg.get("ablation", "none"),
+                    encoder_mode=args.m7_encoder_mode,
+                    encoder_seed=args.m7_random_encoder_seed,
+                    expected={
+                        "method": method_name,
+                        "seed": seed,
+                        "ablation": method_cfg.get("ablation", "none"),
+                    },
+                )
+            else:
+                encoder_identity = policy_only_identity(ckpt_path)
             model = PPO.load(str(ckpt_path))
 
             for split_name in splits_to_eval:
@@ -453,7 +603,14 @@ def main():
                 if split_cfg is None:
                     continue
 
-                key = (method_name, seed, split_name)
+                key = result_key(
+                    {
+                        "method": method_name,
+                        "seed": seed,
+                        "split": split_name,
+                        **encoder_identity,
+                    }
+                )
                 if key in completed_keys:
                     print(f"    {split_name}... SKIP existing", flush=True)
                     continue
@@ -468,6 +625,7 @@ def main():
                     horizon=args.horizon,
                     residual_scale=args.residual_scale,
                     seed=seed + 2000,
+                    belief_encoder=belief_encoder,
                 )
 
                 metrics = evaluate_one(model, env, args.n_episodes)
@@ -477,6 +635,7 @@ def main():
                     "method": method_name,
                     "seed": seed,
                     "split": split_name,
+                    **encoder_identity,
                     **metrics,
                 }
                 all_rows.append(row)

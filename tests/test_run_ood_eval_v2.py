@@ -1,4 +1,5 @@
 import sys
+import types
 
 import pytest
 
@@ -92,6 +93,11 @@ def _result_row(**overrides):
         "method": "m1_reactive",
         "seed": 42,
         "split": "id_sand",
+        "encoder_mode": "policy-only",
+        "encoder_seed": "",
+        "encoder_sha256": "",
+        "policy_sha256": "",
+        "protocol": "policy_only",
         "mean_reward": 1.0,
         "std_reward": 0.0,
         "mean_transfer": 0.2,
@@ -181,12 +187,182 @@ def test_aggregate_results_reports_failed_episode_counts():
     assert agg_rows[0]["n_failed_episodes_mean"] == 0.5
 
 
-def test_result_key_uses_method_seed_split():
+def test_result_key_uses_encoder_protocol_identity_fields():
     from pta.scripts.run_ood_eval_v2 import result_key
 
-    row = {"method": "m1_reactive", "seed": 42, "split": "ood_snow"}
+    row = {
+        "method": "m7_pta",
+        "seed": 42,
+        "split": "ood_snow",
+        "encoder_mode": "matched",
+        "encoder_seed": "",
+        "encoder_sha256": "encoder-digest",
+        "policy_sha256": "policy-digest",
+        "protocol": "matched_encoder_v1",
+    }
 
-    assert result_key(row) == ("m1_reactive", 42, "ood_snow")
+    assert result_key(row) == (
+        "m7_pta",
+        42,
+        "ood_snow",
+        "matched",
+        "",
+        "encoder-digest",
+        "policy-digest",
+        "matched_encoder_v1",
+    )
+
+
+def test_parse_args_defaults_to_matched_encoder_without_random_seed():
+    from pta.scripts.run_ood_eval_v2 import parse_args
+
+    args = parse_args([])
+
+    assert args.m7_encoder_mode == "matched"
+    assert args.m7_random_encoder_seed is None
+
+
+def test_resolve_m7_matched_rejects_policy_only_checkpoint(tmp_path):
+    from pta.scripts.run_ood_eval_v2 import resolve_m7_belief_encoder
+
+    policy_path = tmp_path / "best_model.zip"
+    policy_path.write_text("policy only", encoding="utf-8")
+
+    with pytest.raises(FileNotFoundError, match="missing matched encoder artifact"):
+        resolve_m7_belief_encoder(
+            policy_path,
+            ablation="none",
+            encoder_mode="matched",
+            encoder_seed=None,
+            expected={"method": "m7_pta", "seed": 42, "ablation": "none"},
+        )
+
+
+@pytest.mark.parametrize("ablation", ["no_probe", "no_belief"])
+def test_resolve_m7_ablations_use_zero_z_identity_without_sidecar(tmp_path, ablation):
+    from pta.scripts.run_ood_eval_v2 import resolve_m7_belief_encoder
+
+    policy_path = tmp_path / "m7_pta_final.zip"
+    policy_path.write_text("policy only", encoding="utf-8")
+
+    encoder, identity = resolve_m7_belief_encoder(
+        policy_path,
+        ablation=ablation,
+        encoder_mode="matched",
+        encoder_seed=None,
+        expected={"method": "m7_pta", "seed": 42, "ablation": ablation},
+    )
+
+    assert encoder is None
+    assert identity["encoder_mode"] == "zero-z"
+    assert identity["protocol"] == "ablation_zero_z"
+    assert identity["encoder_seed"] == ""
+    assert identity["encoder_sha256"] == ""
+
+
+def test_resolve_m7_random_stress_requires_seed_and_seeds_rngs(monkeypatch, tmp_path):
+    from pta.scripts import run_ood_eval_v2
+
+    policy_path = tmp_path / "best_model.zip"
+    policy_path.write_text("policy", encoding="utf-8")
+    calls = []
+
+    monkeypatch.setattr(
+        run_ood_eval_v2.random,
+        "seed",
+        lambda seed: calls.append(("random", seed)),
+    )
+    monkeypatch.setattr(
+        run_ood_eval_v2.np.random,
+        "seed",
+        lambda seed: calls.append(("numpy", seed)),
+    )
+    monkeypatch.setitem(
+        sys.modules,
+        "torch",
+        types.SimpleNamespace(manual_seed=lambda seed: calls.append(("torch", seed))),
+    )
+
+    with pytest.raises(ValueError, match="requires --m7-random-encoder-seed"):
+        run_ood_eval_v2.resolve_m7_belief_encoder(
+            policy_path,
+            ablation="none",
+            encoder_mode="random-stress",
+            encoder_seed=None,
+            expected={},
+        )
+
+    encoder, identity = run_ood_eval_v2.resolve_m7_belief_encoder(
+        policy_path,
+        ablation="none",
+        encoder_mode="random-stress",
+        encoder_seed=123,
+        expected={},
+    )
+
+    assert encoder is None
+    assert identity["encoder_mode"] == "random-stress"
+    assert identity["encoder_seed"] == "123"
+    assert identity["protocol"] == "random_stress"
+    assert ("random", 123) in calls
+    assert ("numpy", 123) in calls
+    assert ("torch", 123) in calls
+
+
+def test_make_eval_env_passes_loaded_encoder_through_probe_wrapper(monkeypatch):
+    from pta.scripts import run_ood_eval_v2
+
+    captured = {}
+    loaded_encoder = object()
+
+    class FakeBaseEnv:
+        def __init__(self, task_config, scene_config):
+            self.task_config = task_config
+            self.scene_config = scene_config
+            self.observation_space = types.SimpleNamespace(shape=(8,))
+
+        def reset(self, seed=None):
+            captured["reset_seed"] = seed
+            return 0, {}
+
+    class FakeJointResidualWrapper:
+        def __init__(self, env, residual_scale, trajectory):
+            self.env = env
+            self.residual_scale = residual_scale
+            self.trajectory = trajectory
+            self.observation_space = env.observation_space
+
+    class FakeProbePhaseWrapper:
+        def __init__(self, env, **kwargs):
+            captured["probe_kwargs"] = kwargs
+            self.env = env
+
+        def reset(self, seed=None):
+            return self.env.env.reset(seed=seed)
+
+    monkeypatch.setattr(run_ood_eval_v2, "_load_genesis_gym_wrapper", lambda: FakeBaseEnv)
+    monkeypatch.setattr(
+        run_ood_eval_v2,
+        "_load_joint_residual_wrapper",
+        lambda: FakeJointResidualWrapper,
+    )
+    monkeypatch.setattr(
+        run_ood_eval_v2,
+        "_load_probe_phase_wrapper",
+        lambda: FakeProbePhaseWrapper,
+    )
+
+    env = run_ood_eval_v2.make_eval_env(
+        split_config={"particle_material": "sand", "particle_params": {}},
+        use_privileged=False,
+        use_m7_env=True,
+        belief_encoder=loaded_encoder,
+        seed=99,
+    )
+
+    assert isinstance(env, FakeProbePhaseWrapper)
+    assert captured["probe_kwargs"]["belief_encoder"] is loaded_encoder
+    assert captured["reset_seed"] == 99
 
 
 def test_resolve_checkpoint_path_prefers_explicit_final_pattern(tmp_path):
@@ -243,7 +419,18 @@ def test_load_completed_rows_reads_existing_csv(tmp_path):
     rows, keys = load_completed_rows(path, resume=True)
 
     assert rows == [row]
-    assert keys == {("m1_reactive", 42, "id_sand")}
+    assert keys == {
+        (
+            "m1_reactive",
+            42,
+            "id_sand",
+            "policy-only",
+            "",
+            "",
+            "",
+            "policy_only",
+        )
+    }
 
 
 def test_load_completed_rows_ignores_file_when_resume_disabled(tmp_path):
