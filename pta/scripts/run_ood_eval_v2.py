@@ -315,6 +315,19 @@ def legacy_identity_defaults() -> dict:
     return dict(LEGACY_IDENTITY)
 
 
+def m7_encoder_sidecar_paths_light(policy_path: Path) -> tuple[Path, Path, Path]:
+    policy_path = Path(policy_path)
+    if policy_path.suffix != ".zip":
+        zip_path = policy_path.with_suffix(".zip")
+        if zip_path.exists():
+            policy_path = zip_path
+    return (
+        policy_path,
+        policy_path.parent / "belief_encoder.pt",
+        policy_path.parent / "belief_encoder_metadata.json",
+    )
+
+
 def _new_m7_random_encoder(
     trace_dim: int = 30,
     latent_dim: int = 16,
@@ -386,6 +399,12 @@ def resolve_m7_belief_encoder(
             "policy_sha256": policy_sha256,
             "protocol": "random_stress",
         }
+    policy_zip_path, encoder_path, metadata_path = m7_encoder_sidecar_paths_light(
+        policy_path
+    )
+    if not encoder_path.exists() or not metadata_path.exists():
+        raise FileNotFoundError(f"missing matched encoder artifact for {policy_zip_path}")
+
     from pta.training.utils.checkpoint_io import load_m7_encoder_artifact
 
     encoder, metadata = load_m7_encoder_artifact(policy_path, expected=expected)

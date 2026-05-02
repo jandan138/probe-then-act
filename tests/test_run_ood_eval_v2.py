@@ -256,14 +256,25 @@ def test_parse_args_defaults_to_matched_encoder_without_random_seed():
     assert args.m7_random_encoder_seed is None
 
 
-def test_resolve_m7_matched_rejects_policy_only_checkpoint(tmp_path):
-    from pta.scripts.run_ood_eval_v2 import resolve_m7_belief_encoder
+def test_resolve_m7_matched_rejects_policy_only_checkpoint_without_checkpoint_io_import(
+    monkeypatch,
+    tmp_path,
+):
+    from pta.scripts import run_ood_eval_v2
 
     policy_path = tmp_path / "best_model.zip"
     policy_path.write_text("policy only", encoding="utf-8")
+    real_import = __import__
+
+    def fail_checkpoint_io_import(name, *args, **kwargs):
+        if name == "pta.training.utils.checkpoint_io":
+            raise AssertionError("checkpoint_io should not import for missing sidecars")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr("builtins.__import__", fail_checkpoint_io_import)
 
     with pytest.raises(FileNotFoundError, match="missing matched encoder artifact"):
-        resolve_m7_belief_encoder(
+        run_ood_eval_v2.resolve_m7_belief_encoder(
             policy_path,
             ablation="none",
             encoder_mode="matched",
