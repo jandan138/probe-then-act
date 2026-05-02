@@ -252,7 +252,8 @@ def test_verify_metadata_hash_mismatch_fails_required_matched_encoder_load(tmp_p
 def test_verify_metadata_hash_target_rejects_symlink_escaping_repo_root(tmp_path, monkeypatch):
     _write_matched_encoder_artifacts(tmp_path)
     outside_encoder = _write(tmp_path / "outside" / "belief_encoder.pt", b"escaped encoder")
-    escaped_link = tmp_path / "checkpoints" / "escaped_belief_encoder.pt"
+    escaped_link = tmp_path / "checkpoints" / "m7_pta_seed42" / "best" / "belief_encoder.pt"
+    escaped_link.unlink()
     try:
         escaped_link.symlink_to(outside_encoder)
     except OSError as exc:
@@ -263,7 +264,7 @@ def test_verify_metadata_hash_target_rejects_symlink_escaping_repo_root(tmp_path
             "protocol": "matched_encoder_v1",
             "paired_policy_path": "checkpoints/m7_pta_seed42/best/best_model.zip",
             "paired_policy_sha256": hashlib.sha256(b"policy checkpoint").hexdigest(),
-            "belief_encoder_path": "checkpoints/escaped_belief_encoder.pt",
+            "belief_encoder_path": "checkpoints/m7_pta_seed42/best/belief_encoder.pt",
             "belief_encoder_sha256": hashlib.sha256(b"escaped encoder").hexdigest(),
         },
     )
@@ -278,6 +279,43 @@ def test_verify_metadata_hash_target_rejects_symlink_escaping_repo_root(tmp_path
 
     rows = {row["logical_name"]: row for row in manifest["artifacts"]}
     assert rows["m7_pta_seed42_belief_encoder_metadata"]["load_status"] == "failed"
+    assert "symlink" in rows["m7_pta_seed42_belief_encoder_metadata"]["load_error"] or (
+        "repo root" in rows["m7_pta_seed42_belief_encoder_metadata"]["load_error"]
+    )
+    assert "m7_pta_seed42_belief_encoder_metadata" in registry.failed_required_loads(manifest)
+
+
+@pytest.mark.parametrize("protocol", [None, "wrong_protocol"])
+def test_verify_belief_encoder_metadata_rejects_missing_or_wrong_protocol(
+    tmp_path,
+    monkeypatch,
+    protocol,
+):
+    _write_matched_encoder_artifacts(tmp_path)
+    metadata = {
+        "paired_policy_path": "checkpoints/m7_pta_seed42/best/best_model.zip",
+        "paired_policy_sha256": hashlib.sha256(b"policy checkpoint").hexdigest(),
+        "belief_encoder_path": "checkpoints/m7_pta_seed42/best/belief_encoder.pt",
+        "belief_encoder_sha256": hashlib.sha256(b"encoder checkpoint").hexdigest(),
+    }
+    if protocol is not None:
+        metadata["protocol"] = protocol
+    _write_json(
+        tmp_path / "checkpoints" / "m7_pta_seed42" / "best" / "belief_encoder_metadata.json",
+        metadata,
+    )
+    _write_matched_policy_metadata(tmp_path)
+    monkeypatch.setattr(registry, "_load_ppo", lambda: FakePPO)
+    monkeypatch.setattr(registry, "_load_torch", lambda: FakeTorch)
+    monkeypatch.setattr(
+        registry, "_load_latent_belief_encoder", lambda: FakeLatentBeliefEncoder, raising=False
+    )
+
+    manifest = registry.verify_artifacts(tmp_path, ["g2-matched-encoder"])
+
+    rows = {row["logical_name"]: row for row in manifest["artifacts"]}
+    assert rows["m7_pta_seed42_belief_encoder_metadata"]["load_status"] == "failed"
+    assert "protocol" in rows["m7_pta_seed42_belief_encoder_metadata"]["load_error"]
     assert registry.failed_required_loads(manifest) == ["m7_pta_seed42_belief_encoder_metadata"]
 
 

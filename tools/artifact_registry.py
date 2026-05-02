@@ -461,6 +461,8 @@ def _metadata_hash_target(
 
 def _verify_belief_encoder_metadata(row: dict[str, object], repo_root: Path) -> None:
     metadata = _load_json_object(Path(str(row["source_path"])))
+    if metadata.get("protocol") != "matched_encoder_v1":
+        raise ValueError("belief encoder metadata protocol must be 'matched_encoder_v1'")
     policy_path, encoder_path = _expected_encoder_metadata_paths(row)
     _metadata_hash_target(
         repo_root,
