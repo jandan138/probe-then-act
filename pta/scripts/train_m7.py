@@ -28,6 +28,7 @@ Key difference from M1/M8:
 from __future__ import annotations
 
 import argparse
+from copy import deepcopy
 import os
 import sys
 from pathlib import Path
@@ -41,6 +42,150 @@ if "/usr/lib/wsl/lib" not in os.environ.get("LD_LIBRARY_PATH", ""):
     os.environ["LD_LIBRARY_PATH"] = (
         "/usr/lib/wsl/lib:" + os.environ.get("LD_LIBRARY_PATH", "")
     )
+
+
+ENCODER_HIDDEN_DIM = 128
+ENCODER_NUM_LAYERS = 2
+
+
+def clone_belief_encoder_state(encoder):
+    """Return an independent eval-mode copy of a belief encoder."""
+    clone = deepcopy(encoder)
+    clone.eval()
+    return clone
+
+
+def create_m7_belief_encoder(trace_dim: int, latent_dim: int):
+    from pta.models.belief.latent_belief_encoder import LatentBeliefEncoder
+
+    encoder = LatentBeliefEncoder(
+        trace_dim=trace_dim,
+        latent_dim=latent_dim,
+        hidden_dim=ENCODER_HIDDEN_DIM,
+        num_layers=ENCODER_NUM_LAYERS,
+    )
+    encoder.eval()
+    return encoder
+
+
+def derive_trace_dim_from_env(env) -> int:
+    shape = getattr(getattr(env, "observation_space", None), "shape", None)
+    if not shape:
+        raise ValueError("M7 inner env observation_space must expose a shape")
+    return int(shape[0])
+
+
+def save_m7_policy_with_encoder(model, encoder, path, repo_root, metadata):
+    from pta.training.utils.checkpoint_io import (
+        m7_encoder_sidecar_paths,
+        save_m7_encoder_artifact,
+        save_sb3_checkpoint,
+    )
+
+    save_sb3_checkpoint(model, Path(path), metadata=metadata)
+    policy_path = m7_encoder_sidecar_paths(Path(path)).policy_path
+    return save_m7_encoder_artifact(
+        encoder=encoder,
+        policy_path=policy_path,
+        repo_root=repo_root,
+        run_metadata=metadata,
+    )
+
+
+class M7BestModelSidecarCallback:
+    """EvalCallback-compatible hook that writes encoder sidecars for best_model.zip."""
+
+    def __init__(self, *, encoder, policy_path, repo_root, metadata):
+        self.encoder = encoder
+        self.policy_path = Path(policy_path)
+        self.repo_root = Path(repo_root)
+        self.metadata = dict(metadata)
+        self.model = None
+        self.parent = None
+        self.n_calls = 0
+        self.num_timesteps = 0
+        self.locals = {}
+        self.globals = {}
+
+    def init_callback(self, model):
+        self.model = model
+
+    def update_locals(self, locals_):
+        self.locals.update(locals_)
+
+    def update_child_locals(self, locals_):
+        self.update_locals(locals_)
+
+    def on_step(self) -> bool:
+        self.n_calls += 1
+        if self.parent is not None:
+            self.num_timesteps = getattr(self.parent, "num_timesteps", self.num_timesteps)
+        from pta.training.utils.checkpoint_io import save_m7_encoder_artifact
+
+        save_m7_encoder_artifact(
+            encoder=self.encoder,
+            policy_path=self.policy_path,
+            repo_root=self.repo_root,
+            run_metadata=self.metadata,
+        )
+        return True
+
+
+class M7PeriodicCheckpointSidecarCallback:
+    """CheckpointCallback-compatible periodic saver for matched full M7 artifacts."""
+
+    def __init__(self, *, encoder, save_freq, save_path, name_prefix, repo_root, metadata):
+        self.encoder = encoder
+        self.save_freq = int(save_freq)
+        self.save_path = Path(save_path)
+        self.name_prefix = name_prefix
+        self.repo_root = Path(repo_root)
+        self.metadata = dict(metadata)
+        self.model = None
+        self.parent = None
+        self.n_calls = 0
+        self.num_timesteps = 0
+        self.locals = {}
+        self.globals = {}
+
+    def init_callback(self, model):
+        self.model = model
+
+    def on_training_start(self, locals_, globals_):
+        self.locals = locals_
+        self.globals = globals_
+        self.num_timesteps = int(getattr(self.model, "num_timesteps", 0))
+
+    def on_rollout_start(self):
+        pass
+
+    def on_rollout_end(self):
+        pass
+
+    def on_training_end(self):
+        pass
+
+    def update_locals(self, locals_):
+        self.locals.update(locals_)
+
+    def update_child_locals(self, locals_):
+        self.update_locals(locals_)
+
+    def on_step(self) -> bool:
+        self.n_calls += 1
+        self.num_timesteps = int(getattr(self.model, "num_timesteps", self.num_timesteps))
+        if self.n_calls % self.save_freq == 0:
+            step = self.num_timesteps or self.n_calls
+            checkpoint_name = f"{self.name_prefix}_{step}_steps"
+            metadata = {**self.metadata, "num_timesteps": int(step)}
+            save_m7_policy_with_encoder(
+                self.model,
+                self.encoder,
+                self.save_path / checkpoint_name / checkpoint_name,
+                repo_root=self.repo_root,
+                metadata=metadata,
+            )
+        return True
 
 
 def parse_args() -> argparse.Namespace:
@@ -79,6 +224,7 @@ def make_m7_env(
     latent_dim: int = 16,
     n_probes: int = 3,
     ablation: str = "none",
+    belief_encoder=None,
 ):
     """Create the M7 environment stack.
 
@@ -87,31 +233,62 @@ def make_m7_env(
     No PrivilegedObsWrapper -- M7 must infer material from probing, not
     from privileged ground-truth parameters.
     """
+    env = make_m7_inner_env(
+        task_config=task_config,
+        scene_config=scene_config,
+        joint_residual_scale=joint_residual_scale,
+        joint_residual_trajectory=joint_residual_trajectory,
+    )
+
+    env = wrap_m7_inner_env(
+        env,
+        latent_dim=latent_dim,
+        n_probes=n_probes,
+        belief_encoder=belief_encoder,
+        ablation=ablation,
+    )
+
+    env.reset(seed=seed)
+    return env
+
+
+def make_m7_inner_env(
+    task_config=None,
+    scene_config=None,
+    joint_residual_scale: float = 0.2,
+    joint_residual_trajectory: str = "edge_push",
+):
     from pta.envs.wrappers.gym_wrapper import GenesisGymWrapper
     from pta.envs.wrappers.joint_residual_wrapper import JointResidualWrapper
-    from pta.envs.wrappers.probe_phase_wrapper import ProbePhaseWrapper
 
     base_env = GenesisGymWrapper(
         task_config=task_config,
         scene_config=scene_config,
     )
-
-    env = JointResidualWrapper(
+    return JointResidualWrapper(
         base_env,
         residual_scale=joint_residual_scale,
         trajectory=joint_residual_trajectory,
     )
 
-    env = ProbePhaseWrapper(
+
+def wrap_m7_inner_env(
+    env,
+    latent_dim: int = 16,
+    n_probes: int = 3,
+    ablation: str = "none",
+    belief_encoder=None,
+):
+    from pta.envs.wrappers.probe_phase_wrapper import ProbePhaseWrapper
+
+    return ProbePhaseWrapper(
         env,
         latent_dim=latent_dim,
         n_probes=n_probes,
+        belief_encoder=belief_encoder,
         ablation=ablation,
         device="cpu",  # belief encoder on CPU; lightweight for inference
     )
-
-    env.reset(seed=seed)
-    return env
 
 
 def main() -> None:
@@ -172,28 +349,57 @@ def main() -> None:
         "n_envs": 0,
         "particle_material": args.material,
     }
+    trace_dim = None
+    canonical_belief_encoder = None
+
+    def _encoder_for_inner_env(env):
+        nonlocal trace_dim, canonical_belief_encoder
+        if ablation != "none":
+            return None
+        env_trace_dim = derive_trace_dim_from_env(env)
+        if trace_dim is None:
+            trace_dim = env_trace_dim
+            canonical_belief_encoder = create_m7_belief_encoder(
+                trace_dim=trace_dim,
+                latent_dim=args.latent_dim,
+            )
+        elif env_trace_dim != trace_dim:
+            raise ValueError(
+                f"M7 trace_dim changed across envs: {trace_dim} vs {env_trace_dim}"
+            )
+        return clone_belief_encoder_state(canonical_belief_encoder)
 
     def _make_env():
-        return make_m7_env(
+        env = make_m7_inner_env(
             task_config=task_config,
             scene_config=scene_config,
-            seed=seed,
             joint_residual_scale=args.residual_scale,
+        )
+        env = wrap_m7_inner_env(
+            env,
             latent_dim=args.latent_dim,
             n_probes=args.n_probes,
             ablation=ablation,
+            belief_encoder=_encoder_for_inner_env(env),
         )
+        env.reset(seed=seed)
+        return env
 
     def _make_eval_env():
-        return make_m7_env(
+        env = make_m7_inner_env(
             task_config=task_config,
             scene_config=scene_config,
-            seed=seed + 1000,
             joint_residual_scale=args.residual_scale,
+        )
+        env = wrap_m7_inner_env(
+            env,
             latent_dim=args.latent_dim,
             n_probes=args.n_probes,
             ablation=ablation,
+            belief_encoder=_encoder_for_inner_env(env),
         )
+        env.reset(seed=seed + 1000)
+        return env
 
     vec_env = DummyVecEnv([_make_env])
     eval_env = DummyVecEnv([_make_eval_env])
@@ -226,13 +432,51 @@ def main() -> None:
     )
 
     # ---- Callbacks --------------------------------------------------------
-    checkpoint_callback = CheckpointCallback(
-        save_freq=50_000,
-        save_path=str(checkpoint_dir),
-        name_prefix="m7_pta",
-        save_replay_buffer=False,
-        save_vecnormalize=False,
-    )
+    best_sidecar_callback = None
+    if canonical_belief_encoder is not None:
+        assert trace_dim is not None
+        checkpoint_callback = M7PeriodicCheckpointSidecarCallback(
+            encoder=canonical_belief_encoder,
+            save_freq=50_000,
+            save_path=checkpoint_dir,
+            name_prefix="m7_pta",
+            repo_root=_PROJECT_ROOT,
+            metadata={
+                "method": "m7_pta",
+                "seed": seed,
+                "ablation": ablation,
+                "trace_dim": trace_dim,
+                "latent_dim": args.latent_dim,
+                "hidden_dim": ENCODER_HIDDEN_DIM,
+                "num_layers": ENCODER_NUM_LAYERS,
+                "n_probes": args.n_probes,
+                "stage": "periodic",
+            },
+        )
+        best_sidecar_callback = M7BestModelSidecarCallback(
+            encoder=canonical_belief_encoder,
+            policy_path=checkpoint_dir / "best" / "best_model.zip",
+            repo_root=_PROJECT_ROOT,
+            metadata={
+                "method": "m7_pta",
+                "seed": seed,
+                "ablation": ablation,
+                "trace_dim": trace_dim,
+                "latent_dim": args.latent_dim,
+                "hidden_dim": ENCODER_HIDDEN_DIM,
+                "num_layers": ENCODER_NUM_LAYERS,
+                "n_probes": args.n_probes,
+                "stage": "best",
+            },
+        )
+    else:
+        checkpoint_callback = CheckpointCallback(
+            save_freq=50_000,
+            save_path=str(checkpoint_dir),
+            name_prefix="m7_pta",
+            save_replay_buffer=False,
+            save_vecnormalize=False,
+        )
 
     eval_callback = EvalCallback(
         eval_env,
@@ -242,6 +486,7 @@ def main() -> None:
         n_eval_episodes=5,
         deterministic=True,
         render=False,
+        callback_on_new_best=best_sidecar_callback,
     )
 
     callbacks = CallbackList([checkpoint_callback, eval_callback])
@@ -275,19 +520,41 @@ def main() -> None:
 
     # ---- Save final model -------------------------------------------------
     final_path = checkpoint_dir / "m7_pta_final"
-    save_sb3_checkpoint(
-        model,
-        final_path,
-        metadata={
-            "total_timesteps": args.total_timesteps,
-            "seed": seed,
-            "method": "m7",
-            "ablation": ablation,
-            "latent_dim": args.latent_dim,
-            "n_probes": args.n_probes,
-            "stage": "m7_rl",
-        },
-    )
+    final_metadata = {
+        "total_timesteps": args.total_timesteps,
+        "seed": seed,
+        "ablation": ablation,
+        "latent_dim": args.latent_dim,
+        "n_probes": args.n_probes,
+    }
+    if canonical_belief_encoder is not None:
+        final_metadata.update(
+            {
+                "method": "m7_pta",
+                "trace_dim": trace_dim,
+                "hidden_dim": ENCODER_HIDDEN_DIM,
+                "num_layers": ENCODER_NUM_LAYERS,
+                "stage": "final",
+            }
+        )
+        save_m7_policy_with_encoder(
+            model,
+            canonical_belief_encoder,
+            final_path,
+            repo_root=_PROJECT_ROOT,
+            metadata=final_metadata,
+        )
+    else:
+        final_metadata.update(
+            {
+                "method": "m7_pta",
+                "stage": "final",
+                "encoder_mode": "zero-z",
+                "legacy_policy_only": False,
+                "zero_z_semantics": ablation,
+            }
+        )
+        save_sb3_checkpoint(model, final_path, metadata=final_metadata)
     print(f"Final model saved to {final_path}")
 
     # ---- Cleanup ----------------------------------------------------------

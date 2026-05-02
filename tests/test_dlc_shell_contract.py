@@ -351,6 +351,40 @@ def test_launch_job_dry_run_points_to_pta_worker_path(tmp_path):
     ) in result.stdout
 
 
+def test_launch_job_default_image_is_verified_genesis_training_image(tmp_path):
+    env = os.environ.copy()
+    env.update(
+        {
+            "DLC_DRY_RUN": "1",
+            "PTA_CODE_ROOT": "/cpfs/shared/simulation/zhuzihou/dev/probe-then-act",
+            "DLC_GPU_COUNT": "1",
+        }
+    )
+    env.pop("DLC_IMAGE", None)
+
+    result = subprocess.run(
+        [
+            "bash",
+            str(LAUNCH_JOB),
+            "pta_6seed_m7_s2",
+            "0",
+            "1",
+            "d-a,d-b",
+            "custom env PYOPENGL_PLATFORM=egl EGL_DEVICE_ID=0 python -u pta/scripts/train_m7.py --seed 2",
+        ],
+        cwd=REPO_ROOT,
+        env=env,
+        text=True,
+        capture_output=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert (
+        "--worker_image=pj4090acr-registry-vpc.cn-beijing.cr.aliyuncs.com/"
+        "pj4090/mahaoxiang:genmanip-mahaoxiang"
+    ) in result.stdout
+
+
 def test_launch_job_dry_run_preserves_multi_token_command_args(tmp_path):
     env = os.environ.copy()
     env.update(

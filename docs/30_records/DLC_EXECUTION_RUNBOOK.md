@@ -42,7 +42,7 @@ also supports:
 
 ```bash
 export DLC_WORKSPACE_ID=270969
-export DLC_IMAGE=dsw-registry-vpc.cn-beijing.cr.aliyuncs.com/pai-training-algorithm/pytorch:py311-cu126
+export DLC_IMAGE=pj4090acr-registry-vpc.cn-beijing.cr.aliyuncs.com/pj4090/mahaoxiang:genmanip-mahaoxiang
 export DLC_GPU_COUNT=1
 export DLC_RESOURCE_ID=quota1r947pmazvk
 ```
@@ -57,6 +57,8 @@ d-mzps5b7joy2axmqpa8,d-d49o5g0h2818sw8j1g,d-8wz4emfs21s5ajs9oz
 Use `--data-sources` on `submit_jobs.py` if the DSW workspace requires a
 different mount set.
 
+The `launch_job.sh` default image is the verified Genesis/PTA training image above. Do not use the generic PyTorch image for Genesis training jobs unless intentionally running a non-Genesis smoke/debug command.
+
 ## Dry Runs
 
 Always dry-run from DSW before real submission:
@@ -68,6 +70,16 @@ python3 pta/scripts/dlc/submit_jobs.py --suite smoke --dry-run
 python3 pta/scripts/dlc/submit_jobs.py --suite ablation --variants no_probe --seeds 0 1 --dry-run
 python3 pta/scripts/dlc/submit_jobs.py --suite ablation --variants no_belief --seeds 42 0 1 --dry-run
 ```
+
+Before treating a submission as valid, run:
+
+```bash
+"$DLC_BIN" get job <JOB_ID> \
+  --endpoint=pai-dlc.cn-beijing.aliyuncs.com \
+  --region=cn-beijing
+```
+
+Expected: `JobSpecs[0].Image` is `pj4090acr-registry-vpc.cn-beijing.cr.aliyuncs.com/pj4090/mahaoxiang:genmanip-mahaoxiang` for all Genesis/PTA training jobs.
 
 For local contract checks without Genesis preflight:
 
