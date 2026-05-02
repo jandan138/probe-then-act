@@ -55,6 +55,26 @@ def clone_belief_encoder_state(encoder):
     return clone
 
 
+def create_m7_belief_encoder(trace_dim: int, latent_dim: int):
+    from pta.models.belief.latent_belief_encoder import LatentBeliefEncoder
+
+    encoder = LatentBeliefEncoder(
+        trace_dim=trace_dim,
+        latent_dim=latent_dim,
+        hidden_dim=ENCODER_HIDDEN_DIM,
+        num_layers=ENCODER_NUM_LAYERS,
+    )
+    encoder.eval()
+    return encoder
+
+
+def derive_trace_dim_from_env(env) -> int:
+    shape = getattr(getattr(env, "observation_space", None), "shape", None)
+    if not shape:
+        raise ValueError("M7 inner env observation_space must expose a shape")
+    return int(shape[0])
+
+
 def save_m7_policy_with_encoder(model, encoder, path, repo_root, metadata):
     from pta.training.utils.checkpoint_io import (
         m7_encoder_sidecar_paths,
@@ -156,22 +176,55 @@ def make_m7_env(
     No PrivilegedObsWrapper -- M7 must infer material from probing, not
     from privileged ground-truth parameters.
     """
+    env = make_m7_inner_env(
+        task_config=task_config,
+        scene_config=scene_config,
+        joint_residual_scale=joint_residual_scale,
+        joint_residual_trajectory=joint_residual_trajectory,
+    )
+
+    env = wrap_m7_inner_env(
+        env,
+        latent_dim=latent_dim,
+        n_probes=n_probes,
+        belief_encoder=belief_encoder,
+        ablation=ablation,
+    )
+
+    env.reset(seed=seed)
+    return env
+
+
+def make_m7_inner_env(
+    task_config=None,
+    scene_config=None,
+    joint_residual_scale: float = 0.2,
+    joint_residual_trajectory: str = "edge_push",
+):
     from pta.envs.wrappers.gym_wrapper import GenesisGymWrapper
     from pta.envs.wrappers.joint_residual_wrapper import JointResidualWrapper
-    from pta.envs.wrappers.probe_phase_wrapper import ProbePhaseWrapper
 
     base_env = GenesisGymWrapper(
         task_config=task_config,
         scene_config=scene_config,
     )
-
-    env = JointResidualWrapper(
+    return JointResidualWrapper(
         base_env,
         residual_scale=joint_residual_scale,
         trajectory=joint_residual_trajectory,
     )
 
-    env = ProbePhaseWrapper(
+
+def wrap_m7_inner_env(
+    env,
+    latent_dim: int = 16,
+    n_probes: int = 3,
+    ablation: str = "none",
+    belief_encoder=None,
+):
+    from pta.envs.wrappers.probe_phase_wrapper import ProbePhaseWrapper
+
+    return ProbePhaseWrapper(
         env,
         latent_dim=latent_dim,
         n_probes=n_probes,
@@ -179,9 +232,6 @@ def make_m7_env(
         ablation=ablation,
         device="cpu",  # belief encoder on CPU; lightweight for inference
     )
-
-    env.reset(seed=seed)
-    return env
 
 
 def main() -> None:
@@ -225,7 +275,6 @@ def main() -> None:
     from stable_baselines3.common.vec_env import DummyVecEnv
 
     from pta.training.utils.checkpoint_io import save_sb3_checkpoint
-    from pta.models.belief.latent_belief_encoder import LatentBeliefEncoder
     from pta.training.utils.logger import ExperimentLogger
     from pta.training.utils.seed import set_seed
 
@@ -243,48 +292,57 @@ def main() -> None:
         "n_envs": 0,
         "particle_material": args.material,
     }
-    trace_dim = 30
+    trace_dim = None
     canonical_belief_encoder = None
-    if ablation == "none":
-        canonical_belief_encoder = LatentBeliefEncoder(
-            trace_dim=trace_dim,
-            latent_dim=args.latent_dim,
-            hidden_dim=ENCODER_HIDDEN_DIM,
-            num_layers=ENCODER_NUM_LAYERS,
-        )
-        canonical_belief_encoder.eval()
+
+    def _encoder_for_inner_env(env):
+        nonlocal trace_dim, canonical_belief_encoder
+        if ablation != "none":
+            return None
+        env_trace_dim = derive_trace_dim_from_env(env)
+        if trace_dim is None:
+            trace_dim = env_trace_dim
+            canonical_belief_encoder = create_m7_belief_encoder(
+                trace_dim=trace_dim,
+                latent_dim=args.latent_dim,
+            )
+        elif env_trace_dim != trace_dim:
+            raise ValueError(
+                f"M7 trace_dim changed across envs: {trace_dim} vs {env_trace_dim}"
+            )
+        return clone_belief_encoder_state(canonical_belief_encoder)
 
     def _make_env():
-        return make_m7_env(
+        env = make_m7_inner_env(
             task_config=task_config,
             scene_config=scene_config,
-            seed=seed,
             joint_residual_scale=args.residual_scale,
+        )
+        env = wrap_m7_inner_env(
+            env,
             latent_dim=args.latent_dim,
             n_probes=args.n_probes,
             ablation=ablation,
-            belief_encoder=(
-                clone_belief_encoder_state(canonical_belief_encoder)
-                if canonical_belief_encoder is not None
-                else None
-            ),
+            belief_encoder=_encoder_for_inner_env(env),
         )
+        env.reset(seed=seed)
+        return env
 
     def _make_eval_env():
-        return make_m7_env(
+        env = make_m7_inner_env(
             task_config=task_config,
             scene_config=scene_config,
-            seed=seed + 1000,
             joint_residual_scale=args.residual_scale,
+        )
+        env = wrap_m7_inner_env(
+            env,
             latent_dim=args.latent_dim,
             n_probes=args.n_probes,
             ablation=ablation,
-            belief_encoder=(
-                clone_belief_encoder_state(canonical_belief_encoder)
-                if canonical_belief_encoder is not None
-                else None
-            ),
+            belief_encoder=_encoder_for_inner_env(env),
         )
+        env.reset(seed=seed + 1000)
+        return env
 
     vec_env = DummyVecEnv([_make_env])
     eval_env = DummyVecEnv([_make_eval_env])
@@ -327,6 +385,7 @@ def main() -> None:
 
     best_sidecar_callback = None
     if canonical_belief_encoder is not None:
+        assert trace_dim is not None
         best_sidecar_callback = M7BestModelSidecarCallback(
             encoder=canonical_belief_encoder,
             policy_path=checkpoint_dir / "best" / "best_model.zip",
