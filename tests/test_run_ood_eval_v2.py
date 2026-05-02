@@ -96,7 +96,9 @@ def _result_row(**overrides):
         "split": "id_sand",
         "encoder_mode": "policy-only",
         "encoder_seed": "",
+        "encoder_artifact": "",
         "encoder_sha256": "",
+        "policy_checkpoint": "",
         "policy_sha256": "",
         "protocol": "policy_only",
         "mean_reward": 1.0,
@@ -208,9 +210,11 @@ def test_aggregate_results_keeps_encoder_protocols_separate():
             split="ood_snow",
             encoder_mode="random-stress",
             encoder_seed="123",
+            encoder_artifact="",
             encoder_sha256="",
+            policy_checkpoint="checkpoints/m7_pta_seed0/best/best_model.zip",
             policy_sha256="policy-sha",
-            protocol="random_stress",
+            protocol="random_eval_encoder_stress",
             mean_transfer=0.0,
         ),
     ]
@@ -231,7 +235,9 @@ def test_result_key_uses_encoder_protocol_identity_fields():
         "split": "ood_snow",
         "encoder_mode": "matched",
         "encoder_seed": "",
+        "encoder_artifact": "checkpoints/m7_pta_seed42/best/belief_encoder.pt",
         "encoder_sha256": "encoder-digest",
+        "policy_checkpoint": "checkpoints/m7_pta_seed42/best/best_model.zip",
         "policy_sha256": "policy-digest",
         "protocol": "matched_encoder_v1",
     }
@@ -242,9 +248,27 @@ def test_result_key_uses_encoder_protocol_identity_fields():
         "ood_snow",
         "matched",
         "",
+        "checkpoints/m7_pta_seed42/best/belief_encoder.pt",
         "encoder-digest",
+        "checkpoints/m7_pta_seed42/best/best_model.zip",
+        "policy-digest",
         "matched_encoder_v1",
     )
+
+
+def test_result_fieldnames_include_complete_encoder_identity_schema():
+    from pta.scripts.run_ood_eval_v2 import RESULT_FIELDNAMES
+
+    split_index = RESULT_FIELDNAMES.index("split")
+    assert RESULT_FIELDNAMES[split_index + 1 : split_index + 8] == [
+        "encoder_mode",
+        "encoder_seed",
+        "encoder_artifact",
+        "encoder_sha256",
+        "policy_checkpoint",
+        "policy_sha256",
+        "protocol",
+    ]
 
 
 def test_parse_args_defaults_to_matched_encoder_without_random_seed():
@@ -302,7 +326,9 @@ def test_resolve_m7_ablations_use_zero_z_identity_without_sidecar(tmp_path, abla
     assert identity["encoder_mode"] == "zero-z"
     assert identity["protocol"] == "ablation_zero_z"
     assert identity["encoder_seed"] == ""
+    assert identity["encoder_artifact"] == ""
     assert identity["encoder_sha256"] == ""
+    assert identity["policy_checkpoint"] == str(policy_path)
 
 
 def test_resolve_m7_random_stress_constructs_and_injects_seeded_encoder(
@@ -368,7 +394,9 @@ def test_resolve_m7_random_stress_constructs_and_injects_seeded_encoder(
     assert encoder is marker_encoder
     assert identity["encoder_mode"] == "random-stress"
     assert identity["encoder_seed"] == "123"
-    assert identity["protocol"] == "random_stress"
+    assert identity["encoder_artifact"] == ""
+    assert identity["policy_checkpoint"] == str(policy_path)
+    assert identity["protocol"] == "random_eval_encoder_stress"
     assert calls == [
         ("torch_fork", "enter"),
         ("torch", 123),
@@ -592,6 +620,9 @@ def test_load_completed_rows_reads_existing_csv(tmp_path):
             "policy-only",
             "",
             "",
+            "",
+            "",
+            "",
             "policy_only",
         )
     }
@@ -619,13 +650,18 @@ def test_coerce_result_row_marks_missing_identity_as_legacy_unversioned():
     assert row["encoder_mode"] == "legacy-unversioned"
     assert row["protocol"] == "legacy_unversioned"
     assert row["encoder_seed"] == ""
+    assert row["encoder_artifact"] == ""
     assert row["encoder_sha256"] == ""
+    assert row["policy_checkpoint"] == ""
     assert row["policy_sha256"] == ""
     assert result_key(row) == (
         "m7_pta",
         42,
         "id_sand",
         "legacy-unversioned",
+        "",
+        "",
+        "",
         "",
         "",
         "legacy_unversioned",

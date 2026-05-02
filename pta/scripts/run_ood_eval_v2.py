@@ -237,7 +237,9 @@ RESULT_FIELDNAMES = [
     "split",
     "encoder_mode",
     "encoder_seed",
+    "encoder_artifact",
     "encoder_sha256",
+    "policy_checkpoint",
     "policy_sha256",
     "protocol",
     "mean_reward",
@@ -252,14 +254,18 @@ RESULT_FIELDNAMES = [
 RESULT_IDENTITY_FIELDS = [
     "encoder_mode",
     "encoder_seed",
+    "encoder_artifact",
     "encoder_sha256",
+    "policy_checkpoint",
     "policy_sha256",
     "protocol",
 ]
 LEGACY_IDENTITY = {
     "encoder_mode": "legacy-unversioned",
     "encoder_seed": "",
+    "encoder_artifact": "",
     "encoder_sha256": "",
+    "policy_checkpoint": "",
     "policy_sha256": "",
     "protocol": "legacy_unversioned",
 }
@@ -282,7 +288,10 @@ def result_key(row):
         row["split"],
         identity["encoder_mode"],
         str(identity["encoder_seed"]),
+        identity["encoder_artifact"],
         identity["encoder_sha256"],
+        identity["policy_checkpoint"],
+        identity["policy_sha256"],
         identity["protocol"],
     )
 
@@ -305,7 +314,9 @@ def policy_only_identity(policy_path: Path) -> dict:
     return {
         "encoder_mode": "policy-only",
         "encoder_seed": "",
+        "encoder_artifact": "",
         "encoder_sha256": "",
+        "policy_checkpoint": str(policy_path),
         "policy_sha256": sha256_file(policy_path),
         "protocol": "policy_only",
     }
@@ -356,7 +367,9 @@ def resolve_m7_belief_encoder(
         return None, {
             "encoder_mode": "zero-z",
             "encoder_seed": "",
+            "encoder_artifact": "",
             "encoder_sha256": "",
+            "policy_checkpoint": str(policy_path),
             "policy_sha256": policy_sha256,
             "protocol": "ablation_zero_z",
         }
@@ -395,9 +408,11 @@ def resolve_m7_belief_encoder(
         return encoder, {
             "encoder_mode": "random-stress",
             "encoder_seed": str(encoder_seed),
+            "encoder_artifact": "",
             "encoder_sha256": "",
+            "policy_checkpoint": str(policy_path),
             "policy_sha256": policy_sha256,
-            "protocol": "random_stress",
+            "protocol": "random_eval_encoder_stress",
         }
     policy_zip_path, encoder_path, metadata_path = m7_encoder_sidecar_paths_light(
         policy_path
@@ -411,7 +426,9 @@ def resolve_m7_belief_encoder(
     return encoder, {
         "encoder_mode": "matched",
         "encoder_seed": "",
+        "encoder_artifact": metadata["belief_encoder_path"],
         "encoder_sha256": metadata["belief_encoder_sha256"],
+        "policy_checkpoint": metadata["paired_policy_path"],
         "policy_sha256": metadata["paired_policy_sha256"],
         "protocol": metadata["protocol"],
     }
@@ -467,7 +484,9 @@ def coerce_result_row(raw: dict) -> dict:
         "split": raw["split"],
         "encoder_mode": raw["encoder_mode"],
         "encoder_seed": str(raw["encoder_seed"]),
+        "encoder_artifact": raw["encoder_artifact"],
         "encoder_sha256": raw["encoder_sha256"],
+        "policy_checkpoint": raw["policy_checkpoint"],
         "policy_sha256": raw["policy_sha256"],
         "protocol": raw["protocol"],
         **floats,
@@ -578,7 +597,9 @@ def aggregate_results(all_rows):
             row["split"],
             identity["encoder_mode"],
             str(identity["encoder_seed"]),
+            identity["encoder_artifact"],
             identity["encoder_sha256"],
+            identity["policy_checkpoint"],
             identity["protocol"],
         )
         for metric in AGGREGATE_METRICS:
@@ -590,7 +611,9 @@ def aggregate_results(all_rows):
         split,
         encoder_mode,
         encoder_seed,
+        encoder_artifact,
         encoder_sha256,
+        policy_checkpoint,
         protocol,
     ), metrics in sorted(agg.items()):
         agg_row = {
@@ -598,7 +621,9 @@ def aggregate_results(all_rows):
             "split": split,
             "encoder_mode": encoder_mode,
             "encoder_seed": encoder_seed,
+            "encoder_artifact": encoder_artifact,
             "encoder_sha256": encoder_sha256,
+            "policy_checkpoint": policy_checkpoint,
             "protocol": protocol,
             "n_seeds": len(metrics["mean_reward"]),
         }
