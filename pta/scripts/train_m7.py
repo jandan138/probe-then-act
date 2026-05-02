@@ -28,6 +28,7 @@ Key difference from M1/M8:
 from __future__ import annotations
 
 import argparse
+from copy import deepcopy
 import os
 import sys
 from pathlib import Path
@@ -41,6 +42,73 @@ if "/usr/lib/wsl/lib" not in os.environ.get("LD_LIBRARY_PATH", ""):
     os.environ["LD_LIBRARY_PATH"] = (
         "/usr/lib/wsl/lib:" + os.environ.get("LD_LIBRARY_PATH", "")
     )
+
+
+ENCODER_HIDDEN_DIM = 128
+ENCODER_NUM_LAYERS = 2
+
+
+def clone_belief_encoder_state(encoder):
+    """Return an independent eval-mode copy of a belief encoder."""
+    clone = deepcopy(encoder)
+    clone.eval()
+    return clone
+
+
+def save_m7_policy_with_encoder(model, encoder, path, repo_root, metadata):
+    from pta.training.utils.checkpoint_io import (
+        m7_encoder_sidecar_paths,
+        save_m7_encoder_artifact,
+        save_sb3_checkpoint,
+    )
+
+    save_sb3_checkpoint(model, Path(path), metadata=metadata)
+    policy_path = m7_encoder_sidecar_paths(Path(path)).policy_path
+    return save_m7_encoder_artifact(
+        encoder=encoder,
+        policy_path=policy_path,
+        repo_root=repo_root,
+        run_metadata=metadata,
+    )
+
+
+class M7BestModelSidecarCallback:
+    """EvalCallback-compatible hook that writes encoder sidecars for best_model.zip."""
+
+    def __init__(self, *, encoder, policy_path, repo_root, metadata):
+        self.encoder = encoder
+        self.policy_path = Path(policy_path)
+        self.repo_root = Path(repo_root)
+        self.metadata = dict(metadata)
+        self.model = None
+        self.parent = None
+        self.n_calls = 0
+        self.num_timesteps = 0
+        self.locals = {}
+        self.globals = {}
+
+    def init_callback(self, model):
+        self.model = model
+
+    def update_locals(self, locals_):
+        self.locals.update(locals_)
+
+    def update_child_locals(self, locals_):
+        self.update_locals(locals_)
+
+    def on_step(self) -> bool:
+        self.n_calls += 1
+        if self.parent is not None:
+            self.num_timesteps = getattr(self.parent, "num_timesteps", self.num_timesteps)
+        from pta.training.utils.checkpoint_io import save_m7_encoder_artifact
+
+        save_m7_encoder_artifact(
+            encoder=self.encoder,
+            policy_path=self.policy_path,
+            repo_root=self.repo_root,
+            run_metadata=self.metadata,
+        )
+        return True
 
 
 def parse_args() -> argparse.Namespace:
@@ -79,6 +147,7 @@ def make_m7_env(
     latent_dim: int = 16,
     n_probes: int = 3,
     ablation: str = "none",
+    belief_encoder=None,
 ):
     """Create the M7 environment stack.
 
@@ -106,6 +175,7 @@ def make_m7_env(
         env,
         latent_dim=latent_dim,
         n_probes=n_probes,
+        belief_encoder=belief_encoder,
         ablation=ablation,
         device="cpu",  # belief encoder on CPU; lightweight for inference
     )
@@ -155,6 +225,7 @@ def main() -> None:
     from stable_baselines3.common.vec_env import DummyVecEnv
 
     from pta.training.utils.checkpoint_io import save_sb3_checkpoint
+    from pta.models.belief.latent_belief_encoder import LatentBeliefEncoder
     from pta.training.utils.logger import ExperimentLogger
     from pta.training.utils.seed import set_seed
 
@@ -172,6 +243,16 @@ def main() -> None:
         "n_envs": 0,
         "particle_material": args.material,
     }
+    trace_dim = 30
+    canonical_belief_encoder = None
+    if ablation == "none":
+        canonical_belief_encoder = LatentBeliefEncoder(
+            trace_dim=trace_dim,
+            latent_dim=args.latent_dim,
+            hidden_dim=ENCODER_HIDDEN_DIM,
+            num_layers=ENCODER_NUM_LAYERS,
+        )
+        canonical_belief_encoder.eval()
 
     def _make_env():
         return make_m7_env(
@@ -182,6 +263,11 @@ def main() -> None:
             latent_dim=args.latent_dim,
             n_probes=args.n_probes,
             ablation=ablation,
+            belief_encoder=(
+                clone_belief_encoder_state(canonical_belief_encoder)
+                if canonical_belief_encoder is not None
+                else None
+            ),
         )
 
     def _make_eval_env():
@@ -193,6 +279,11 @@ def main() -> None:
             latent_dim=args.latent_dim,
             n_probes=args.n_probes,
             ablation=ablation,
+            belief_encoder=(
+                clone_belief_encoder_state(canonical_belief_encoder)
+                if canonical_belief_encoder is not None
+                else None
+            ),
         )
 
     vec_env = DummyVecEnv([_make_env])
@@ -234,6 +325,25 @@ def main() -> None:
         save_vecnormalize=False,
     )
 
+    best_sidecar_callback = None
+    if canonical_belief_encoder is not None:
+        best_sidecar_callback = M7BestModelSidecarCallback(
+            encoder=canonical_belief_encoder,
+            policy_path=checkpoint_dir / "best" / "best_model.zip",
+            repo_root=_PROJECT_ROOT,
+            metadata={
+                "method": "m7_pta",
+                "seed": seed,
+                "ablation": ablation,
+                "trace_dim": trace_dim,
+                "latent_dim": args.latent_dim,
+                "hidden_dim": ENCODER_HIDDEN_DIM,
+                "num_layers": ENCODER_NUM_LAYERS,
+                "n_probes": args.n_probes,
+                "stage": "best",
+            },
+        )
+
     eval_callback = EvalCallback(
         eval_env,
         best_model_save_path=str(checkpoint_dir / "best"),
@@ -242,6 +352,7 @@ def main() -> None:
         n_eval_episodes=5,
         deterministic=True,
         render=False,
+        callback_on_new_best=best_sidecar_callback,
     )
 
     callbacks = CallbackList([checkpoint_callback, eval_callback])
@@ -275,19 +386,41 @@ def main() -> None:
 
     # ---- Save final model -------------------------------------------------
     final_path = checkpoint_dir / "m7_pta_final"
-    save_sb3_checkpoint(
-        model,
-        final_path,
-        metadata={
-            "total_timesteps": args.total_timesteps,
-            "seed": seed,
-            "method": "m7",
-            "ablation": ablation,
-            "latent_dim": args.latent_dim,
-            "n_probes": args.n_probes,
-            "stage": "m7_rl",
-        },
-    )
+    final_metadata = {
+        "total_timesteps": args.total_timesteps,
+        "seed": seed,
+        "ablation": ablation,
+        "latent_dim": args.latent_dim,
+        "n_probes": args.n_probes,
+    }
+    if canonical_belief_encoder is not None:
+        final_metadata.update(
+            {
+                "method": "m7_pta",
+                "trace_dim": trace_dim,
+                "hidden_dim": ENCODER_HIDDEN_DIM,
+                "num_layers": ENCODER_NUM_LAYERS,
+                "stage": "final",
+            }
+        )
+        save_m7_policy_with_encoder(
+            model,
+            canonical_belief_encoder,
+            final_path,
+            repo_root=_PROJECT_ROOT,
+            metadata=final_metadata,
+        )
+    else:
+        final_metadata.update(
+            {
+                "method": "m7_pta",
+                "stage": "final",
+                "encoder_mode": "zero-z",
+                "legacy_policy_only": False,
+                "zero_z_semantics": ablation,
+            }
+        )
+        save_sb3_checkpoint(model, final_path, metadata=final_metadata)
     print(f"Final model saved to {final_path}")
 
     # ---- Cleanup ----------------------------------------------------------
