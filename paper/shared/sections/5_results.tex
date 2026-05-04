@@ -55,7 +55,7 @@ With the original $n=3$ main protocol, $10$ deterministic episodes per (method, 
 
 \input{figures/TABLE_4_matched_encoder_audit}
 
-The corrected matched-encoder audit further addresses the encoder-protocol concern. The legacy random-evaluation-encoder diagnostic intentionally paired a fixed M7 policy with fresh random evaluation encoders and is not claim-bearing. Under the matched sidecar protocol, seed 42 passes corrected G2 with $96.8$\% elastoplastic transfer and zero failed episodes. Across six matched M7 policy seeds, using the seed-4 final checkpoint value $97.1$\%, M7 averages $93.5\pm7.4$\% transfer versus $39.4\pm47.9$\% for the six reactive seeds; the mean paired delta is $+54.2$pp. Four of six pairs favor M7, while the two negative pairs are near ties ($-1.2$pp and $-0.1$pp). We therefore treat the elastoplastic direction as strengthened but still report the near ties and high baseline variance explicitly.
+A separate matched-encoder audit addresses the evaluator-protocol concern. Across six matched M7 policy seeds, M7 averages $93.5\pm7.4$\% elastoplastic transfer versus $39.4\pm47.9$\% for six reactive seeds, with a $+54.2$pp mean paired delta. Four pairs favor M7; the two reactive wins are near ties ($-1.2$pp and $-0.1$pp). The audit strengthens the elastoplastic direction without changing the 3-seed cross-split protocol.
 
 \subsection{Alternative Explanations and Recoverability}
 \label{sec:results_analysis}

@@ -1,7 +1,7 @@
 \section{Results}
 \label{sec:results}
 
-We read the results as a diagnostic of active context acquisition rather than as a leaderboard. The object of study is the sign pattern induced by a physical probe: where the information gain dominates the state perturbation, where the perturbation dominates, and whether the split-level signs match the recoverability hypothesis.
+These results diagnose active context acquisition rather than benchmark leadership. The object of study is the sign pattern induced by a physical probe: where information gain dominates state perturbation, where perturbation dominates, and whether the signs match the recoverability hypothesis.
 
 \input{figures/TABLE_1_main_results}
 
@@ -22,16 +22,16 @@ We read the results as a diagnostic of active context acquisition rather than as
 \subsection{Main Cross-Material Results}
 \label{sec:results_main}
 
-\cref{tab:main_results} and \cref{fig:main} report transfer efficiency across all five material splits for the original 3-seed main protocol. M1 and M7 use three seeds; M8 is a single-seed diagnostic row. We report the corrected matched-encoder six-seed elastoplastic audit separately in \cref{tab:matched_encoder_audit} rather than merging protocols. The pattern is asymmetric.
+\cref{tab:main_results} and \cref{fig:main} report transfer efficiency across all five material splits for the original 3-seed protocol. M1 and M7 use three seeds; M8 is a single-seed diagnostic row. We keep the six-seed matched-encoder elastoplastic audit separate in \cref{tab:matched_encoder_audit}. The pattern is asymmetric.
 
 \paragraph{Gain on the elastoplastic (recoverable-rebound) split.}
-On the OOD elastoplastic split, \PTA{} (M7) achieves $60.7$\% transfer versus $46.0$\% for M1, a 14.7pp gain. Spill also improves by 14.7pp (39.3\% vs.\ 54.0\%), and success rises from 50.0\% to 66.7\%. The direction aligns across metrics, but the seed variance is high (\cref{sec:results_stats}).
+On elastoplastic, \PTA{} gains 14.7pp in transfer over M1 and improves spill and success in the same direction. The metrics align, but seed variance is high (\cref{sec:results_stats}).
 
 \paragraph{Opposite sign on persistent-perturbation splits.}
-On ID sand, M1 outperforms \PTA{} by 22.2pp (64.1\% vs 41.9\%); on parameter-shifted sand variants, M1 leads by 13--22pp; and on cohesive snow, M1 leads by 13.3pp (55.9\% vs 42.6\%). These negative signs are part of the empirical finding: the same probe that helps on recoverable elastoplastic dynamics is costly on splits where the contact perturbation persists. We interpret this central asymmetry through the recoverability hypothesis in \cref{sec:results_analysis}.
+On ID sand, shifted sand, and snow, M1 leads by 13--22pp. These negative signs are part of the finding: the probe that helps on recoverable elastoplastic dynamics is costly when the contact perturbation persists. We interpret this asymmetry through recoverability in \cref{sec:results_analysis}.
 
 \paragraph{Single-seed privileged-parameter failure on elastoplastic.}
-M8 receives ground-truth material parameters but is otherwise matched to M7 and scored from a single seed, so we treat it as diagnostic. It is close to or above M1 on ID sand, snow, and Sand-Hard, trails M1 on Sand-Soft, and scores 0.0\% transfer on elastoplastic. Zero NaN events rule out simulator crashes as the direct explanation. In this sand-only residual-control setup, the privileged parameter vector did not produce a useful elastoplastic response curve, while the probe trace retained nonzero elastoplastic transfer.
+M8 receives ground-truth material parameters but is scored from a single seed, so we treat it as diagnostic. It is strong on several sand-like splits yet scores 0.0\% transfer on elastoplastic. In this sand-only residual-control setup, passive parameter access did not produce the elastoplastic response captured by the probe trace.
 
 \input{figures/TABLE_2_ablation}
 
@@ -41,21 +41,21 @@ M8 receives ground-truth material parameters but is otherwise matched to M7 and 
 \cref{tab:ablation} breaks down \PTA{}'s elastoplastic gain by component, holding all other training pipeline elements fixed; Appendix \cref{fig:ablation} visualizes the per-seed ranges.
 
 \paragraph{Probe execution carries signal; conditioning closes the gap.}
-Removing probing drops transfer to 33.1\%, 27.6pp below M7 Full and 12.9pp below M1. Keeping the probe but dropping the encoder output gives 46.3\%, essentially M1-level but 14.4pp below full \PTA{}. The ablations therefore suggest, without proving, that the elastoplastic gain depends on coupling a physical probe with usable conditioning rather than merely adding wrapper capacity.
+Removing probing drops transfer below M1. Keeping the probe but dropping the encoder output returns to roughly M1-level transfer, well below full \PTA{}. The gain therefore appears to require both probe execution and usable conditioning, not either alone.
 
 \subsection{Statistical Reading of the Elastoplastic Gain}
 \label{sec:results_stats}
 
-With the original $n=3$ main protocol, 10 episodes per (method, seed, split), and $\sim$40pp elastoplastic seed standard deviation, we report effect sizes and per-seed metrics rather than collapse the result into a significance claim. Appendix \cref{fig:seeds} shows that \PTA{} exceeds M1 on two matched seed pairs (one large gain, one near tie) and loses sharply on the third. The positive split is therefore high-variance, but the three reported metrics on elastoplastic move in the same direction, and the four persistent-perturbation splits move in the opposite direction in the seed means.
+With $n=3$ seeds and $\sim$40pp elastoplastic dispersion, we report effect sizes rather than significance claims. Appendix \cref{fig:seeds} shows that \PTA{} exceeds M1 on two of three matched seed pairs (one near tie, one large gain) and loses sharply on the remaining seed. The split is noisy, but transfer, spill, and success move together on elastoplastic, while the persistent-perturbation splits move in the opposite direction.
 
 \input{figures/TABLE_4_matched_encoder_audit}
 
-The corrected matched-encoder audit further addresses the encoder-protocol concern. The legacy random-evaluation-encoder diagnostic intentionally paired a fixed M7 policy with fresh random evaluation encoders and is not claim-bearing. Under the matched sidecar protocol, seed 42 passes corrected G2 with $96.8$\% elastoplastic transfer and zero failed episodes. Across six matched M7 policy seeds, using the seed-4 final checkpoint value $97.1$\%, M7 averages $93.5\pm7.4$\% transfer versus $39.4\pm47.9$\% for the six reactive seeds; the mean paired delta is $+54.2$pp. Four of six pairs favor M7, while the two negative pairs are near ties ($-1.2$pp and $-0.1$pp). We therefore treat the elastoplastic direction as strengthened but still report the near ties and high baseline variance explicitly.
+A separate matched-encoder audit addresses the evaluator-protocol concern. Across six matched M7 policy seeds, M7 averages $93.5\pm7.4$\% elastoplastic transfer versus $39.4\pm47.9$\% for six reactive seeds, with a $+54.2$pp mean paired delta. Four pairs favor M7; the two reactive wins are near ties ($-1.2$pp and $-0.1$pp). The audit strengthens the elastoplastic direction without changing the 3-seed cross-split protocol.
 
 \subsection{Alternative Explanations and Recoverability}
 \label{sec:results_analysis}
 
-\cref{fig:effect_delta} shows the sign pattern behind the recoverability hypothesis: \PTA{} gains on elastoplastic but loses on ID sand, Sand-Hard, Sand-Soft, and snow. Two simpler accounts must be considered. First, if the elastoplastic gain were only an OOD-distance or capacity effect, then the same wrapper should also help on the sand parameter shifts; instead Sand-Hard and Sand-Soft remain negative, No-Belief stays near M1 on elastoplastic, and No-Probe drops below M1. This weakens but does not eliminate capacity/OOD-distance explanations because our material distances are not metric-matched. Second, sand-only training may itself make probe perturbations harmful on sand-like regimes; the ID-sand loss is consistent with this and is part of the intervention-cost signal, not a separate failure mode. Seed noise remains the third alternative: elastoplastic has $\sim$40pp dispersion. We therefore treat recoverability as the current organizing hypothesis, to be distinguished by matched material-distance sweeps, equal-capacity dummy probes, non-sand training sources, and direct post-probe recovery measurements. Snow is the boundary case anticipated in \cref{sec:experiments}: cohesive in appearance, but negative under contact loading, consistent with persistent compaction or displacement rather than rebound.
+\cref{fig:effect_delta} shows the sign pattern behind the recoverability hypothesis: \PTA{} gains on elastoplastic but loses on ID sand, Sand-Hard, Sand-Soft, and snow. Alternative explanations remain. If the gain were pure OOD robustness or capacity, the sand parameter shifts should also improve; they do not. Sand-only training may itself make probe perturbations harmful on sand-like regimes, which is part of the intervention-cost signal rather than a separate failure mode. Seed noise also remains: elastoplastic has $\sim$40pp dispersion. Recoverability is therefore a working hypothesis, to be tested with matched material-distance sweeps, dummy probes, non-sand training sources, and direct post-probe recovery measurements. Snow is the boundary case anticipated in \cref{sec:experiments}: cohesive in appearance, but negative under contact loading.
 
 \begin{figure}[H]
     \centering
