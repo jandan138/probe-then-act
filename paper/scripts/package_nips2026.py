@@ -25,7 +25,7 @@ EXPECTED_LABELS = {
     "sec:conclusion": ("6", "9"),
     "sec:conclusion:end": ("6", "9"),
 }
-EXPECTED_TOTAL_PAGES = "14"
+MIN_EXPECTED_TOTAL_PAGES = 14
 
 LOG_PATTERNS = {
     "LaTeX errors": r"(?m)^! (?:LaTeX Error|Package .* Error|Emergency stop|Fatal error)",
@@ -188,11 +188,12 @@ def check_aux(aux_path: Path, checks: list[Check], base: Path) -> None:
 
     page_match = re.search(r"\\gdef \\@abspage@last\{([^}]*)\}", text)
     actual_pages = page_match.group(1) if page_match else None
+    actual_page_count = int(actual_pages) if actual_pages and actual_pages.isdigit() else None
     add_check(
         checks,
         "NeurIPS total PDF pages from aux",
-        actual_pages == EXPECTED_TOTAL_PAGES,
-        f"expected {EXPECTED_TOTAL_PAGES}, found {actual_pages}",
+        actual_page_count is not None and actual_page_count >= MIN_EXPECTED_TOTAL_PAGES,
+        f"expected at least {MIN_EXPECTED_TOTAL_PAGES} pages with refs/appendix/checklist, found {actual_pages}",
     )
 
 
@@ -224,6 +225,33 @@ def check_stale_wording(paper_dir: Path, checks: list[Check]) -> None:
         add_check(checks, f"Stale wording: {name}", not matches, "no matches" if not matches else f"{len(matches)} matches")
 
 
+def check_neurips_checklist(venue_dir: Path, source_main_tex: Path, checks: list[Check]) -> None:
+    checklist_tex = venue_dir / "sections" / "B_checklist.tex"
+    if not checklist_tex.exists():
+        add_check(checks, "NeurIPS paper checklist source exists", False, f"Missing {checklist_tex}")
+        return
+
+    checklist = checklist_tex.read_text(encoding="utf-8", errors="replace")
+    source = source_main_tex.read_text(encoding="utf-8", errors="replace") if source_main_tex.exists() else ""
+    todo_matches = re.findall(r"\\answerTODO|\\justificationTODO|\bTODO\b", checklist)
+    answers = re.findall(r"(?m)^\s*\\item\[\] Answer:", checklist)
+    questions = re.findall(r"(?m)^\\item \{\\bf ", checklist)
+    add_check(
+        checks,
+        "NeurIPS paper checklist heading",
+        "NeurIPS Paper Checklist" in checklist and "NeurIPS Paper Checklist" in source,
+        "heading present in checklist source and flattened source"
+        if "NeurIPS Paper Checklist" in checklist and "NeurIPS Paper Checklist" in source
+        else "heading missing from checklist source or flattened source",
+    )
+    add_check(
+        checks,
+        "NeurIPS paper checklist answers complete",
+        len(questions) == 16 and len(answers) == 16 and not todo_matches,
+        f"questions={len(questions)}, answers={len(answers)}, todo_markers={len(todo_matches)}",
+    )
+
+
 def check_pdf_tools(pdf_path: Path, checks: list[Check], command_log: Path, redactions: list[tuple[str, str]]) -> dict[str, object]:
     results: dict[str, object] = {}
 
@@ -234,8 +262,8 @@ def check_pdf_tools(pdf_path: Path, checks: list[Check], command_log: Path, reda
         add_check(
             checks,
             "pdfinfo page count",
-            pages is not None and pages.group(1) == EXPECTED_TOTAL_PAGES,
-            f"expected {EXPECTED_TOTAL_PAGES}, found {pages.group(1) if pages else None}",
+            pages is not None and int(pages.group(1)) >= MIN_EXPECTED_TOTAL_PAGES,
+            f"expected at least {MIN_EXPECTED_TOTAL_PAGES}, found {pages.group(1) if pages else None}",
         )
     else:
         add_skip(checks, "pdfinfo page count", "pdfinfo is not installed; aux page check was used instead")
@@ -404,6 +432,7 @@ def main() -> int:
         scan_text_file(build_dir / "main.log", LOG_PATTERNS, checks, "NeurIPS build log", paper_dir)
         check_blg(build_dir / "main.blg", checks, "NeurIPS build", paper_dir)
         scan_text_file(source_build_log, LOG_PATTERNS, checks, "Flattened source log", paper_dir)
+        check_neurips_checklist(venue_dir, source_dir / "main.tex", checks)
         if (source_dir / "build").exists():
             shutil.rmtree(source_dir / "build")
 
