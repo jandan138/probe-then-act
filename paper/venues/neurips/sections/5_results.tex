@@ -22,7 +22,7 @@ We read the results as a diagnostic of active context acquisition rather than as
 \subsection{Main Cross-Material Results}
 \label{sec:results_main}
 
-\cref{tab:main_results} and \cref{fig:main} report transfer efficiency across all five material splits. M1 and M7 use three seeds; M8 is a single-seed diagnostic row. The pattern is asymmetric.
+\cref{tab:main_results} and \cref{fig:main} report transfer efficiency across all five material splits for the original 3-seed main protocol. M1 and M7 use three seeds; M8 is a single-seed diagnostic row. We report the corrected matched-encoder six-seed elastoplastic audit separately in \cref{tab:matched_encoder_audit} rather than merging protocols. The pattern is asymmetric.
 
 \paragraph{Gain on the elastoplastic (recoverable-rebound) split.}
 On the OOD elastoplastic split, \PTA{} (M7) achieves $60.7$\% transfer versus $46.0$\% for M1, a 14.7pp gain. Spill also improves by 14.7pp (39.3\% vs.\ 54.0\%), and success rises from 50.0\% to 66.7\%. The direction aligns across metrics, but the seed variance is high (\cref{sec:results_stats}).
@@ -46,7 +46,11 @@ Removing probing drops transfer to 33.1\%, 27.6pp below M7 Full and 12.9pp below
 \subsection{Statistical Reading of the Elastoplastic Gain}
 \label{sec:results_stats}
 
-With $n=3$ seeds, 10 episodes per (method, seed, split), and $\sim$40pp elastoplastic seed standard deviation, we report effect sizes and per-seed metrics rather than collapse the result into a significance claim. Appendix \cref{fig:seeds} shows that \PTA{} exceeds M1 on two matched seed pairs (one large gain, one near tie) and loses sharply on the third. The positive split is therefore high-variance, but the three reported metrics on elastoplastic move in the same direction, and the four persistent-perturbation splits move in the opposite direction in the seed means.
+With the original $n=3$ main protocol, 10 episodes per (method, seed, split), and $\sim$40pp elastoplastic seed standard deviation, we report effect sizes and per-seed metrics rather than collapse the result into a significance claim. Appendix \cref{fig:seeds} shows that \PTA{} exceeds M1 on two matched seed pairs (one large gain, one near tie) and loses sharply on the third. The positive split is therefore high-variance, but the three reported metrics on elastoplastic move in the same direction, and the four persistent-perturbation splits move in the opposite direction in the seed means.
+
+\input{figures/TABLE_4_matched_encoder_audit}
+
+The corrected matched-encoder audit further addresses the encoder-protocol concern. The legacy random-evaluation-encoder diagnostic intentionally paired a fixed M7 policy with fresh random evaluation encoders and is not claim-bearing. Under the matched sidecar protocol, seed 42 passes corrected G2 with $96.8$\% elastoplastic transfer and zero failed episodes. Across six matched M7 policy seeds, using the seed-4 final checkpoint value $97.1$\%, M7 averages $93.5\pm7.4$\% transfer versus $39.4\pm47.9$\% for the six reactive seeds; the mean paired delta is $+54.2$pp. Four of six pairs favor M7, while the two negative pairs are near ties ($-1.2$pp and $-0.1$pp). We therefore treat the elastoplastic direction as strengthened but still report the near ties and high baseline variance explicitly.
 
 \subsection{Alternative Explanations and Recoverability}
 \label{sec:results_analysis}

@@ -2,6 +2,7 @@
 
 Date: 2026-04-26
 Updated: 2026-05-01
+Status update: 2026-05-04
 
 Checkpoints are not stored in normal Git. The repo provides a manifest/bundle builder so a fresh DSW/DLC machine can retrieve the exact artifacts without bloating Git history.
 
@@ -62,7 +63,7 @@ python tools/artifact_registry.py bundle \
   --run-dir /cpfs/shared/simulation/zhuzihou/artifacts/probe-then-act/<date>/<run_id>
 ```
 
-Current shortest path: do not upload checkpoints before training. The DSW side can start the five remaining ablation jobs without baseline checkpoints because those jobs train new `m7_noprobe` and `m7_nobelief` models.
+Current shortest path: the verified-image six-seed replacement training jobs for seeds `2`, `3`, and `4` have completed on DLC with worker `exit_code=0`. Preserve those checkpoints in CPFS and register them before any cleanup. The 2026-05-03 legacy evaluation jobs below only write result CSVs and do not create new checkpoint artifacts.
 
 Matched M7 claim archives must include the complete policy-plus-encoder bundle for the evaluated checkpoint:
 
@@ -72,6 +73,59 @@ Matched M7 claim archives must include the complete policy-plus-encoder bundle f
 - `best/belief_encoder_metadata.json`
 
 Checkpoint `.zip` files and encoder `.pt` sidecars stay out of Git. Preserve them through the artifact registry or durable CPFS archives, with JSON metadata and SHA256 links committed only as documentation when needed.
+
+## 2026-05-02 Matched Encoder Smoke Artifact
+
+The DLC matched-sidecar smoke job `dlc7m883ucvcce7n` ran in `/cpfs/shared/simulation/zhuzihou/dev/probe-then-act` with seed `9042` to verify the new sidecar protocol without changing legacy seed42 artifacts. It produced a final matched bundle:
+
+- `checkpoints/m7_pta_seed9042/m7_pta_final.zip`
+- `checkpoints/m7_pta_seed9042/m7_pta_final.json`
+- `checkpoints/m7_pta_seed9042/belief_encoder.pt`
+- `checkpoints/m7_pta_seed9042/belief_encoder_metadata.json`
+
+The worker record `results/dlc/runs/20260502T065019Z_custom_dlc7m883ucvcce7n-master-0.json` has `exit_code=0`. Local verification loaded the policy with SB3 and loaded the sidecar with `load_m7_encoder_artifact(... expected={'method': 'm7_pta', 'seed': 9042, 'ablation': 'none'})`, returning protocol `matched_encoder_v1`.
+
+This smoke artifact proves the runtime sidecar path works, but it is not corrected G2 evidence. Corrected G2 requires a full matched `m7_pta seed42` artifact bundle and `results/presub/audit_matched_encoder_m7_pta_s42_ood_elastoplastic.json`.
+
+As of the 2026-05-03 refresh, the isolated full matched seed42 job `dlc1weyuiyngs6ow` is `Succeeded` with worker `exit_code=0`, best and final matched bundles verified. All five additional matched M7 seeds `0-4` also succeeded in their isolated roots. Do not register or promote a corrected G2 bundle until the corrected G2 audit DLC `dlcqfs83uu5rmvp7` finishes and produces `audit_matched_encoder_m7_pta_s42_ood_elastoplastic.json`.
+
+## 2026-05-03 Matched M7 Claim Bundles
+
+Six matched M7 claim-bundle candidates produced under isolated roots:
+
+| Seed | Root | DLC JobId | Best timesteps | Protocol |
+|---:|---|---|---:|---|
+| 0 | `probe-then-act-matched-m7-s0` | `dlc1t2k26iivao2n` | 240000 | `matched_encoder_v1` |
+| 1 | `probe-then-act-matched-m7-s1` | `dlc1u6ifpmua9a2q` | 380000 | `matched_encoder_v1` |
+| 2 | `probe-then-act-matched-m7-s2` | `dlc1vkgemincxw8m` | 320000 | `matched_encoder_v1` |
+| 3 | `probe-then-act-matched-m7-s3` | `dlc1wyedjetvmv6o` | 120000 | `matched_encoder_v1` |
+| 4 | `probe-then-act-matched-m7-s4` | `dlc1y2cr2ibi27xx` | 170000 | `matched_encoder_v1` |
+| 42 | `probe-then-act-matched-seed42` | `dlc1weyuiyngs6ow` | 270000 | `matched_encoder_v1` |
+
+All 6 verified: `Status=Succeeded`, worker `exit_code=0`, verified image, best bundle 4/4 files present, final bundle 4/4 files present, PPO.load OK, `load_m7_encoder_artifact` OK. Best-checkpoint timesteps vary because PPO saved the best evaluation model at different training steps; final bundles complete at `total_timesteps=500000`.
+
+DLC submission note: priority 8 blocked by workspace role check (`CheckConfigFromAIWorkspace: role check failed`). Use priority ≤7 for this workspace.
+
+Corrected G2: **passed.** `dlcqfs83uu5rmvp7` worker `exit_code=0`, audit `passes=true`, `mean_transfer=0.968`.
+Matched G4 eval: `dlcrjqlmycuna0or` (priority 6) completed M7 matched eval (30/30 rows for 6 seeds × 5 splits) then stalled at M1 transition. M7 rows saved in `results/presub/ood_eval_matched_g4_6seed_20260503.csv`. DLC still `Running`; worker record not yet available. M1 comparison rows come from verified legacy eval outputs.
+Seed 4 elastoplastic claim evidence uses the final 500k checkpoint value `0.9712`, superseding the best-checkpoint outlier (`0.080219` at 170k best timesteps). Local retest DLC `dlc1dmz216m49jqt` is queued for independent reproduction only.
+
+## 2026-05-03 Six-Seed Result Artifact Status
+
+The verified-image G3 replacement checkpoints are runtime artifacts under `/cpfs/shared/simulation/zhuzihou/dev/probe-then-act/checkpoints/`. The full `m7_pta` seed `2`, `3`, and `4` artifacts are policy-only legacy diagnostics because those jobs predate matched encoder sidecar persistence. Do not register them as matched M7 claim bundles.
+
+Legacy extra-seed eval jobs from the same runtime wrote these non-checkpoint result artifacts:
+
+| Scope | DLC JobId | Worker record | Result artifact | Rows |
+|---|---|---|---|---:|
+| `m1_reactive`, `m7_pta`; seeds `2, 3` | `dlcoucjyiozupi5h` | `results/dlc/runs/20260503T030353Z_custom_dlcoucjyiozupi5h-master-0.json` | `results/presub/ood_eval_extra_seeds_s2_s3_legacy_policy_only_20260503.csv` | 20 |
+| `m1_reactive`, `m7_pta`; seed `4` | `dlcpyaxhmcnzk87e` | `results/dlc/runs/20260503T031326Z_custom_dlcpyaxhmcnzk87e-master-0.json` | `results/presub/ood_eval_extra_seed4_legacy_policy_only_20260503.csv` | 10 |
+| `m7_noprobe`; seeds `2, 3, 4` | `dlc5pczyite2yvpp` | `results/dlc/runs/20260503T031326Z_custom_dlc5pczyite2yvpp-master-0.json` | `results/presub/ood_eval_ablation_no_probe_extra_seeds_s2_s3_s4_legacy_policy_only_20260503.csv` | 15 |
+| `m7_nobelief`; seeds `2, 3, 4` | `dlc7na5myukdtyc1` | `results/dlc/runs/20260503T030410Z_custom_dlc7na5myukdtyc1-master-0.json` | `results/presub/ood_eval_ablation_no_belief_extra_seeds_s2_s3_s4_legacy_policy_only_20260503.csv` | 15 |
+
+Completion verification found all four legacy DLC eval jobs `Succeeded` with worker `exit_code=0`, expected row counts, and no missing or duplicate method/seed/split combinations. The matched M7 seed `0`-`4` jobs submitted under isolated roots are verified claim-bundle candidates with `belief_encoder.pt` + `belief_encoder_metadata.json` (all 6 seeds PPO-load and encoder-load verified). Seed4 best-checkpoint elastoplastic outlier is resolved for claim evidence by using the final 500k checkpoint value `0.9712`.
+
+Matched-encoder elastoplastic audit summary for paper use: six policy seeds (`0, 1, 2, 3, 4, 42`), M7 matched mean transfer `0.9354`, M1 mean transfer `0.3936`, mean paired delta `+54.2` pp, `positive_pairs=4/6`, with seeds 1 and 3 near ties. Keep this summary separate from the original 3-seed cross-split main table and legacy policy-only diagnostics.
 
 ## Build Manifest
 
