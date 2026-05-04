@@ -1,28 +1,28 @@
 \section{Results}
 \label{sec:results}
 
-These results diagnose active context acquisition rather than benchmark leadership. The object of study is the sign pattern induced by a physical probe: where information gain dominates state perturbation, where perturbation dominates, and whether the signs match the recoverability hypothesis.
+These results isolate active context acquisition as an information--intervention tradeoff rather than a benchmark-leaderboard exercise. The object of study is the sign pattern induced by a physical probe: where information gain dominates state perturbation, where perturbation dominates, and whether the signs match the recoverability hypothesis.
 
 \input{figures/TABLE_1_main_results}
 
 \begin{figure}[t]
     \centering
     \includegraphics[width=0.98\columnwidth]{figures/fig2_main_comparison.pdf}
-    \caption{\textbf{Absolute transfer-efficiency landscape.} Mean transfer efficiency (\%) across methods and splits. M1/M7 are 3-seed means; M8 is a single-seed diagnostic row. The outlined OOD-elastoplastic column highlights the conditional finding: \PTA{} (M7) reaches $60.7$\% transfer versus $46.0$\% for M1 and $0$\% for M8. \cref{fig:effect_delta} gives deltas; \cref{fig:seeds} gives seed dispersion. Zero NaN rollouts occurred.}
+    \caption{\textbf{Absolute transfer-efficiency landscape.} Mean transfer efficiency (\%) across methods and splits. M1/M7 are 3-seed means; M8 is a single-seed privileged-parameter row. The outlined OOD-elastoplastic column highlights the recoverability-linked finding: \PTA{} (M7) reaches $60.7$\% transfer versus $46.0$\% for M1 and $0$\% for M8. \cref{fig:effect_delta} gives deltas; \cref{fig:seeds} gives seed dispersion. Zero NaN rollouts occurred.}
     \label{fig:main}
 \end{figure}
 
 \begin{figure}[b]
     \centering
     \includegraphics[width=0.68\textwidth]{figures/fig1_effect_delta.pdf}
-    \caption{\textbf{Per-split deltas relative to M1.} Filled circles show M7--M1; hollow triangles show single-seed M8--M1 diagnostics. The figure emphasizes sign direction across splits; per-seed dispersion is reported in Appendix \cref{fig:seeds}.}
+    \caption{\textbf{Per-split deltas relative to M1.} Filled circles show M7--M1; hollow triangles show single-seed M8--M1 deltas. The figure emphasizes sign direction across splits; per-seed dispersion is reported in Appendix \cref{fig:seeds}.}
     \label{fig:effect_delta}
 \end{figure}
 
 \subsection{Main Cross-Material Results}
 \label{sec:results_main}
 
-\cref{tab:main_results} and \cref{fig:main} report transfer efficiency across all five material splits for the original 3-seed protocol. M1 and M7 use three seeds; M8 is a single-seed diagnostic row. We keep the six-seed matched-encoder elastoplastic audit separate in \cref{tab:matched_encoder_audit}. The pattern is asymmetric.
+\cref{tab:main_results} and \cref{fig:main} report transfer efficiency across all five material splits for the original 3-seed protocol. M1 and M7 use three seeds; M8 is a single-seed privileged-parameter row. We keep the six-seed matched-encoder elastoplastic audit separate in \cref{tab:matched_encoder_audit}. The pattern is asymmetric.
 
 \paragraph{Gain on the elastoplastic (recoverable-rebound) split.}
 On elastoplastic, \PTA{} gains 14.7pp in transfer over M1 and improves spill and success in the same direction. The metrics align, but seed variance is high (\cref{sec:results_stats}).
@@ -31,7 +31,7 @@ On elastoplastic, \PTA{} gains 14.7pp in transfer over M1 and improves spill and
 On ID sand, shifted sand, and snow, M1 leads by 13--22pp. These negative signs are part of the finding: the probe that helps on recoverable elastoplastic dynamics is costly when the contact perturbation persists. We interpret this asymmetry through recoverability in \cref{sec:results_analysis}.
 
 \paragraph{Single-seed privileged-parameter failure on elastoplastic.}
-M8 receives ground-truth material parameters but is scored from a single seed, so we treat it as diagnostic. It is strong on several sand-like splits yet scores 0.0\% transfer on elastoplastic. In this sand-only residual-control setup, passive parameter access did not produce the elastoplastic response captured by the probe trace.
+M8 receives ground-truth material parameters but is scored from a single seed, so we treat it as a privileged-parameter stress test rather than a 3-seed comparison. It is strong on several sand-like splits yet scores 0.0\% transfer on elastoplastic. In this sand-only residual-control setup, passive parameter access did not produce the elastoplastic response captured by the probe trace.
 
 \input{figures/TABLE_2_ablation}
 
@@ -46,20 +46,20 @@ Removing probing drops transfer below M1. Keeping the probe but dropping the enc
 \subsection{Statistical Reading of the Elastoplastic Gain}
 \label{sec:results_stats}
 
-With $n=3$ seeds and $\sim$40pp elastoplastic dispersion, we report effect sizes rather than significance claims. Appendix \cref{fig:seeds} shows that \PTA{} exceeds M1 on two of three matched seed pairs (one near tie, one large gain) and loses sharply on the remaining seed. The split is noisy, but transfer, spill, and success move together on elastoplastic, while the persistent-perturbation splits move in the opposite direction.
+With $n=3$ seeds and $\sim$40pp elastoplastic dispersion, we report effect sizes rather than significance claims. Appendix \cref{fig:seeds} shows that \PTA{} exceeds M1 on two of three matched seed pairs (one near tie, one large gain) and drops sharply on the remaining seed. Dispersion is large, but transfer, spill, and success move together on elastoplastic, while the persistent-perturbation splits move in the opposite direction.
 
 \input{figures/TABLE_4_matched_encoder_audit}
 
-A separate matched-encoder audit addresses the evaluator-protocol concern. Across six matched M7 policy seeds, M7 averages $93.5\pm7.4$\% elastoplastic transfer versus $39.4\pm47.9$\% for six reactive seeds, with a $+54.2$pp mean paired delta. Four pairs favor M7; the two reactive wins are near ties ($-1.2$pp and $-0.1$pp). The audit strengthens the elastoplastic direction without changing the 3-seed cross-split protocol.
+A separate matched-encoder audit adds a protocol-controlled check. Across six matched M7 policy seeds, M7 averages $93.5\pm7.4$\% elastoplastic transfer versus $39.4\pm47.9$\% for six reactive seeds, with a $+54.2$pp mean paired delta. Four pairs favor M7; the two reactive wins are near ties ($-1.2$pp and $-0.1$pp). The audit strengthens the elastoplastic direction without changing the 3-seed cross-split protocol.
 
 \subsection{Alternative Explanations and Recoverability}
 \label{sec:results_analysis}
 
-\cref{fig:effect_delta} shows the sign pattern behind the recoverability hypothesis: \PTA{} gains on elastoplastic but loses on ID sand, Sand-Hard, Sand-Soft, and snow. Alternative explanations remain. If the gain were pure OOD robustness or capacity, the sand parameter shifts should also improve; they do not. Sand-only training may itself make probe perturbations harmful on sand-like regimes, which is part of the intervention-cost signal rather than a separate failure mode. Seed noise also remains: elastoplastic has $\sim$40pp dispersion. Recoverability is therefore a working hypothesis, to be tested with matched material-distance sweeps, dummy probes, non-sand training sources, and direct post-probe recovery measurements. Snow is the boundary case anticipated in \cref{sec:experiments}: cohesive in appearance, but negative under contact loading.
+\cref{fig:effect_delta} shows the recoverability-aligned sign pattern: \PTA{} gains on elastoplastic but pays costs on ID sand, Sand-Hard, Sand-Soft, and snow. This pattern separates recoverability from generic OOD robustness or capacity: if either were sufficient, the sand parameter shifts should also improve; they do not. Sand-only training may amplify probe costs on sand-like regimes, which is consistent with the intervention-cost signal rather than a contradiction. Elastoplastic dispersion remains large ($\sim$40pp), so recoverability is a working, falsifiable explanation to be tested with matched material-distance sweeps, dummy probes, non-sand training sources, and direct post-probe recovery measurements. Snow is the boundary case anticipated in \cref{sec:experiments}: cohesive in appearance, but negative under contact loading.
 
 \begin{figure}[H]
     \centering
     \includegraphics[width=0.82\textwidth]{figures/fig0_teaser.png}
-    \caption{\textbf{Qualitative summary of the information--intervention tradeoff.} The 2D schematic summarizes the observed sign pattern after the quantitative results: the fixed probe can reveal material response but also perturbs the particle state. In this benchmark, \PTA{} improves elastoplastic transfer (+14.7pp versus M1) and underperforms on persistent-perturbation splits; the M8 value is a single-seed elastoplastic diagnostic. Exact metrics are reported in \cref{tab:main_results,fig:main,fig:effect_delta}.}
+    \caption{\textbf{Qualitative summary of the information--intervention tradeoff.} The 2D schematic summarizes the observed sign pattern after the quantitative results: the fixed probe can reveal material response but also perturbs the particle state. In this benchmark, \PTA{} improves elastoplastic transfer (+14.7pp versus M1) and pays costs on persistent-perturbation splits; the M8 value is a single-seed privileged-parameter stress test. Exact metrics are reported in \cref{tab:main_results,fig:main,fig:effect_delta}.}
     \label{fig:teaser}
 \end{figure}

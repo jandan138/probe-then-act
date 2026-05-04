@@ -1,9 +1,9 @@
 \section{Discussion}
 \label{sec:discussion}
 
-\subsection{The Recoverable-Deformation Hypothesis as a Testable Heuristic}
+\subsection{The Recoverable-Deformation Hypothesis as a Testable Principle}
 
-The present benchmark turns recoverability into a testable heuristic rather than a settled law: the positive evidence comes from a single elastoplastic family, and recoverability is not independently varied from task ease, particle density, control stability, sand-only training, or the simulator's specific elastoplastic constitutive model. We offer it as a physically grounded interpretation of the asymmetry and as a design rule for targeted follow-up experiments.
+The present benchmark turns recoverability into a testable physical principle for active probing: the positive evidence comes from a single elastoplastic family, and recoverability is not independently varied from task ease, particle density, control stability, sand-only training, or the simulator's specific elastoplastic constitutive model. We offer it as a physically grounded interpretation of the asymmetry and as a design rule for targeted follow-up experiments.
 
 If the hypothesis holds more broadly, the implied prescription is to allocate probe time to a material if and only if the probe-induced perturbation relaxes back on the timescale of the subsequent task. Each row of the candidate prescription below beyond elastoplastic is an extrapolation, not a tested claim of this paper:
 \begin{itemize}
@@ -12,7 +12,7 @@ If the hypothesis holds more broadly, the implied prescription is to allocate pr
     \item \textbf{Cohesive compacting media} (wet sand, snow): cohesive in appearance but capable of persistent compaction under contact loading. Snow showed a 13.3pp loss in our setup; the broader regime is not tested.
 \end{itemize}
 
-This scope claim suggests a practical stack for mixed materials: use a coarse material-class router that selects between \PTA{} and a reactive policy.
+This principle suggests a practical stack for mixed materials: use a coarse material-class router that selects between \PTA{} and a reactive policy.
 
 \subsection{Why the Privileged-Parameter Baseline Fails on the Elastoplastic Split}
 
@@ -24,7 +24,7 @@ Because the matched encoder is a paired task-conditioning sidecar rather than a 
 
 \subsection{Limitations}
 
-The positive result rests on a single OOD split, with no test on other viscoelastic materials (gel, dough, foam) or on training distributions that include any non-sand material. The original 3-seed main table has high elastoplastic variance, and the six-seed matched-encoder audit strengthens the direction without making it a broad robustness theorem: M7 wins four pairs, while two high-performing reactive seeds are near ties. Probing physically degrades granular substrates (the 22pp loss on ID sand is predicted by the hypothesis but is also a hard scope limit: do not deploy \PTA{} on dry granular media). The probe is scripted and identical across materials; a learned probe policy that optimizes an information-gain surrogate may tighten the elastoplastic gain. All results are in Genesis MPM; sim-to-real transfer of probe-style policies on viscoelastic media---especially robustness to real tactile noise and rebound-timescale shifts---is open. Finally, the observation includes simulator-derived aggregate-particle statistics; a sim-to-real deployment would need vision or tactile estimates of those quantities. We use ``tactile'' throughout in the loose sense of contact-derived response inferred from joints and aggregate motion, not a simulated tactile-array sensor.
+The current evidence is intentionally concentrated on one OOD elastoplastic split, without tests on other viscoelastic materials (gel, dough, foam) or training distributions that include non-sand material. The original 3-seed main table has high elastoplastic variance, and the six-seed matched-encoder audit strengthens the direction without turning it into a broad robustness theorem: M7 wins four pairs, while two high-performing reactive seeds are near ties. Probing physically alters granular substrates (the 22pp cost on ID sand is predicted by the hypothesis but is also a deployment boundary for dry granular media). The probe is scripted and identical across materials; a learned probe policy that optimizes an information-gain surrogate may tighten the elastoplastic gain. All results are in Genesis MPM; sim-to-real transfer of probe-style policies on viscoelastic media---especially robustness to real tactile noise and rebound-timescale shifts---is open. Finally, the observation includes simulator-derived aggregate-particle statistics; a sim-to-real deployment would need vision or tactile estimates of those quantities. We use ``tactile'' throughout in the loose sense of contact-derived response inferred from joints and aggregate motion, not a simulated tactile-array sensor.
 
 \subsection{Connection to Information-Gathering Control}
 
